@@ -13,12 +13,15 @@
     .section { margin-top: 25px; padding: 20px; background: #eef4ff; border-left: 5px solid #2563eb; border-radius: 8px; }
     .condition-card, .question-card { margin-top: 16px; padding: 15px; background: white; border: 1px solid #dbeafe; border-radius: 8px; }
     .note { margin-top: 8px; font-size: 14px; color: #475569; background: #f8fafc; padding: 10px; border-radius: 8px; }
-    .scale-option-row { display: grid; grid-template-columns: 140px 1fr; gap: 12px; align-items: center; margin-top: 10px; }
+    .scale-option-row { display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: center; margin-top: 10px; }
     button { margin-top: 20px; background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; margin-right: 8px; }
     button:hover { background: #1d4ed8; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
     .preview-box { margin-top: 25px; padding: 20px; background: #ffffff; border: 2px solid #2563eb; border-radius: 10px; }
     .preview-title { font-size: 20px; font-weight: bold; color: #1e3a8a; margin-bottom: 12px; }
     .preview-stimuli { white-space: pre-wrap; line-height: 1.6; background: #f8fafc; padding: 15px; border-radius: 8px; }
+    .preview-question { margin-top: 14px; padding: 12px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; }
+    .scale-radio { display: block; margin-top: 8px; font-weight: normal; }
     .preview-nav { margin-top: 15px; display: flex; justify-content: space-between; align-items: center; }
     .preview-counter { font-weight: bold; color: #475569; }
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.35); }
@@ -40,9 +43,6 @@
 
     <label for="studyName">Study Name:</label>
     <input type="text" id="studyName" placeholder="Enter study name">
-
-    <label for="sampleCount">Enter Required Number of Samples:</label>
-    <input type="number" id="sampleCount" min="1" placeholder="Enter required number of samples">
 
     <label for="conditionCount">Enter Number of Conditions:</label>
     <input type="number" id="conditionCount" min="1" max="20" placeholder="Enter number of conditions"
@@ -81,11 +81,15 @@
       for (let i = 1; i <= count; i++) {
         html += `
           <div class="condition-card">
+            <label>Enter Required Number of Samples for Condition ${i}:</label>
+            <input type="number" id="condition${i}SampleCount" min="1"
+              placeholder="Enter sample size for condition ${i}">
+
             <label>Enter stimuli for Condition ${i}:</label>
             <textarea id="condition${i}Stimuli" placeholder="Enter stimuli text for condition ${i}"></textarea>
 
             <div class="note">
-              Use placeholders such as <b>{Q1}</b>, <b>{Q2}</b>, and so on wherever you want the generator to insert participant responses to your questions.
+              Use placeholders such as <b>{Q1}</b>, <b>{Q2}</b>, and so on wherever you want the generator to insert participant response questions.
             </div>
 
             <label for="condition${i}QuestionCount">How many questions are included in this condition?</label>
@@ -120,7 +124,7 @@
             <label>What response scale would you like to use for this question?</label>
             <input type="number" min="2" max="20"
               id="condition${conditionNumber}Question${q}ScaleCount"
-              placeholder="Enter number of response options"
+              placeholder="Enter number of response scale points"
               oninput="showScaleOptions(${conditionNumber}, ${q}, this.value)">
 
             <div id="condition${conditionNumber}Question${q}ScaleOptions"></div>
@@ -151,20 +155,46 @@
       }
     }
 
-    function buildQuestionText(conditionNumber, questionNumber) {
-      const question = document.getElementById(`condition${conditionNumber}Question${questionNumber}`)?.value.trim() || `Question ${questionNumber}`;
+    function getScaleLabels(conditionNumber, questionNumber) {
       const scaleCount = parseInt(document.getElementById(`condition${conditionNumber}Question${questionNumber}ScaleCount`)?.value);
+      const scaleLabels = [];
 
-      let scaleLabels = [];
+      if (!scaleCount || scaleCount < 2) return scaleLabels;
 
-      if (scaleCount && scaleCount >= 2) {
-        for (let s = 1; s <= scaleCount; s++) {
-          const label = document.getElementById(`condition${conditionNumber}Question${questionNumber}Scale${s}`)?.value.trim();
-          scaleLabels.push(label || `Scale Point ${s}`);
+      for (let s = 1; s <= scaleCount; s++) {
+        const label = document.getElementById(`condition${conditionNumber}Question${questionNumber}Scale${s}`)?.value.trim();
+
+        if (label) {
+          scaleLabels.push(`${s}-${label}`);
+        } else {
+          scaleLabels.push(`${s}-`);
         }
       }
 
-      return `${question}\nScale: ${scaleLabels.join(" | ")}`;
+      return scaleLabels;
+    }
+
+    function buildQuestionPreview(conditionNumber, questionNumber) {
+      const question = document.getElementById(`condition${conditionNumber}Question${questionNumber}`)?.value.trim() || "";
+      const scaleLabels = getScaleLabels(conditionNumber, questionNumber);
+
+      let html = `
+        <div class="preview-question">
+          <strong>Q${questionNumber}: ${escapeHTML(question)}</strong>
+          <div><strong>Response Scale:</strong></div>
+      `;
+
+      scaleLabels.forEach((label, index) => {
+        html += `
+          <label class="scale-radio">
+            <input type="radio" name="previewCondition${conditionNumber}Q${questionNumber}">
+            ${escapeHTML(label)}
+          </label>
+        `;
+      });
+
+      html += `</div>`;
+      return html;
     }
 
     function showPreview() {
@@ -179,18 +209,22 @@
       for (let c = 1; c <= conditionCount; c++) {
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
         const questionCount = parseInt(document.getElementById(`condition${c}QuestionCount`)?.value);
+        const sampleCount = document.getElementById(`condition${c}SampleCount`)?.value || "";
+
+        let htmlStimuli = escapeHTML(stimuli);
 
         if (questionCount && questionCount > 0) {
           for (let q = 1; q <= questionCount; q++) {
-            const questionText = buildQuestionText(c, q);
+            const questionHtml = buildQuestionPreview(c, q);
             const placeholder = new RegExp(`\\{Q${q}\\}`, "g");
-            stimuli = stimuli.replace(placeholder, questionText);
+            htmlStimuli = htmlStimuli.replace(placeholder, questionHtml);
           }
         }
 
         previews.push({
           condition: c,
-          text: stimuli || "No stimuli entered for this condition."
+          sampleCount: sampleCount,
+          html: htmlStimuli || "No stimuli entered for this condition."
         });
       }
 
@@ -205,7 +239,9 @@
       previewArea.innerHTML = `
         <div class="preview-box">
           <div class="preview-title">Preview: Condition ${preview.condition}</div>
-          <div class="preview-stimuli">${escapeHTML(preview.text)}</div>
+          <p><strong>Required Samples:</strong> ${escapeHTML(preview.sampleCount || "Not entered")}</p>
+
+          <div class="preview-stimuli">${preview.html}</div>
 
           <div class="preview-nav">
             <button onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
@@ -231,7 +267,7 @@
     }
 
     function escapeHTML(text) {
-      return text
+      return String(text)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
