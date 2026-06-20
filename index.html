@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Synthetic Experimental Data Generator</title>
+  <title>Open LLM Synthetic Experimental Data Generator</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; color: #1f2937; }
     .container { max-width: 850px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
@@ -14,6 +14,7 @@
     .condition-card, .question-card { margin-top: 16px; padding: 15px; background: white; border: 1px solid #dbeafe; border-radius: 8px; }
     .note { margin-top: 8px; font-size: 14px; color: #475569; background: #f8fafc; padding: 10px; border-radius: 8px; }
     .scale-option-row { display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: center; margin-top: 10px; }
+    .radio-options label { font-weight: normal; display: block; margin-top: 8px; }
     button { margin-top: 20px; background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; margin-right: 8px; }
     button:hover { background: #1d4ed8; }
     button:disabled { background: #94a3b8; cursor: not-allowed; }
@@ -37,7 +38,7 @@
 
 <body>
   <div class="container">
-    <h1>SYNTHETIC EXPERIMENTAL DATA GENERATOR</h1>
+    <h1>OPEN LLM SYNTHETIC EXPERIMENTAL DATA GENERATOR (OLSEDG)</h1>
 
     <div class="cite-button-wrap">
       <button onclick="showCitations()">Cite this generator</button>
@@ -46,6 +47,9 @@
     <label for="studyName">Study Name:</label>
     <input type="text" id="studyName" placeholder="Enter study name">
 
+    <label for="sampleCount">Enter Required Number of Samples per Condition:</label>
+    <input type="number" id="sampleCount" min="1" placeholder="Enter samples per condition">
+
     <label for="conditionCount">Enter Number of Conditions:</label>
     <input type="number" id="conditionCount" min="1" max="20" placeholder="Enter number of conditions"
       oninput="showConditionInputs()">
@@ -53,6 +57,22 @@
     <div id="conditionFields"></div>
 
     <button onclick="showPreview()">Preview</button>
+
+    <div class="section">
+      <label>Select the language model for response generation:</label>
+      <div class="radio-options">
+        <label><input type="radio" name="modelChoice" value="qwen2.5:14b"> qwen2.5:14b</label>
+        <label><input type="radio" name="modelChoice" value="qwen2.5:7b"> qwen2.5:7b</label>
+      </div>
+
+      <label>Select the response generation approach:</label>
+      <div class="radio-options">
+        <label><input type="radio" name="generationApproach" value="direct"> Use the model directly</label>
+        <label><input type="radio" name="generationApproach" value="digitalTwin"> Have the model enact digital twin personas (Toubia et al., 2025)</label>
+      </div>
+
+      <button onclick="generateResponses()">Generate</button>
+    </div>
 
     <div id="previewArea"></div>
   </div>
@@ -83,10 +103,6 @@
       for (let i = 1; i <= count; i++) {
         html += `
           <div class="condition-card">
-            <label>Enter Required Number of Samples for Condition ${i}:</label>
-            <input type="number" id="condition${i}SampleCount" min="1"
-              placeholder="Enter sample size for condition ${i}">
-
             <label>Enter stimuli for Condition ${i}:</label>
             <textarea id="condition${i}Stimuli" placeholder="Example: Intro text {Q1} follow-up text {Q2}"></textarea>
 
@@ -199,6 +215,7 @@
 
     function showPreview() {
       const conditionCount = parseInt(document.getElementById("conditionCount").value);
+      const sampleCount = document.getElementById("sampleCount").value || "";
       previews = [];
 
       if (!conditionCount || conditionCount < 1) {
@@ -209,7 +226,6 @@
       for (let c = 1; c <= conditionCount; c++) {
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
         const questionCount = parseInt(document.getElementById(`condition${c}QuestionCount`)?.value);
-        const sampleCount = document.getElementById(`condition${c}SampleCount`)?.value || "";
 
         let htmlStimuli = escapeHTML(stimuli);
 
@@ -239,7 +255,7 @@
       previewArea.innerHTML = `
         <div class="preview-box">
           <div class="preview-title">Preview: Condition ${preview.condition}</div>
-          <p><strong>Required Samples:</strong> ${escapeHTML(preview.sampleCount || "Not entered")}</p>
+          <p><strong>Required Samples per Condition:</strong> ${escapeHTML(preview.sampleCount || "Not entered")}</p>
           <div class="preview-stimuli">${preview.html}</div>
 
           <div class="preview-nav">
@@ -265,6 +281,10 @@
       }
     }
 
+    function generateResponses() {
+      alert("Generate button clicked. Backend connection will be added next.");
+    }
+
     function escapeHTML(text) {
       return String(text)
         .replace(/&/g, "&amp;")
@@ -273,22 +293,22 @@
     }
 
     function showCitations() {
-      const studyName = document.getElementById("studyName").value.trim() || "Synthetic Experimental Data Generator";
+      const studyName = document.getElementById("studyName").value.trim() || "Open LLM Synthetic Experimental Data Generator";
       const author = "Siva Shanmugam Mariappan";
       const year = new Date().getFullYear();
 
       document.getElementById("citationContent").innerHTML = `
         <div class="citation-row">
           <div class="citation-style">MLA</div>
-          <div>${author}. "${studyName}." <i>Synthetic Experimental Data Generator</i>, ${year}.</div>
+          <div>${author}. "${studyName}." <i>Open LLM Synthetic Experimental Data Generator (OLSEDG)</i>, ${year}.</div>
         </div>
         <div class="citation-row">
           <div class="citation-style">APA</div>
-          <div>Mariappan, S. S. (${year}). <i>${studyName}</i>. Synthetic Experimental Data Generator.</div>
+          <div>Mariappan, S. S. (${year}). <i>${studyName}</i>. Open LLM Synthetic Experimental Data Generator (OLSEDG).</div>
         </div>
         <div class="citation-row">
           <div class="citation-style">Chicago</div>
-          <div>Mariappan, Siva Shanmugam. "${studyName}." <i>Synthetic Experimental Data Generator</i>, ${year}.</div>
+          <div>Mariappan, Siva Shanmugam. "${studyName}." <i>Open LLM Synthetic Experimental Data Generator (OLSEDG)</i>, ${year}.</div>
         </div>
       `;
 
