@@ -3,149 +3,30 @@
 <head>
   <title>Synthetic Experimental Data Generator</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f7fb;
-      margin: 0;
-      color: #1f2937;
-    }
-
-    .container {
-      max-width: 850px;
-      margin: 50px auto;
-      background: white;
-      padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.08);
-    }
-
-    h1 {
-      text-align: center;
-      color: #1e3a8a;
-      margin-bottom: 12px;
-    }
-
-    .cite-button-wrap {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-
-    label {
-      font-weight: bold;
-      display: block;
-      margin-top: 18px;
-      margin-bottom: 6px;
-    }
-
-    input[type="text"],
-    input[type="number"],
-    textarea {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      font-size: 15px;
-      box-sizing: border-box;
-    }
-
-    textarea {
-      min-height: 90px;
-      resize: vertical;
-    }
-
-    .section {
-      margin-top: 25px;
-      padding: 20px;
-      background: #eef4ff;
-      border-left: 5px solid #2563eb;
-      border-radius: 8px;
-    }
-
-    .condition-card,
-    .question-card {
-      margin-top: 16px;
-      padding: 15px;
-      background: white;
-      border: 1px solid #dbeafe;
-      border-radius: 8px;
-    }
-
-    .note {
-      margin-top: 8px;
-      font-size: 14px;
-      color: #475569;
-      background: #f8fafc;
-      padding: 10px;
-      border-radius: 8px;
-    }
-
-    .scale-option-row {
-      display: grid;
-      grid-template-columns: 120px 1fr;
-      gap: 12px;
-      align-items: center;
-      margin-top: 10px;
-    }
-
-    button {
-      margin-top: 20px;
-      background: #2563eb;
-      color: white;
-      border: none;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background: #1d4ed8;
-    }
-
-    .modal {
-      display: none;
-      position: fixed;
-      z-index: 1000;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.35);
-    }
-
-    .modal-content {
-      background: white;
-      width: 620px;
-      max-width: 90%;
-      margin: 100px auto;
-      padding: 25px;
-      border-radius: 10px;
-    }
-
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      border-bottom: 1px solid #e5e7eb;
-      margin-bottom: 15px;
-    }
-
-    .close {
-      font-size: 28px;
-      cursor: pointer;
-    }
-
-    .citation-row {
-      display: grid;
-      grid-template-columns: 90px 1fr;
-      gap: 15px;
-      margin: 18px 0;
-      line-height: 1.4;
-    }
-
-    .citation-style {
-      font-weight: bold;
-      color: #555;
-    }
+    body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; color: #1f2937; }
+    .container { max-width: 850px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
+    h1 { text-align: center; color: #1e3a8a; margin-bottom: 12px; }
+    .cite-button-wrap { text-align: center; margin-bottom: 30px; }
+    label { font-weight: bold; display: block; margin-top: 18px; margin-bottom: 6px; }
+    input[type="text"], input[type="number"], textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; box-sizing: border-box; }
+    textarea { min-height: 90px; resize: vertical; }
+    .section { margin-top: 25px; padding: 20px; background: #eef4ff; border-left: 5px solid #2563eb; border-radius: 8px; }
+    .condition-card, .question-card { margin-top: 16px; padding: 15px; background: white; border: 1px solid #dbeafe; border-radius: 8px; }
+    .note { margin-top: 8px; font-size: 14px; color: #475569; background: #f8fafc; padding: 10px; border-radius: 8px; }
+    .scale-option-row { display: grid; grid-template-columns: 140px 1fr; gap: 12px; align-items: center; margin-top: 10px; }
+    button { margin-top: 20px; background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; margin-right: 8px; }
+    button:hover { background: #1d4ed8; }
+    .preview-box { margin-top: 25px; padding: 20px; background: #ffffff; border: 2px solid #2563eb; border-radius: 10px; }
+    .preview-title { font-size: 20px; font-weight: bold; color: #1e3a8a; margin-bottom: 12px; }
+    .preview-stimuli { white-space: pre-wrap; line-height: 1.6; background: #f8fafc; padding: 15px; border-radius: 8px; }
+    .preview-nav { margin-top: 15px; display: flex; justify-content: space-between; align-items: center; }
+    .preview-counter { font-weight: bold; color: #475569; }
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.35); }
+    .modal-content { background: white; width: 620px; max-width: 90%; margin: 100px auto; padding: 25px; border-radius: 10px; }
+    .modal-header { display: flex; justify-content: space-between; border-bottom: 1px solid #e5e7eb; margin-bottom: 15px; }
+    .close { font-size: 28px; cursor: pointer; }
+    .citation-row { display: grid; grid-template-columns: 90px 1fr; gap: 15px; margin: 18px 0; line-height: 1.4; }
+    .citation-style { font-weight: bold; color: #555; }
   </style>
 </head>
 
@@ -160,11 +41,18 @@
     <label for="studyName">Study Name:</label>
     <input type="text" id="studyName" placeholder="Enter study name">
 
+    <label for="sampleCount">Enter Required Number of Samples:</label>
+    <input type="number" id="sampleCount" min="1" placeholder="Enter required number of samples">
+
     <label for="conditionCount">Enter Number of Conditions:</label>
     <input type="number" id="conditionCount" min="1" max="20" placeholder="Enter number of conditions"
       oninput="showConditionInputs()">
 
     <div id="conditionFields"></div>
+
+    <button onclick="showPreview()">Preview</button>
+
+    <div id="previewArea"></div>
   </div>
 
   <div id="citationModal" class="modal">
@@ -173,16 +61,17 @@
         <h2>Cite</h2>
         <span class="close" onclick="closeCitations()">&times;</span>
       </div>
-
       <div id="citationContent"></div>
     </div>
   </div>
 
   <script>
+    let previews = [];
+    let currentPreviewIndex = 0;
+
     function showConditionInputs() {
       const count = parseInt(document.getElementById("conditionCount").value);
       const container = document.getElementById("conditionFields");
-
       container.innerHTML = "";
 
       if (!count || count < 1) return;
@@ -211,12 +100,12 @@
 
       html += `</div>`;
       container.innerHTML = html;
+      document.getElementById("previewArea").innerHTML = "";
     }
 
     function showQuestionInputs(conditionNumber, questionCountValue) {
       const questionCount = parseInt(questionCountValue);
       const container = document.getElementById(`condition${conditionNumber}Questions`);
-
       container.innerHTML = "";
 
       if (!questionCount || questionCount < 1) return;
@@ -243,7 +132,6 @@
     function showScaleOptions(conditionNumber, questionNumber, scaleCountValue) {
       const scaleCount = parseInt(scaleCountValue);
       const container = document.getElementById(`condition${conditionNumber}Question${questionNumber}ScaleOptions`);
-
       container.innerHTML = "";
 
       if (!scaleCount || scaleCount < 2) return;
@@ -256,10 +144,97 @@
           <div class="scale-option-row">
             <label>Scale Point ${s} (${requiredText}):</label>
             <input type="text" ${requiredAttribute}
+              id="condition${conditionNumber}Question${questionNumber}Scale${s}"
               placeholder="Enter label for scale point ${s}">
           </div>
         `;
       }
+    }
+
+    function buildQuestionText(conditionNumber, questionNumber) {
+      const question = document.getElementById(`condition${conditionNumber}Question${questionNumber}`)?.value.trim() || `Question ${questionNumber}`;
+      const scaleCount = parseInt(document.getElementById(`condition${conditionNumber}Question${questionNumber}ScaleCount`)?.value);
+
+      let scaleLabels = [];
+
+      if (scaleCount && scaleCount >= 2) {
+        for (let s = 1; s <= scaleCount; s++) {
+          const label = document.getElementById(`condition${conditionNumber}Question${questionNumber}Scale${s}`)?.value.trim();
+          scaleLabels.push(label || `Scale Point ${s}`);
+        }
+      }
+
+      return `${question}\nScale: ${scaleLabels.join(" | ")}`;
+    }
+
+    function showPreview() {
+      const conditionCount = parseInt(document.getElementById("conditionCount").value);
+      previews = [];
+
+      if (!conditionCount || conditionCount < 1) {
+        alert("Please enter the number of conditions first.");
+        return;
+      }
+
+      for (let c = 1; c <= conditionCount; c++) {
+        let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
+        const questionCount = parseInt(document.getElementById(`condition${c}QuestionCount`)?.value);
+
+        if (questionCount && questionCount > 0) {
+          for (let q = 1; q <= questionCount; q++) {
+            const questionText = buildQuestionText(c, q);
+            const placeholder = new RegExp(`\\{Q${q}\\}`, "g");
+            stimuli = stimuli.replace(placeholder, questionText);
+          }
+        }
+
+        previews.push({
+          condition: c,
+          text: stimuli || "No stimuli entered for this condition."
+        });
+      }
+
+      currentPreviewIndex = 0;
+      renderPreview();
+    }
+
+    function renderPreview() {
+      const preview = previews[currentPreviewIndex];
+      const previewArea = document.getElementById("previewArea");
+
+      previewArea.innerHTML = `
+        <div class="preview-box">
+          <div class="preview-title">Preview: Condition ${preview.condition}</div>
+          <div class="preview-stimuli">${escapeHTML(preview.text)}</div>
+
+          <div class="preview-nav">
+            <button onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
+            <span class="preview-counter">Condition ${currentPreviewIndex + 1} of ${previews.length}</span>
+            <button onclick="nextPreview()" ${currentPreviewIndex === previews.length - 1 ? "disabled" : ""}>Next</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function nextPreview() {
+      if (currentPreviewIndex < previews.length - 1) {
+        currentPreviewIndex++;
+        renderPreview();
+      }
+    }
+
+    function previousPreview() {
+      if (currentPreviewIndex > 0) {
+        currentPreviewIndex--;
+        renderPreview();
+      }
+    }
+
+    function escapeHTML(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
     }
 
     function showCitations() {
@@ -272,12 +247,10 @@
           <div class="citation-style">MLA</div>
           <div>${author}. "${studyName}." <i>Synthetic Experimental Data Generator</i>, ${year}.</div>
         </div>
-
         <div class="citation-row">
           <div class="citation-style">APA</div>
           <div>Mariappan, S. S. (${year}). <i>${studyName}</i>. Synthetic Experimental Data Generator.</div>
         </div>
-
         <div class="citation-row">
           <div class="citation-style">Chicago</div>
           <div>Mariappan, Siva Shanmugam. "${studyName}." <i>Synthetic Experimental Data Generator</i>, ${year}.</div>
