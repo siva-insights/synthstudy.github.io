@@ -4,7 +4,7 @@
   <title>Synthetic Experimental Data Generator</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; color: #1f2937; }
-    .container { max-width: 800px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
+    .container { max-width: 850px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
     h1 { text-align: center; color: #1e3a8a; margin-bottom: 30px; }
     label { font-weight: bold; display: block; margin-top: 18px; margin-bottom: 6px; }
     input[type="text"], input[type="number"], textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; box-sizing: border-box; }
@@ -14,8 +14,56 @@
     .factor-card { margin-top: 16px; padding: 15px; background: white; border: 1px solid #dbeafe; border-radius: 8px; }
     .stimuli-box { margin-top: 12px; padding: 12px; background: #f8fafc; border-radius: 8px; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    button { margin-top: 25px; background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; }
+    button { margin-top: 25px; background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; margin-right: 10px; }
     button:hover { background: #1d4ed8; }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.35);
+    }
+
+    .modal-content {
+      background: white;
+      width: 560px;
+      max-width: 90%;
+      margin: 100px auto;
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #e5e7eb;
+      margin-bottom: 15px;
+    }
+
+    .close {
+      font-size: 28px;
+      cursor: pointer;
+      color: #555;
+    }
+
+    .citation-row {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 15px;
+      margin: 18px 0;
+      line-height: 1.4;
+    }
+
+    .citation-style {
+      font-weight: bold;
+      color: #555;
+    }
   </style>
 </head>
 
@@ -36,6 +84,18 @@
     <div id="designFields"></div>
 
     <button onclick="submitForm()">Submit</button>
+    <button onclick="showCitations()">Cite</button>
+  </div>
+
+  <div id="citationModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Cite</h2>
+        <span class="close" onclick="closeCitations()">&times;</span>
+      </div>
+
+      <div id="citationContent"></div>
+    </div>
   </div>
 
   <script>
@@ -81,9 +141,7 @@
     function showFactorInputs(type, containerId, countValue) {
       const count = parseInt(countValue);
       const container = document.getElementById(containerId);
-
       container.innerHTML = "";
-
       if (!count || count < 1) return;
 
       for (let i = 1; i <= count; i++) {
@@ -125,9 +183,7 @@
     function showStimuliInputs(safeType, type, factorIndex, levelCountValue) {
       const levelCount = parseInt(levelCountValue);
       const container = document.getElementById(`${safeType}Factor${factorIndex}Stimuli`);
-
       container.innerHTML = "";
-
       if (!levelCount || levelCount < 1) return;
 
       let html = `<div class="stimuli-box">`;
@@ -141,6 +197,45 @@
 
       html += `</div>`;
       container.innerHTML = html;
+    }
+
+    function showCitations() {
+      const studyName = document.getElementById("studyName").value.trim() || "Synthetic Experimental Data Generator";
+      const author = "Siva Shanmugam Mariappan";
+      const year = new Date().getFullYear();
+
+      document.getElementById("citationContent").innerHTML = `
+        <div class="citation-row">
+          <div class="citation-style">MLA</div>
+          <div>${author}. "${studyName}." <i>Synthetic Experimental Data Generator</i>, ${year}.</div>
+        </div>
+
+        <div class="citation-row">
+          <div class="citation-style">APA</div>
+          <div>Mariappan, S. S. (${year}). <i>${studyName}</i>. Synthetic Experimental Data Generator.</div>
+        </div>
+
+        <div class="citation-row">
+          <div class="citation-style">Chicago</div>
+          <div>Mariappan, Siva Shanmugam. "${studyName}." <i>Synthetic Experimental Data Generator</i>, ${year}.</div>
+        </div>
+
+        <div class="citation-row">
+          <div class="citation-style">Harvard</div>
+          <div>Mariappan, S.S. ${year}. <i>${studyName}</i>. Synthetic Experimental Data Generator.</div>
+        </div>
+
+        <div class="citation-row">
+          <div class="citation-style">Vancouver</div>
+          <div>Mariappan SS. ${studyName}. Synthetic Experimental Data Generator. ${year}.</div>
+        </div>
+      `;
+
+      document.getElementById("citationModal").style.display = "block";
+    }
+
+    function closeCitations() {
+      document.getElementById("citationModal").style.display = "none";
     }
 
     function submitForm() {
