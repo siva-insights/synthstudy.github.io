@@ -7,11 +7,13 @@
     .container { max-width: 800px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
     h1 { text-align: center; color: #1e3a8a; margin-bottom: 30px; }
     label { font-weight: bold; display: block; margin-top: 18px; margin-bottom: 6px; }
-    input[type="text"], input[type="number"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; box-sizing: border-box; }
+    input[type="text"], input[type="number"], textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; box-sizing: border-box; }
+    textarea { min-height: 80px; resize: vertical; }
     .radio-group label { font-weight: normal; display: inline-block; margin-right: 20px; }
     .section { margin-top: 25px; padding: 20px; background: #eef4ff; border-left: 5px solid #2563eb; border-radius: 8px; }
     .factor-card { margin-top: 16px; padding: 15px; background: white; border: 1px solid #dbeafe; border-radius: 8px; }
     .stimuli-box { margin-top: 12px; padding: 12px; background: #f8fafc; border-radius: 8px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
     button { margin-top: 25px; background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; }
     button:hover { background: #1d4ed8; }
   </style>
@@ -50,9 +52,7 @@
             <div id="betweenFactors"></div>
           </div>
         `;
-      }
-
-      else if (selectedDesign === "within") {
+      } else if (selectedDesign === "within") {
         designFields.innerHTML = `
           <div class="section">
             <label>Number of Within Subject Factors:</label>
@@ -61,9 +61,7 @@
             <div id="withinFactors"></div>
           </div>
         `;
-      }
-
-      else if (selectedDesign === "mixed") {
+      } else if (selectedDesign === "mixed") {
         designFields.innerHTML = `
           <div class="section">
             <label>Number of Between Subject Factors:</label>
@@ -93,15 +91,21 @@
 
         container.innerHTML += `
           <div class="factor-card">
-            <label>${type} Factor ${i} Name:</label>
-            <input type="text" id="${safeType}Factor${i}Name"
-              placeholder="Enter ${type.toLowerCase()} factor ${i} name"
-              oninput="updateLevelLabel('${safeType}', '${type}', ${i})">
+            <div class="form-row">
+              <div>
+                <label>${type} Factor ${i} Name:</label>
+                <input type="text" id="${safeType}Factor${i}Name"
+                  placeholder="Enter ${type.toLowerCase()} factor ${i} name"
+                  oninput="updateLevelLabel('${safeType}', '${type}', ${i})">
+              </div>
 
-            <label id="${safeType}Factor${i}LevelLabel">Number of Levels for ${type} Factor ${i}:</label>
-            <input type="number" min="1" max="20" id="${safeType}Factor${i}Levels"
-              placeholder="Enter number of levels"
-              oninput="showStimuliInputs('${safeType}', '${type}', ${i}, this.value)">
+              <div>
+                <label id="${safeType}Factor${i}LevelLabel">Number of Levels for ${type} Factor ${i}:</label>
+                <input type="number" min="1" max="20" id="${safeType}Factor${i}Levels"
+                  placeholder="Enter number of levels"
+                  oninput="showStimuliInputs('${safeType}', '${type}', ${i}, this.value)">
+              </div>
+            </div>
 
             <div id="${safeType}Factor${i}Stimuli"></div>
           </div>
@@ -131,7 +135,7 @@
       for (let level = 1; level <= levelCount; level++) {
         html += `
           <label>Enter the stimuli for ${type} Factor ${factorIndex} and Level ${level}:</label>
-          <input type="text" placeholder="Enter stimuli">
+          <textarea placeholder="Enter stimuli paragraph"></textarea>
         `;
       }
 
