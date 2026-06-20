@@ -1,20 +1,150 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Name Website</title>
+  <title>Synthetic Experimental Data Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f7fb;
+      margin: 0;
+      padding: 0;
+      color: #1f2937;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 50px auto;
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+    }
+
+    h1 {
+      text-align: center;
+      color: #1e3a8a;
+      margin-bottom: 30px;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 18px;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    .radio-group {
+      margin-top: 8px;
+    }
+
+    .radio-group label {
+      font-weight: normal;
+      display: inline-block;
+      margin-right: 20px;
+    }
+
+    .section {
+      margin-top: 25px;
+      padding: 20px;
+      background: #eef4ff;
+      border-left: 5px solid #2563eb;
+      border-radius: 8px;
+    }
+
+    button {
+      margin-top: 25px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+  </style>
 </head>
+
 <body>
-  <h1>Enter your name</h1>
+  <div class="container">
+    <h1>SYNTHETIC EXPERIMENTAL DATA GENERATOR</h1>
 
-  <input id="nameInput" placeholder="Your name">
-  <button onclick="showName()">Submit</button>
+    <label for="studyName">Study Name:</label>
+    <input type="text" id="studyName" placeholder="Enter study name">
 
-  <h2 id="result"></h2>
+    <label>Study Design:</label>
+    <div class="radio-group">
+      <label><input type="radio" name="studyDesign" value="between" onchange="showDesignFields()"> Between</label>
+      <label><input type="radio" name="studyDesign" value="within" onchange="showDesignFields()"> Within</label>
+      <label><input type="radio" name="studyDesign" value="mixed" onchange="showDesignFields()"> Mixed</label>
+    </div>
+
+    <div id="designFields"></div>
+
+    <button onclick="submitForm()">Submit</button>
+  </div>
 
   <script>
-    function showName() {
-      let name = document.getElementById("nameInput").value;
-      document.getElementById("result").innerText = "Hello, " + name + "!";
+    function showDesignFields() {
+      const selectedDesign = document.querySelector('input[name="studyDesign"]:checked').value;
+      const designFields = document.getElementById("designFields");
+
+      let labelText = "";
+      let factorPrefix = "";
+
+      if (selectedDesign === "between") {
+        labelText = "Number of Between Subject Factors:";
+        factorPrefix = "B";
+      } else if (selectedDesign === "within") {
+        labelText = "Number of Within Subject Factors:";
+        factorPrefix = "W";
+      } else if (selectedDesign === "mixed") {
+        labelText = "Number of Between and Within Subject Factors:";
+        factorPrefix = "M";
+      }
+
+      designFields.innerHTML = `
+        <div class="section">
+          <label>${labelText}</label>
+          <input type="number" id="factorCount" min="1" max="10" placeholder="Enter number of factors" oninput="showFactorNames('${factorPrefix}')">
+
+          <div id="factorNames"></div>
+        </div>
+      `;
+    }
+
+    function showFactorNames(prefix) {
+      const count = parseInt(document.getElementById("factorCount").value);
+      const factorNames = document.getElementById("factorNames");
+
+      factorNames.innerHTML = "";
+
+      if (!count || count < 1) {
+        return;
+      }
+
+      for (let i = 1; i <= count; i++) {
+        factorNames.innerHTML += `
+          <label>${prefix} Factor ${i} Name:</label>
+          <input type="text" id="${prefix}factor${i}" placeholder="Enter ${prefix} factor ${i} name">
+        `;
+      }
+    }
+
+    function submitForm() {
+      alert("Study information submitted!");
     }
   </script>
 </body>
