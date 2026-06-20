@@ -4,31 +4,15 @@
   <title>Open LLM Synthetic Experimental Data Generator</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; color: #1f2937; }
-    .input-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-    }
-  
-    .input-table td {
-      padding: 10px;
-      vertical-align: middle;
-    }
-  
-    .input-table td:first-child {
-      width: 40%;
-      font-weight: bold;
-    }
-  
-    .input-table input {
-      width: 100%;
-    }
     .container { max-width: 850px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
     h1 { text-align: center; color: #1e3a8a; margin-bottom: 12px; }
     .cite-button-wrap { text-align: center; margin-bottom: 30px; }
     label { font-weight: bold; display: block; margin-top: 18px; margin-bottom: 6px; }
     input[type="text"], input[type="number"], textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; box-sizing: border-box; }
     textarea { min-height: 90px; resize: vertical; }
+    .input-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    .input-table td { padding: 10px; vertical-align: middle; }
+    .input-table td:first-child { width: 40%; font-weight: bold; }
     .section { margin-top: 25px; padding: 20px; background: #eef4ff; border-left: 5px solid #2563eb; border-radius: 8px; }
     .condition-card, .question-card { margin-top: 16px; padding: 15px; background: white; border: 1px solid #dbeafe; border-radius: 8px; }
     .note { margin-top: 8px; font-size: 14px; color: #475569; background: #f8fafc; padding: 10px; border-radius: 8px; }
@@ -66,7 +50,7 @@
         <td><label for="studyName">Study Name:</label></td>
         <td><input type="text" id="studyName" placeholder="Enter study name"></td>
       </tr>
-    
+
       <tr>
         <td><label for="conditionCount">Enter Number of Conditions:</label></td>
         <td>
@@ -75,7 +59,7 @@
             oninput="showConditionInputs()">
         </td>
       </tr>
-    
+
       <tr>
         <td><label for="sampleCount">Enter Required Number of Samples per Condition:</label></td>
         <td><input type="number" id="sampleCount" min="1" placeholder="Enter samples per condition"></td>
@@ -83,6 +67,12 @@
     </table>
 
     <div id="conditionFields"></div>
+
+    <div class="section">
+      <h2>Questions</h2>
+      <button onclick="addQuestion()">+ Add Question</button>
+      <div id="questionFields"></div>
+    </div>
 
     <button onclick="showPreview()">Preview</button>
 
@@ -98,6 +88,16 @@
         <label><input type="radio" name="generationApproach" value="direct"> Use the model directly</label>
         <label><input type="radio" name="generationApproach" value="humanPersonas"> Have the model enact human personas (Toubia et al., 2025)</label>
       </div>
+
+      <label>Persona Diversity Level:</label>
+      <div class="radio-options">
+        <label><input type="radio" name="personaDiversity" value="low"> Low</label>
+        <label><input type="radio" name="personaDiversity" value="medium"> Medium</label>
+        <label><input type="radio" name="personaDiversity" value="high"> High</label>
+      </div>
+
+      <label for="temperature">Response Randomness / Temperature:</label>
+      <input type="number" id="temperature" min="0" max="2" step="0.1" value="0.7">
 
       <button onclick="generateResponses()">Generate</button>
     </div>
@@ -118,6 +118,7 @@
   <script>
     let previews = [];
     let currentPreviewIndex = 0;
+    let questionCount = 0;
 
     function showConditionInputs() {
       const count = parseInt(document.getElementById("conditionCount").value);
@@ -126,7 +127,7 @@
 
       if (!count || count < 1) return;
 
-      let html = `<div class="section">`;
+      let html = `<div class="section"><h2>Stimuli</h2>`;
 
       for (let i = 1; i <= count; i++) {
         html += `
@@ -135,17 +136,9 @@
             <textarea id="condition${i}Stimuli" placeholder="Example: Intro text {Q1} follow-up text {Q2}"></textarea>
 
             <div class="note">
-              <b>Note:</b> This version supports text input only. Use placeholders such as
-              <b>{Q1}</b>, <b>{Q2}</b>, etc. to mark where each survey question should be inserted.
-              Text input limits vary by open LLM model and are shown in the model selection section.
+              <b>Note:</b> Enter only the stimuli here. Use placeholders such as
+              <b>{Q1}</b>, <b>{Q2}</b>, etc. wherever you want questions to appear in the preview.
             </div>
-
-            <label for="condition${i}QuestionCount">How many questions are included in this condition?</label>
-            <input type="number" id="condition${i}QuestionCount" min="1" max="20"
-              placeholder="Enter number of questions"
-              oninput="showQuestionInputs(${i}, this.value)">
-            
-            <div id="condition${i}Questions"></div>
           </div>
         `;
       }
@@ -155,34 +148,29 @@
       document.getElementById("previewArea").innerHTML = "";
     }
 
-    function showQuestionInputs(conditionNumber, questionCountValue) {
-      const questionCount = parseInt(questionCountValue);
-      const container = document.getElementById(`condition${conditionNumber}Questions`);
-      container.innerHTML = "";
+    function addQuestion() {
+      questionCount++;
+      const container = document.getElementById("questionFields");
 
-      if (!questionCount || questionCount < 1) return;
+      container.innerHTML += `
+        <div class="question-card" id="questionCard${questionCount}">
+          <label>Question ${questionCount}:</label>
+          <input type="text" id="question${questionCount}" placeholder="Enter question ${questionCount}">
 
-      for (let q = 1; q <= questionCount; q++) {
-        container.innerHTML += `
-          <div class="question-card">
-            <label>Question ${q}:</label>
-            <input type="text" id="condition${conditionNumber}Question${q}" placeholder="Enter question ${q}">
+          <label>What response scale would you like to use for this question?</label>
+          <input type="number" min="2" max="20"
+            id="question${questionCount}ScaleCount"
+            placeholder="Enter number of response scale points"
+            oninput="showScaleOptions(${questionCount}, this.value)">
 
-            <label>What response scale would you like to use for this question?</label>
-            <input type="number" min="2" max="20"
-              id="condition${conditionNumber}Question${q}ScaleCount"
-              placeholder="Enter number of response scale points"
-              oninput="showScaleOptions(${conditionNumber}, ${q}, this.value)">
-
-            <div id="condition${conditionNumber}Question${q}ScaleOptions"></div>
-          </div>
-        `;
-      }
+          <div id="question${questionCount}ScaleOptions"></div>
+        </div>
+      `;
     }
 
-    function showScaleOptions(conditionNumber, questionNumber, scaleCountValue) {
+    function showScaleOptions(questionNumber, scaleCountValue) {
       const scaleCount = parseInt(scaleCountValue);
-      const container = document.getElementById(`condition${conditionNumber}Question${questionNumber}ScaleOptions`);
+      const container = document.getElementById(`question${questionNumber}ScaleOptions`);
       container.innerHTML = "";
 
       if (!scaleCount || scaleCount < 2) return;
@@ -195,30 +183,30 @@
           <div class="scale-option-row">
             <label>Scale Point ${s} (${requiredText}):</label>
             <input type="text" ${requiredAttribute}
-              id="condition${conditionNumber}Question${questionNumber}Scale${s}"
+              id="question${questionNumber}Scale${s}"
               placeholder="Enter label for scale point ${s}">
           </div>
         `;
       }
     }
 
-    function getScaleLabels(conditionNumber, questionNumber) {
-      const scaleCount = parseInt(document.getElementById(`condition${conditionNumber}Question${questionNumber}ScaleCount`)?.value);
+    function getScaleLabels(questionNumber) {
+      const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value);
       const scaleLabels = [];
 
       if (!scaleCount || scaleCount < 2) return scaleLabels;
 
       for (let s = 1; s <= scaleCount; s++) {
-        const label = document.getElementById(`condition${conditionNumber}Question${questionNumber}Scale${s}`)?.value.trim();
+        const label = document.getElementById(`question${questionNumber}Scale${s}`)?.value.trim();
         if (label) scaleLabels.push(`${s}-${label}`);
       }
 
       return scaleLabels;
     }
 
-    function buildQuestionPreview(conditionNumber, questionNumber) {
-      const question = document.getElementById(`condition${conditionNumber}Question${questionNumber}`)?.value.trim() || "";
-      const scaleLabels = getScaleLabels(conditionNumber, questionNumber);
+    function buildQuestionPreview(questionNumber) {
+      const question = document.getElementById(`question${questionNumber}`)?.value.trim() || "";
+      const scaleLabels = getScaleLabels(questionNumber);
 
       let html = `<div class="preview-question">
         <div><strong>Q${questionNumber}: ${escapeHTML(question)}</strong></div>
@@ -226,7 +214,7 @@
 
       scaleLabels.forEach((label) => {
         html += `<label class="scale-radio">
-          <input type="radio" name="previewCondition${conditionNumber}Q${questionNumber}">
+          <input type="radio" name="previewQ${questionNumber}">
           ${escapeHTML(label)}
         </label>`;
       });
@@ -247,16 +235,12 @@
 
       for (let c = 1; c <= conditionCount; c++) {
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
-        const questionCount = parseInt(document.getElementById(`condition${c}QuestionCount`)?.value);
-
         let htmlStimuli = escapeHTML(stimuli);
 
-        if (questionCount && questionCount > 0) {
-          for (let q = 1; q <= questionCount; q++) {
-            const questionHtml = buildQuestionPreview(c, q);
-            const placeholder = new RegExp(`\\{Q${q}\\}`, "g");
-            htmlStimuli = htmlStimuli.replace(placeholder, questionHtml);
-          }
+        for (let q = 1; q <= questionCount; q++) {
+          const questionHtml = buildQuestionPreview(q);
+          const placeholder = new RegExp(`\\{Q${q}\\}`, "g");
+          htmlStimuli = htmlStimuli.replace(placeholder, questionHtml);
         }
 
         previews.push({
