@@ -4,6 +4,25 @@
   <title>Open LLM Synthetic Experimental Data Generator</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; color: #1f2937; }
+    .input-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    }
+  
+    .input-table td {
+      padding: 10px;
+      vertical-align: middle;
+    }
+  
+    .input-table td:first-child {
+      width: 40%;
+      font-weight: bold;
+    }
+  
+    .input-table input {
+      width: 100%;
+    }
     .container { max-width: 850px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
     h1 { text-align: center; color: #1e3a8a; margin-bottom: 12px; }
     .cite-button-wrap { text-align: center; margin-bottom: 30px; }
@@ -42,15 +61,20 @@
       <button onclick="showCitations()">Cite this generator</button>
     </div>
 
-    <label for="studyName">Study Name:</label>
-    <input type="text" id="studyName" placeholder="Enter study name">
-
-    <label for="conditionCount">Enter Number of Conditions:</label>
-    <input type="number" id="conditionCount" min="1" max="20" placeholder="Enter number of conditions"
-      oninput="showConditionInputs()">
-
-    <label for="sampleCount">Enter Required Number of Samples per Condition:</label>
-    <input type="number" id="sampleCount" min="1" placeholder="Enter samples per condition">
+    <table class="input-table">
+      <tr>
+        <td>Study Name:</td>
+        <td><input type="text" id="studyName" name="studyName"></td>
+      </tr>
+      <tr>
+        <td>Enter Number of Conditions:</td>
+        <td><input type="number" id="numConditions" name="numConditions"></td>
+      </tr>
+      <tr>
+        <td>Enter Required Number of Samples per Condition:</td>
+        <td><input type="number" id="samplesPerCondition" name="samplesPerCondition"></td>
+      </tr>
+    </table>
 
     <div id="conditionFields"></div>
 
