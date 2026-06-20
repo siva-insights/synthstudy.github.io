@@ -151,21 +151,23 @@
     function addQuestion() {
       questionCount++;
       const container = document.getElementById("questionFields");
-
-      container.innerHTML += `
+    
+      const questionHtml = `
         <div class="question-card" id="questionCard${questionCount}">
           <label>Question ${questionCount}:</label>
           <input type="text" id="question${questionCount}" placeholder="Enter question ${questionCount}">
-
+    
           <label>What response scale would you like to use for this question?</label>
           <input type="number" min="2" max="20"
             id="question${questionCount}ScaleCount"
             placeholder="Enter number of response scale points"
             oninput="showScaleOptions(${questionCount}, this.value)">
-
+    
           <div id="question${questionCount}ScaleOptions"></div>
         </div>
       `;
+    
+      container.insertAdjacentHTML("beforeend", questionHtml);
     }
 
     function showScaleOptions(questionNumber, scaleCountValue) {
