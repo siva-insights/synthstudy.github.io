@@ -18,7 +18,6 @@
     button { margin-top: 20px; background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; margin-right: 8px; }
     button:hover { background: #1d4ed8; }
     button:disabled { background: #94a3b8; cursor: not-allowed; }
-
     .preview-box { margin-top: 25px; padding: 16px; background: #ffffff; border: 2px solid #2563eb; border-radius: 10px; }
     .preview-title { font-size: 20px; font-weight: bold; color: #1e3a8a; margin-bottom: 8px; }
     .preview-stimuli { line-height: 1.4; background: #f8fafc; padding: 12px; border-radius: 8px; }
@@ -26,7 +25,6 @@
     .scale-radio { display: inline-flex; align-items: center; gap: 4px; margin-right: 16px; margin-top: 8px; font-weight: normal; }
     .preview-nav { margin-top: 15px; display: flex; justify-content: space-between; align-items: center; }
     .preview-counter { font-weight: bold; color: #475569; }
-
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.35); }
     .modal-content { background: white; width: 620px; max-width: 90%; margin: 100px auto; padding: 25px; border-radius: 10px; }
     .modal-header { display: flex; justify-content: space-between; border-bottom: 1px solid #e5e7eb; margin-bottom: 15px; }
@@ -47,12 +45,12 @@
     <label for="studyName">Study Name:</label>
     <input type="text" id="studyName" placeholder="Enter study name">
 
-    <label for="sampleCount">Enter Required Number of Samples per Condition:</label>
-    <input type="number" id="sampleCount" min="1" placeholder="Enter samples per condition">
-
     <label for="conditionCount">Enter Number of Conditions:</label>
     <input type="number" id="conditionCount" min="1" max="20" placeholder="Enter number of conditions"
       oninput="showConditionInputs()">
+
+    <label for="sampleCount">Enter Required Number of Samples per Condition:</label>
+    <input type="number" id="sampleCount" min="1" placeholder="Enter samples per condition">
 
     <div id="conditionFields"></div>
 
@@ -68,7 +66,7 @@
       <label>Select the response generation approach:</label>
       <div class="radio-options">
         <label><input type="radio" name="generationApproach" value="direct"> Use the model directly</label>
-        <label><input type="radio" name="generationApproach" value="digitalTwin"> Have the model enact digital twin personas (Toubia et al., 2025)</label>
+        <label><input type="radio" name="generationApproach" value="humanPersonas"> Have the model enact human personas (Toubia et al., 2025)</label>
       </div>
 
       <button onclick="generateResponses()">Generate</button>
@@ -136,8 +134,7 @@
         container.innerHTML += `
           <div class="question-card">
             <label>Question ${q}:</label>
-            <input type="text" id="condition${conditionNumber}Question${q}"
-              placeholder="Enter question ${q}">
+            <input type="text" id="condition${conditionNumber}Question${q}" placeholder="Enter question ${q}">
 
             <label>What response scale would you like to use for this question?</label>
             <input type="number" min="2" max="20"
@@ -181,10 +178,7 @@
 
       for (let s = 1; s <= scaleCount; s++) {
         const label = document.getElementById(`condition${conditionNumber}Question${questionNumber}Scale${s}`)?.value.trim();
-
-        if (label) {
-          scaleLabels.push(`${s}-${label}`);
-        }
+        if (label) scaleLabels.push(`${s}-${label}`);
       }
 
       return scaleLabels;
@@ -194,19 +188,15 @@
       const question = document.getElementById(`condition${conditionNumber}Question${questionNumber}`)?.value.trim() || "";
       const scaleLabels = getScaleLabels(conditionNumber, questionNumber);
 
-      let html = `
-        <div class="preview-question">
-          <div><strong>Q${questionNumber}: ${escapeHTML(question)}</strong></div>
-          <div><strong>Response Scale:</strong></div>
-      `;
+      let html = `<div class="preview-question">
+        <div><strong>Q${questionNumber}: ${escapeHTML(question)}</strong></div>
+        <div><strong>Response Scale:</strong></div>`;
 
       scaleLabels.forEach((label) => {
-        html += `
-          <label class="scale-radio">
-            <input type="radio" name="previewCondition${conditionNumber}Q${questionNumber}">
-            ${escapeHTML(label)}
-          </label>
-        `;
+        html += `<label class="scale-radio">
+          <input type="radio" name="previewCondition${conditionNumber}Q${questionNumber}">
+          ${escapeHTML(label)}
+        </label>`;
       });
 
       html += `</div>`;
