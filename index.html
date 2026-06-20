@@ -17,13 +17,15 @@
     button { margin-top: 20px; background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; margin-right: 8px; }
     button:hover { background: #1d4ed8; }
     button:disabled { background: #94a3b8; cursor: not-allowed; }
-    .preview-box { margin-top: 25px; padding: 20px; background: #ffffff; border: 2px solid #2563eb; border-radius: 10px; }
-    .preview-title { font-size: 20px; font-weight: bold; color: #1e3a8a; margin-bottom: 12px; }
-    .preview-stimuli { white-space: pre-wrap; line-height: 1.6; background: #f8fafc; padding: 15px; border-radius: 8px; }
-    .preview-question { margin-top: 14px; padding: 12px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; }
-    .scale-radio { display: block; margin-top: 8px; font-weight: normal; }
+
+    .preview-box { margin-top: 25px; padding: 18px; background: #ffffff; border: 2px solid #2563eb; border-radius: 10px; }
+    .preview-title { font-size: 20px; font-weight: bold; color: #1e3a8a; margin-bottom: 10px; }
+    .preview-stimuli { white-space: pre-wrap; line-height: 1.5; background: #f8fafc; padding: 14px; border-radius: 8px; }
+    .preview-question { margin-top: 10px; padding: 10px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; }
+    .scale-radio { display: inline-block; margin-right: 18px; margin-top: 8px; font-weight: normal; }
     .preview-nav { margin-top: 15px; display: flex; justify-content: space-between; align-items: center; }
     .preview-counter { font-weight: bold; color: #475569; }
+
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.35); }
     .modal-content { background: white; width: 620px; max-width: 90%; margin: 100px auto; padding: 25px; border-radius: 10px; }
     .modal-header { display: flex; justify-content: space-between; border-bottom: 1px solid #e5e7eb; margin-bottom: 15px; }
@@ -86,7 +88,7 @@
               placeholder="Enter sample size for condition ${i}">
 
             <label>Enter stimuli for Condition ${i}:</label>
-            <textarea id="condition${i}Stimuli" placeholder="Enter stimuli text for condition ${i}"></textarea>
+            <textarea id="condition${i}Stimuli" placeholder="Example: Intro text {Q1} follow-up text {Q2}"></textarea>
 
             <div class="note">
               Use placeholders such as <b>{Q1}</b>, <b>{Q2}</b>, and so on wherever you want the generator to insert participant response questions.
@@ -163,12 +165,7 @@
 
       for (let s = 1; s <= scaleCount; s++) {
         const label = document.getElementById(`condition${conditionNumber}Question${questionNumber}Scale${s}`)?.value.trim();
-
-        if (label) {
-          scaleLabels.push(`${s}-${label}`);
-        } else {
-          scaleLabels.push(`${s}-`);
-        }
+        scaleLabels.push(`${s}-${label || ""}`);
       }
 
       return scaleLabels;
@@ -180,11 +177,11 @@
 
       let html = `
         <div class="preview-question">
-          <strong>Q${questionNumber}: ${escapeHTML(question)}</strong>
+          <div><strong>Q${questionNumber}: ${escapeHTML(question)}</strong></div>
           <div><strong>Response Scale:</strong></div>
       `;
 
-      scaleLabels.forEach((label, index) => {
+      scaleLabels.forEach((label) => {
         html += `
           <label class="scale-radio">
             <input type="radio" name="previewCondition${conditionNumber}Q${questionNumber}">
