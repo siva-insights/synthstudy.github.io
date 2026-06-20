@@ -63,16 +63,22 @@
 
     <table class="input-table">
       <tr>
-        <td>Study Name:</td>
-        <td><input type="text" id="studyName" name="studyName"></td>
+        <td><label for="studyName">Study Name:</label></td>
+        <td><input type="text" id="studyName" placeholder="Enter study name"></td>
       </tr>
+    
       <tr>
-        <td>Enter Number of Conditions:</td>
-        <td><input type="number" id="numConditions" name="numConditions"></td>
+        <td><label for="conditionCount">Enter Number of Conditions:</label></td>
+        <td>
+          <input type="number" id="conditionCount" min="1" max="20"
+            placeholder="Enter number of conditions"
+            oninput="showConditionInputs()">
+        </td>
       </tr>
+    
       <tr>
-        <td>Enter Required Number of Samples per Condition:</td>
-        <td><input type="number" id="samplesPerCondition" name="samplesPerCondition"></td>
+        <td><label for="sampleCount">Enter Required Number of Samples per Condition:</label></td>
+        <td><input type="number" id="sampleCount" min="1" placeholder="Enter samples per condition"></td>
       </tr>
     </table>
 
