@@ -18,11 +18,11 @@
     button:hover { background: #1d4ed8; }
     button:disabled { background: #94a3b8; cursor: not-allowed; }
 
-    .preview-box { margin-top: 25px; padding: 18px; background: #ffffff; border: 2px solid #2563eb; border-radius: 10px; }
-    .preview-title { font-size: 20px; font-weight: bold; color: #1e3a8a; margin-bottom: 10px; }
-    .preview-stimuli { white-space: pre-wrap; line-height: 1.5; background: #f8fafc; padding: 14px; border-radius: 8px; }
-    .preview-question { margin-top: 10px; padding: 10px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; }
-    .scale-radio { display: inline-block; margin-right: 18px; margin-top: 8px; font-weight: normal; }
+    .preview-box { margin-top: 25px; padding: 16px; background: #ffffff; border: 2px solid #2563eb; border-radius: 10px; }
+    .preview-title { font-size: 20px; font-weight: bold; color: #1e3a8a; margin-bottom: 8px; }
+    .preview-stimuli { line-height: 1.4; background: #f8fafc; padding: 12px; border-radius: 8px; }
+    .preview-question { margin: 8px 0; padding: 10px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; }
+    .scale-radio { display: inline-flex; align-items: center; gap: 4px; margin-right: 16px; margin-top: 8px; font-weight: normal; }
     .preview-nav { margin-top: 15px; display: flex; justify-content: space-between; align-items: center; }
     .preview-counter { font-weight: bold; color: #475569; }
 
@@ -165,7 +165,10 @@
 
       for (let s = 1; s <= scaleCount; s++) {
         const label = document.getElementById(`condition${conditionNumber}Question${questionNumber}Scale${s}`)?.value.trim();
-        scaleLabels.push(`${s}-${label || ""}`);
+
+        if (label) {
+          scaleLabels.push(`${s}-${label}`);
+        }
       }
 
       return scaleLabels;
@@ -237,7 +240,6 @@
         <div class="preview-box">
           <div class="preview-title">Preview: Condition ${preview.condition}</div>
           <p><strong>Required Samples:</strong> ${escapeHTML(preview.sampleCount || "Not entered")}</p>
-
           <div class="preview-stimuli">${preview.html}</div>
 
           <div class="preview-nav">
