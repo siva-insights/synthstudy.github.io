@@ -3,19 +3,116 @@
 <head>
   <title>Synthetic Experimental Data Generator</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; color: #1f2937; }
-    .container { max-width: 850px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
-    h1 { text-align: center; color: #1e3a8a; margin-bottom: 30px; }
-    label { font-weight: bold; display: block; margin-top: 18px; margin-bottom: 6px; }
-    input[type="text"], input[type="number"], textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; box-sizing: border-box; }
-    textarea { min-height: 80px; resize: vertical; }
-    .radio-group label { font-weight: normal; display: inline-block; margin-right: 20px; }
-    .section { margin-top: 25px; padding: 20px; background: #eef4ff; border-left: 5px solid #2563eb; border-radius: 8px; }
-    .factor-card { margin-top: 16px; padding: 15px; background: white; border: 1px solid #dbeafe; border-radius: 8px; }
-    .stimuli-box { margin-top: 12px; padding: 12px; background: #f8fafc; border-radius: 8px; }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    button { margin-top: 25px; background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; margin-right: 10px; }
-    button:hover { background: #1d4ed8; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f7fb;
+      margin: 0;
+      color: #1f2937;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 50px auto;
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    }
+
+    h1 {
+      text-align: center;
+      color: #1e3a8a;
+      margin-bottom: 12px;
+    }
+
+    .cite-button-wrap {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 18px;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .radio-group label {
+      font-weight: normal;
+      display: inline-block;
+      margin-right: 20px;
+    }
+
+    .section {
+      margin-top: 25px;
+      padding: 20px;
+      background: #eef4ff;
+      border-left: 5px solid #2563eb;
+      border-radius: 8px;
+    }
+
+    .factor-card {
+      margin-top: 16px;
+      padding: 15px;
+      background: white;
+      border: 1px solid #dbeafe;
+      border-radius: 8px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .level-box,
+    .stimuli-box {
+      margin-top: 15px;
+      padding: 12px;
+      background: #f8fafc;
+      border-radius: 8px;
+    }
+
+    button {
+      margin-top: 20px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .cite-button {
+      margin-top: 0;
+      background: #475569;
+    }
+
+    .cite-button:hover {
+      background: #334155;
+    }
 
     .modal {
       display: none;
@@ -30,7 +127,7 @@
 
     .modal-content {
       background: white;
-      width: 560px;
+      width: 620px;
       max-width: 90%;
       margin: 100px auto;
       padding: 25px;
@@ -71,6 +168,10 @@
   <div class="container">
     <h1>SYNTHETIC EXPERIMENTAL DATA GENERATOR</h1>
 
+    <div class="cite-button-wrap">
+      <button class="cite-button" onclick="showCitations()">Cite this generator</button>
+    </div>
+
     <label for="studyName">Study Name:</label>
     <input type="text" id="studyName" placeholder="Enter study name">
 
@@ -84,7 +185,6 @@
     <div id="designFields"></div>
 
     <button onclick="submitForm()">Submit</button>
-    <button onclick="showCitations()">Cite</button>
   </div>
 
   <div id="citationModal" class="modal">
@@ -112,7 +212,9 @@
             <div id="betweenFactors"></div>
           </div>
         `;
-      } else if (selectedDesign === "within") {
+      }
+
+      else if (selectedDesign === "within") {
         designFields.innerHTML = `
           <div class="section">
             <label>Number of Within Subject Factors:</label>
@@ -121,7 +223,9 @@
             <div id="withinFactors"></div>
           </div>
         `;
-      } else if (selectedDesign === "mixed") {
+      }
+
+      else if (selectedDesign === "mixed") {
         designFields.innerHTML = `
           <div class="section">
             <label>Number of Between Subject Factors:</label>
@@ -141,7 +245,9 @@
     function showFactorInputs(type, containerId, countValue) {
       const count = parseInt(countValue);
       const container = document.getElementById(containerId);
+
       container.innerHTML = "";
+
       if (!count || count < 1) return;
 
       for (let i = 1; i <= count; i++) {
@@ -154,49 +260,94 @@
                 <label>${type} Factor ${i} Name:</label>
                 <input type="text" id="${safeType}Factor${i}Name"
                   placeholder="Enter ${type.toLowerCase()} factor ${i} name"
-                  oninput="updateLevelLabel('${safeType}', '${type}', ${i})">
+                  oninput="updateStimuliLabels('${safeType}', '${type}', ${i})">
               </div>
 
               <div>
-                <label id="${safeType}Factor${i}LevelLabel">Number of Levels for ${type} Factor ${i}:</label>
+                <label>Number of Levels:</label>
                 <input type="number" min="1" max="20" id="${safeType}Factor${i}Levels"
                   placeholder="Enter number of levels"
-                  oninput="showStimuliInputs('${safeType}', '${type}', ${i}, this.value)">
+                  oninput="showLevelInputs('${safeType}', '${type}', ${i}, this.value)">
               </div>
             </div>
 
+            <div id="${safeType}Factor${i}LevelsBox"></div>
             <div id="${safeType}Factor${i}Stimuli"></div>
           </div>
         `;
       }
     }
 
-    function updateLevelLabel(safeType, type, index) {
-      const factorName = document.getElementById(`${safeType}Factor${index}Name`).value.trim();
-      const levelLabel = document.getElementById(`${safeType}Factor${index}LevelLabel`);
+    function showLevelInputs(safeType, type, factorIndex, levelCountValue) {
+      const levelCount = parseInt(levelCountValue);
+      const levelsContainer = document.getElementById(`${safeType}Factor${factorIndex}LevelsBox`);
+      const stimuliContainer = document.getElementById(`${safeType}Factor${factorIndex}Stimuli`);
 
-      levelLabel.innerText = factorName
-        ? `Number of Levels for ${factorName}:`
-        : `Number of Levels for ${type} Factor ${index}:`;
+      levelsContainer.innerHTML = "";
+      stimuliContainer.innerHTML = "";
+
+      if (!levelCount || levelCount < 1) return;
+
+      let levelHtml = `<div class="level-box">`;
+
+      for (let level = 1; level <= levelCount; level++) {
+        levelHtml += `
+          <label>Level ${level} Name:</label>
+          <input type="text" id="${safeType}Factor${factorIndex}Level${level}Name"
+            placeholder="Enter level ${level} name"
+            oninput="updateStimuliLabels('${safeType}', '${type}', ${factorIndex})">
+        `;
+      }
+
+      levelHtml += `</div>`;
+      levelsContainer.innerHTML = levelHtml;
+
+      showStimuliInputs(safeType, type, factorIndex, levelCount);
     }
 
-    function showStimuliInputs(safeType, type, factorIndex, levelCountValue) {
-      const levelCount = parseInt(levelCountValue);
+    function showStimuliInputs(safeType, type, factorIndex, levelCount) {
       const container = document.getElementById(`${safeType}Factor${factorIndex}Stimuli`);
-      container.innerHTML = "";
-      if (!levelCount || levelCount < 1) return;
 
       let html = `<div class="stimuli-box">`;
 
       for (let level = 1; level <= levelCount; level++) {
         html += `
-          <label>Enter the stimuli for ${type} Factor ${factorIndex} and Level ${level}:</label>
+          <label id="${safeType}Factor${factorIndex}Level${level}StimuliLabel">
+            Enter the stimuli for ${type} Factor ${factorIndex}, Level ${level}:
+          </label>
           <textarea placeholder="Enter stimuli paragraph"></textarea>
         `;
       }
 
       html += `</div>`;
       container.innerHTML = html;
+
+      updateStimuliLabels(safeType, type, factorIndex);
+    }
+
+    function updateStimuliLabels(safeType, type, factorIndex) {
+      const factorNameInput = document.getElementById(`${safeType}Factor${factorIndex}Name`);
+      const levelCountInput = document.getElementById(`${safeType}Factor${factorIndex}Levels`);
+
+      if (!factorNameInput || !levelCountInput) return;
+
+      const factorName = factorNameInput.value.trim() || `${type} Factor ${factorIndex}`;
+      const levelCount = parseInt(levelCountInput.value);
+
+      if (!levelCount || levelCount < 1) return;
+
+      for (let level = 1; level <= levelCount; level++) {
+        const levelNameInput = document.getElementById(`${safeType}Factor${factorIndex}Level${level}Name`);
+        const stimuliLabel = document.getElementById(`${safeType}Factor${factorIndex}Level${level}StimuliLabel`);
+
+        if (stimuliLabel) {
+          const levelName = levelNameInput && levelNameInput.value.trim()
+            ? levelNameInput.value.trim()
+            : `Level ${level}`;
+
+          stimuliLabel.innerText = `Enter the stimuli for ${type} Factor ${factorIndex} (${factorName}), ${levelName}:`;
+        }
+      }
     }
 
     function showCitations() {
