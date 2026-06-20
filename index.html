@@ -12,7 +12,7 @@
     }
 
     .container {
-      max-width: 700px;
+      max-width: 760px;
       margin: 50px auto;
       background: white;
       padding: 30px;
@@ -40,10 +40,7 @@
       border: 1px solid #cbd5e1;
       border-radius: 8px;
       font-size: 15px;
-    }
-
-    .radio-group {
-      margin-top: 8px;
+      box-sizing: border-box;
     }
 
     .radio-group label {
@@ -57,6 +54,14 @@
       padding: 20px;
       background: #eef4ff;
       border-left: 5px solid #2563eb;
+      border-radius: 8px;
+    }
+
+    .factor-card {
+      margin-top: 16px;
+      padding: 15px;
+      background: white;
+      border: 1px solid #dbeafe;
       border-radius: 8px;
     }
 
@@ -106,8 +111,8 @@
           <div class="section">
             <label>Number of Between Subject Factors:</label>
             <input type="number" min="1" max="10" placeholder="Enter number of between factors"
-              oninput="showFactorNames('B', 'betweenFactorNames', this.value)">
-            <div id="betweenFactorNames"></div>
+              oninput="showFactorInputs('B', 'betweenFactors', this.value)">
+            <div id="betweenFactors"></div>
           </div>
         `;
       }
@@ -117,8 +122,8 @@
           <div class="section">
             <label>Number of Within Subject Factors:</label>
             <input type="number" min="1" max="10" placeholder="Enter number of within factors"
-              oninput="showFactorNames('W', 'withinFactorNames', this.value)">
-            <div id="withinFactorNames"></div>
+              oninput="showFactorInputs('W', 'withinFactors', this.value)">
+            <div id="withinFactors"></div>
           </div>
         `;
       }
@@ -128,33 +133,52 @@
           <div class="section">
             <label>Number of Between Subject Factors:</label>
             <input type="number" min="1" max="10" placeholder="Enter number of between factors"
-              oninput="showFactorNames('B', 'betweenFactorNames', this.value)">
-            <div id="betweenFactorNames"></div>
+              oninput="showFactorInputs('B', 'betweenFactors', this.value)">
+            <div id="betweenFactors"></div>
 
             <label>Number of Within Subject Factors:</label>
             <input type="number" min="1" max="10" placeholder="Enter number of within factors"
-              oninput="showFactorNames('W', 'withinFactorNames', this.value)">
-            <div id="withinFactorNames"></div>
+              oninput="showFactorInputs('W', 'withinFactors', this.value)">
+            <div id="withinFactors"></div>
           </div>
         `;
       }
     }
 
-    function showFactorNames(prefix, containerId, countValue) {
+    function showFactorInputs(prefix, containerId, countValue) {
       const count = parseInt(countValue);
       const container = document.getElementById(containerId);
 
       container.innerHTML = "";
 
-      if (!count || count < 1) {
-        return;
-      }
+      if (!count || count < 1) return;
 
       for (let i = 1; i <= count; i++) {
         container.innerHTML += `
-          <label>${prefix} Factor ${i} Name:</label>
-          <input type="text" placeholder="Enter ${prefix} factor ${i} name">
+          <div class="factor-card">
+            <label>${prefix} Factor ${i} Name:</label>
+            <input type="text" id="${prefix}factor${i}Name"
+              placeholder="Enter ${prefix} factor ${i} name"
+              oninput="updateLevelLabel('${prefix}', ${i})">
+
+            <label id="${prefix}factor${i}LevelLabel">Number of Levels for ${prefix} Factor ${i}:</label>
+            <input type="number" min="1" max="20" id="${prefix}factor${i}Levels"
+              placeholder="Enter number of levels">
+          </div>
         `;
+      }
+    }
+
+    function updateLevelLabel(prefix, index) {
+      const factorNameInput = document.getElementById(`${prefix}factor${index}Name`);
+      const levelLabel = document.getElementById(`${prefix}factor${index}LevelLabel`);
+
+      const factorName = factorNameInput.value.trim();
+
+      if (factorName) {
+        levelLabel.innerText = `Number of Levels for ${factorName}:`;
+      } else {
+        levelLabel.innerText = `Number of Levels for ${prefix} Factor ${index}:`;
       }
     }
 
