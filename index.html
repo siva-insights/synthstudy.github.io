@@ -11,7 +11,7 @@
     }
 
     .container {
-      max-width: 900px;
+      max-width: 700px;
       margin: 50px auto;
       background: white;
       padding: 30px;
@@ -37,9 +37,7 @@
       margin-bottom: 6px;
     }
 
-    input[type="text"],
-    input[type="number"],
-    textarea {
+    input[type="text"] {
       width: 100%;
       padding: 10px;
       border: 1px solid #cbd5e1;
@@ -48,49 +46,7 @@
       box-sizing: border-box;
     }
 
-    textarea {
-      min-height: 90px;
-      resize: vertical;
-    }
-
-    .radio-group label {
-      font-weight: normal;
-      display: inline-block;
-      margin-right: 20px;
-    }
-
-    .section {
-      margin-top: 25px;
-      padding: 20px;
-      background: #eef4ff;
-      border-left: 5px solid #2563eb;
-      border-radius: 8px;
-    }
-
-    .factor-card {
-      margin-top: 16px;
-      padding: 15px;
-      background: white;
-      border: 1px solid #dbeafe;
-      border-radius: 8px;
-    }
-
-    .form-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 18px;
-    }
-
-    .level-box,
-    .stimuli-box {
-      margin-top: 15px;
-      padding: 12px;
-      background: #f8fafc;
-      border-radius: 8px;
-    }
-
     button {
-      margin-top: 20px;
       background: #2563eb;
       color: white;
       border: none;
@@ -98,20 +54,10 @@
       border-radius: 8px;
       font-size: 16px;
       cursor: pointer;
-      margin-right: 10px;
     }
 
     button:hover {
       background: #1d4ed8;
-    }
-
-    .cite-button {
-      margin-top: 0;
-      background: #475569;
-    }
-
-    .cite-button:hover {
-      background: #334155;
     }
 
     .modal {
@@ -132,13 +78,11 @@
       margin: 100px auto;
       padding: 25px;
       border-radius: 10px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     }
 
     .modal-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
       border-bottom: 1px solid #e5e7eb;
       margin-bottom: 15px;
     }
@@ -146,7 +90,6 @@
     .close {
       font-size: 28px;
       cursor: pointer;
-      color: #555;
     }
 
     .citation-row {
@@ -169,22 +112,11 @@
     <h1>SYNTHETIC EXPERIMENTAL DATA GENERATOR</h1>
 
     <div class="cite-button-wrap">
-      <button class="cite-button" onclick="showCitations()">Cite this generator</button>
+      <button onclick="showCitations()">Cite this generator</button>
     </div>
 
     <label for="studyName">Study Name:</label>
     <input type="text" id="studyName" placeholder="Enter study name">
-
-    <label>Study Design:</label>
-    <div class="radio-group">
-      <label><input type="radio" name="studyDesign" value="between" onchange="showDesignFields()"> Between</label>
-      <label><input type="radio" name="studyDesign" value="within" onchange="showDesignFields()"> Within</label>
-      <label><input type="radio" name="studyDesign" value="mixed" onchange="showDesignFields()"> Mixed</label>
-    </div>
-
-    <div id="designFields"></div>
-
-    <button onclick="submitForm()">Submit</button>
   </div>
 
   <div id="citationModal" class="modal">
@@ -199,157 +131,6 @@
   </div>
 
   <script>
-    function showDesignFields() {
-      const selectedDesign = document.querySelector('input[name="studyDesign"]:checked').value;
-      const designFields = document.getElementById("designFields");
-
-      if (selectedDesign === "between") {
-        designFields.innerHTML = `
-          <div class="section">
-            <label>Number of Between Subject Factors:</label>
-            <input type="number" min="1" max="10" placeholder="Enter number of between factors"
-              oninput="showFactorInputs('Between', 'betweenFactors', this.value)">
-            <div id="betweenFactors"></div>
-          </div>
-        `;
-      }
-
-      else if (selectedDesign === "within") {
-        designFields.innerHTML = `
-          <div class="section">
-            <label>Number of Within Subject Factors:</label>
-            <input type="number" min="1" max="10" placeholder="Enter number of within factors"
-              oninput="showFactorInputs('Within', 'withinFactors', this.value)">
-            <div id="withinFactors"></div>
-          </div>
-        `;
-      }
-
-      else if (selectedDesign === "mixed") {
-        designFields.innerHTML = `
-          <div class="section">
-            <label>Number of Between Subject Factors:</label>
-            <input type="number" min="1" max="10" placeholder="Enter number of between factors"
-              oninput="showFactorInputs('Between', 'betweenFactors', this.value)">
-            <div id="betweenFactors"></div>
-
-            <label>Number of Within Subject Factors:</label>
-            <input type="number" min="1" max="10" placeholder="Enter number of within factors"
-              oninput="showFactorInputs('Within', 'withinFactors', this.value)">
-            <div id="withinFactors"></div>
-          </div>
-        `;
-      }
-    }
-
-    function showFactorInputs(type, containerId, countValue) {
-      const count = parseInt(countValue);
-      const container = document.getElementById(containerId);
-
-      container.innerHTML = "";
-
-      if (!count || count < 1) return;
-
-      for (let i = 1; i <= count; i++) {
-        const safeType = type.toLowerCase();
-
-        container.innerHTML += `
-          <div class="factor-card">
-            <div class="form-row">
-              <div>
-                <label>${type} Factor ${i} Name:</label>
-                <input type="text" id="${safeType}Factor${i}Name"
-                  placeholder="Enter ${type.toLowerCase()} factor ${i} name"
-                  oninput="updateStimuliLabels('${safeType}', '${type}', ${i})">
-              </div>
-
-              <div>
-                <label>Number of Levels:</label>
-                <input type="number" min="1" max="20" id="${safeType}Factor${i}Levels"
-                  placeholder="Enter number of levels"
-                  oninput="showLevelInputs('${safeType}', '${type}', ${i}, this.value)">
-              </div>
-            </div>
-
-            <div id="${safeType}Factor${i}LevelsBox"></div>
-            <div id="${safeType}Factor${i}Stimuli"></div>
-          </div>
-        `;
-      }
-    }
-
-    function showLevelInputs(safeType, type, factorIndex, levelCountValue) {
-      const levelCount = parseInt(levelCountValue);
-      const levelsContainer = document.getElementById(`${safeType}Factor${factorIndex}LevelsBox`);
-      const stimuliContainer = document.getElementById(`${safeType}Factor${factorIndex}Stimuli`);
-
-      levelsContainer.innerHTML = "";
-      stimuliContainer.innerHTML = "";
-
-      if (!levelCount || levelCount < 1) return;
-
-      let levelHtml = `<div class="level-box">`;
-
-      for (let level = 1; level <= levelCount; level++) {
-        levelHtml += `
-          <label>Level ${level} Name:</label>
-          <input type="text" id="${safeType}Factor${factorIndex}Level${level}Name"
-            placeholder="Enter level ${level} name"
-            oninput="updateStimuliLabels('${safeType}', '${type}', ${factorIndex})">
-        `;
-      }
-
-      levelHtml += `</div>`;
-      levelsContainer.innerHTML = levelHtml;
-
-      showStimuliInputs(safeType, type, factorIndex, levelCount);
-    }
-
-    function showStimuliInputs(safeType, type, factorIndex, levelCount) {
-      const container = document.getElementById(`${safeType}Factor${factorIndex}Stimuli`);
-
-      let html = `<div class="stimuli-box">`;
-
-      for (let level = 1; level <= levelCount; level++) {
-        html += `
-          <label id="${safeType}Factor${factorIndex}Level${level}StimuliLabel">
-            Enter the stimuli for ${type} Factor ${factorIndex}, Level ${level}:
-          </label>
-          <textarea placeholder="Enter stimuli paragraph"></textarea>
-        `;
-      }
-
-      html += `</div>`;
-      container.innerHTML = html;
-
-      updateStimuliLabels(safeType, type, factorIndex);
-    }
-
-    function updateStimuliLabels(safeType, type, factorIndex) {
-      const factorNameInput = document.getElementById(`${safeType}Factor${factorIndex}Name`);
-      const levelCountInput = document.getElementById(`${safeType}Factor${factorIndex}Levels`);
-
-      if (!factorNameInput || !levelCountInput) return;
-
-      const factorName = factorNameInput.value.trim() || `${type} Factor ${factorIndex}`;
-      const levelCount = parseInt(levelCountInput.value);
-
-      if (!levelCount || levelCount < 1) return;
-
-      for (let level = 1; level <= levelCount; level++) {
-        const levelNameInput = document.getElementById(`${safeType}Factor${factorIndex}Level${level}Name`);
-        const stimuliLabel = document.getElementById(`${safeType}Factor${factorIndex}Level${level}StimuliLabel`);
-
-        if (stimuliLabel) {
-          const levelName = levelNameInput && levelNameInput.value.trim()
-            ? levelNameInput.value.trim()
-            : `Level ${level}`;
-
-          stimuliLabel.innerText = `Enter the stimuli for ${type} Factor ${factorIndex} (${factorName}), ${levelName}:`;
-        }
-      }
-    }
-
     function showCitations() {
       const studyName = document.getElementById("studyName").value.trim() || "Synthetic Experimental Data Generator";
       const author = "Siva Shanmugam Mariappan";
@@ -370,16 +151,6 @@
           <div class="citation-style">Chicago</div>
           <div>Mariappan, Siva Shanmugam. "${studyName}." <i>Synthetic Experimental Data Generator</i>, ${year}.</div>
         </div>
-
-        <div class="citation-row">
-          <div class="citation-style">Harvard</div>
-          <div>Mariappan, S.S. ${year}. <i>${studyName}</i>. Synthetic Experimental Data Generator.</div>
-        </div>
-
-        <div class="citation-row">
-          <div class="citation-style">Vancouver</div>
-          <div>Mariappan SS. ${studyName}. Synthetic Experimental Data Generator. ${year}.</div>
-        </div>
       `;
 
       document.getElementById("citationModal").style.display = "block";
@@ -387,10 +158,6 @@
 
     function closeCitations() {
       document.getElementById("citationModal").style.display = "none";
-    }
-
-    function submitForm() {
-      alert("Study information submitted!");
     }
   </script>
 </body>
