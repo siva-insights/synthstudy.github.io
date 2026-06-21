@@ -10,11 +10,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from pathlib import Path
 import uvicorn
 
 OLLAMA_URL = "http://localhost:11434"
-OUTPUT_DIR = "outputs"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+OUTPUT_DIR = Path.home() / "OLSEDG_outputs"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="OLSEDG Helper")
 
@@ -271,8 +273,8 @@ def generate(data: GenerateRequest):
     csv_filename = f"olsedg_responses_{file_id}.csv"
     docx_filename = f"olsedg_study_inputs_{file_id}.docx"
 
-    csv_path = os.path.join(OUTPUT_DIR, csv_filename)
-    docx_path = os.path.join(OUTPUT_DIR, docx_filename)
+    csv_path = OUTPUT_DIR / csv_filename
+    docx_path = OUTPUT_DIR / docx_filename
 
     pd.DataFrame(rows).to_csv(csv_path, index=False)
     create_docx(data, docx_path)
