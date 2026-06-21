@@ -1,0 +1,6 @@
+backend/build/
+backend/dist/
+*.spec
+dist/
+build/
+*.spec
