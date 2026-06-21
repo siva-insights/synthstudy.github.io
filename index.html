@@ -316,8 +316,114 @@
       }
     }
 
-    function generateResponses() {
-      alert("Generate button clicked. Backend connection will be added next.");
+    async function generateResponses() {
+      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+    
+      if (!selectedModel) {
+        alert("Please select a language model.");
+        return;
+      }
+    
+      const studyName = document.getElementById("studyName").value.trim();
+      const conditionCount = parseInt(document.getElementById("conditionCount").value);
+      const sampleCount = parseInt(document.getElementById("sampleCount").value);
+      const temperature = parseFloat(document.getElementById("temperature").value);
+    
+      if (!studyName || !conditionCount || !sampleCount || questionCount < 1) {
+        alert("Please complete study name, conditions, samples, and at least one question.");
+        return;
+      }
+    
+      const conditions = [];
+    
+      for (let c = 1; c <= conditionCount; c++) {
+        conditions.push({
+          condition_number: c,
+          stimuli: document.getElementById(`condition${c}Stimuli`).value.trim()
+        });
+      }
+    
+      const questions = [];
+    
+      for (let q = 1; q <= questionCount; q++) {
+        const questionText = document.getElementById(`question${q}`).value.trim();
+        const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`).value);
+    
+        const scalePoints = [];
+    
+        for (let s = 1; s <= scaleCount; s++) {
+          const label = document.getElementById(`question${q}Scale${s}`).value.trim();
+          scalePoints.push(label);
+        }
+    
+        questions.push({
+          question_number: q,
+          question_text: questionText,
+          scale_points: scalePoints
+        });
+      }
+    
+      const payload = {
+        study_name: studyName,
+        model_name: selectedModel.value,
+        temperature: temperature,
+        sample_count_per_condition: sampleCount,
+        conditions: conditions,
+        questions: questions
+      };
+    
+      const previewArea = document.getElementById("previewArea");
+    
+      previewArea.innerHTML = `
+        <div class="preview-box">
+          <div class="preview-title">Generating Synthetic Responses...</div>
+          <p>This may take several minutes because OLSEDG generates one respondent at a time.</p>
+        </div>
+      `;
+    
+      try {
+        const response = await fetch("http://localhost:8000/generate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+    
+        const data = await response.json();
+    
+        if (data.success) {
+          previewArea.innerHTML = `
+            <div class="preview-box">
+              <div class="preview-title">Generation Complete</div>
+              <p><strong>Total responses generated:</strong> ${data.total_responses}</p>
+    
+              <a href="${data.csv_url}" download>
+                <button type="button">Download CSV Responses</button>
+              </a>
+    
+              <a href="${data.docx_url}" download>
+                <button type="button">Download Study Inputs Word Doc</button>
+              </a>
+            </div>
+          `;
+        } else {
+          previewArea.innerHTML = `
+            <div class="preview-box">
+              <div class="preview-title">Generation Failed</div>
+              <p>Please check OLSEDG Helper and Ollama.</p>
+            </div>
+          `;
+        }
+    
+      } catch (error) {
+        previewArea.innerHTML = `
+          <div class="preview-box">
+            <div class="preview-title">Generation Failed</div>
+            <p>OLSEDG Helper is not running or could not connect to Ollama.</p>
+          </div>
+        `;
+      }
     }
 
     function escapeHTML(text) {
