@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from pathlib import Path
+from datetime import datetime
 import uvicorn
 
 OLLAMA_URL = "http://localhost:11434"
@@ -270,8 +271,11 @@ def generate(data: GenerateRequest):
 
     file_id = str(uuid.uuid4())[:8]
 
-    csv_filename = f"olsedg_responses_{file_id}.csv"
-    docx_filename = f"olsedg_study_inputs_{file_id}.docx"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_model_name = data.model_name.replace(":", "-").replace("/", "-")
+    
+    csv_filename = f"olsedg_responses_{safe_model_name}_{timestamp}.csv"
+    docx_filename = f"olsedg_study_inputs_{safe_model_name}_{timestamp}.docx"
 
     csv_path = OUTPUT_DIR / csv_filename
     docx_path = OUTPUT_DIR / docx_filename
