@@ -22,6 +22,15 @@
     button { margin-top: 20px; background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; margin-right: 8px; }
     button:hover { background: #1d4ed8; }
     button:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    .download-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+    .download-card { display: block; text-decoration: none; background: white; border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; color: #1f2937; transition: 0.2s; }
+    .download-card:hover { border-color: #2563eb; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15); }
+    .download-title { font-weight: bold; color: #1e3a8a; margin-bottom: 4px; }
+    .download-subtitle { font-size: 14px; color: #64748b; }
+    .helper-buttons { margin-top: 16px; }
+    .add-question-wrap { margin-top: 12px; }
+
     .preview-box { margin-top: 25px; padding: 16px; background: #ffffff; border: 2px solid #2563eb; border-radius: 10px; }
     .preview-title { font-size: 20px; font-weight: bold; color: #1e3a8a; margin-bottom: 8px; }
     .preview-stimuli { line-height: 1.4; background: #f8fafc; padding: 12px; border-radius: 8px; }
@@ -29,6 +38,7 @@
     .scale-radio { display: inline-flex; align-items: center; gap: 4px; margin-right: 16px; margin-top: 8px; font-weight: normal; }
     .preview-nav { margin-top: 15px; display: flex; justify-content: space-between; align-items: center; }
     .preview-counter { font-weight: bold; color: #475569; }
+
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.35); }
     .modal-content { background: white; width: 620px; max-width: 90%; margin: 100px auto; padding: 25px; border-radius: 10px; }
     .modal-header { display: flex; justify-content: space-between; border-bottom: 1px solid #e5e7eb; margin-bottom: 15px; }
@@ -44,6 +54,38 @@
 
     <div class="cite-button-wrap">
       <button onclick="showCitations()">Cite this generator</button>
+    </div>
+
+    <div class="section">
+      <h2>Model Selection</h2>
+
+      <label>Select the language model for response generation:</label>
+      <div class="radio-options">
+        <label><input type="radio" name="modelChoice" value="qwen2.5:14b"> qwen2.5:14b</label>
+        <label><input type="radio" name="modelChoice" value="qwen2.5:7b"> qwen2.5:7b</label>
+      </div>
+
+      <label for="temperature">Response Randomness / Temperature:</label>
+      <input type="number" id="temperature" min="0" max="2" step="0.1" value="0.7">
+
+      <div class="download-grid">
+        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.2/OLSEDG-Helper.zip" download>
+          <div class="download-title">Download for Mac</div>
+          <div class="download-subtitle">OLSEDG Helper v1.2</div>
+        </a>
+
+        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.1/OLSEDG-Helper.zip" download>
+          <div class="download-title">Download for Windows</div>
+          <div class="download-subtitle">OLSEDG Helper v1.1</div>
+        </a>
+      </div>
+
+      <div class="helper-buttons">
+        <button onclick="checkHelper()">Check Helper</button>
+        <button onclick="checkSelectedModel()">Check Selected Model</button>
+      </div>
+
+      <div id="helperStatus" class="note"></div>
     </div>
 
     <table class="input-table">
@@ -71,25 +113,11 @@
 
     <div class="section">
       <h2>Questions</h2>
-      <button onclick="addQuestion()">+ Add Question</button>
       <div id="questionFields"></div>
-    </div>
 
-    <div class="section">
-      <h2>Model Selection</h2>
-
-      <label>Select the language model for response generation:</label>
-      <div class="radio-options">
-        <label><input type="radio" name="modelChoice" value="qwen2.5:14b"> qwen2.5:14b</label>
-        <label><input type="radio" name="modelChoice" value="qwen2.5:7b"> qwen2.5:7b</label>
+      <div id="addQuestionButtonContainer" class="add-question-wrap">
+        <button onclick="addQuestion()">+ Add Question</button>
       </div>
-
-      <label for="temperature">Response Randomness / Temperature:</label>
-      <input type="number" id="temperature" min="0" max="2" step="0.1" value="0.7">
-
-      <button onclick="checkHelper()">Check Helper</button>
-      <button onclick="checkSelectedModel()">Check Selected Model</button>
-      <div id="helperStatus" class="note"></div>
     </div>
 
     <div class="action-buttons">
@@ -288,8 +316,114 @@
       }
     }
 
-    function generateResponses() {
-      alert("Generate button clicked. Backend connection will be added next.");
+    async function generateResponses() {
+      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+    
+      if (!selectedModel) {
+        alert("Please select a language model.");
+        return;
+      }
+    
+      const studyName = document.getElementById("studyName").value.trim();
+      const conditionCount = parseInt(document.getElementById("conditionCount").value);
+      const sampleCount = parseInt(document.getElementById("sampleCount").value);
+      const temperature = parseFloat(document.getElementById("temperature").value);
+    
+      if (!studyName || !conditionCount || !sampleCount || questionCount < 1) {
+        alert("Please complete study name, conditions, samples, and at least one question.");
+        return;
+      }
+    
+      const conditions = [];
+    
+      for (let c = 1; c <= conditionCount; c++) {
+        conditions.push({
+          condition_number: c,
+          stimuli: document.getElementById(`condition${c}Stimuli`).value.trim()
+        });
+      }
+    
+      const questions = [];
+    
+      for (let q = 1; q <= questionCount; q++) {
+        const questionText = document.getElementById(`question${q}`).value.trim();
+        const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`).value);
+    
+        const scalePoints = [];
+    
+        for (let s = 1; s <= scaleCount; s++) {
+          const label = document.getElementById(`question${q}Scale${s}`).value.trim();
+          scalePoints.push(label);
+        }
+    
+        questions.push({
+          question_number: q,
+          question_text: questionText,
+          scale_points: scalePoints
+        });
+      }
+    
+      const payload = {
+        study_name: studyName,
+        model_name: selectedModel.value,
+        temperature: temperature,
+        sample_count_per_condition: sampleCount,
+        conditions: conditions,
+        questions: questions
+      };
+    
+      const previewArea = document.getElementById("previewArea");
+    
+      previewArea.innerHTML = `
+        <div class="preview-box">
+          <div class="preview-title">Generating Synthetic Responses...</div>
+          <p>This may take several minutes because OLSEDG generates one respondent at a time.</p>
+        </div>
+      `;
+    
+      try {
+        const response = await fetch("http://localhost:8000/generate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+    
+        const data = await response.json();
+    
+        if (data.success) {
+          previewArea.innerHTML = `
+            <div class="preview-box">
+              <div class="preview-title">Generation Complete</div>
+              <p><strong>Total responses generated:</strong> ${data.total_responses}</p>
+    
+              <a href="${data.csv_url}" download>
+                <button type="button">Download CSV Responses</button>
+              </a>
+    
+              <a href="${data.docx_url}" download>
+                <button type="button">Download Study Inputs Word Doc</button>
+              </a>
+            </div>
+          `;
+        } else {
+          previewArea.innerHTML = `
+            <div class="preview-box">
+              <div class="preview-title">Generation Failed</div>
+              <p>Please check OLSEDG Helper and Ollama.</p>
+            </div>
+          `;
+        }
+    
+      } catch (error) {
+        previewArea.innerHTML = `
+          <div class="preview-box">
+            <div class="preview-title">Generation Failed</div>
+            <p>OLSEDG Helper is not running or could not connect to Ollama.</p>
+          </div>
+        `;
+      }
     }
 
     function escapeHTML(text) {
@@ -329,50 +463,49 @@
     async function checkHelper() {
       const statusBox = document.getElementById("helperStatus");
       statusBox.innerHTML = "Checking OLSEDG Helper...";
-    
+
       try {
         const response = await fetch("http://localhost:8000/health");
         const data = await response.json();
-    
+
         if (data.helper_running) {
           statusBox.innerHTML = "✅ OLSEDG Helper is running.";
         } else {
           statusBox.innerHTML = "❌ OLSEDG Helper is not responding.";
         }
-    
+
       } catch (error) {
         statusBox.innerHTML = "❌ OLSEDG Helper is not running. Please open OLSEDG Helper first.";
       }
     }
-    
-    
+
     async function checkSelectedModel() {
       const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
       const statusBox = document.getElementById("helperStatus");
-    
+
       if (!selectedModel) {
         statusBox.innerHTML = "Please select a language model first.";
         return;
       }
-    
+
       const modelName = selectedModel.value;
       statusBox.innerHTML = "Checking selected model...";
-    
+
       try {
         const response = await fetch(`http://localhost:8000/check-model/${encodeURIComponent(modelName)}`);
         const data = await response.json();
-    
+
         if (!data.ollama_running) {
           statusBox.innerHTML = "❌ Ollama is not running. Please start Ollama first.";
           return;
         }
-    
+
         if (data.ready_to_use) {
           statusBox.innerHTML = `✅ ${modelName} is installed and ready to use.`;
         } else {
           statusBox.innerHTML = `❌ ${modelName} is not installed locally.`;
         }
-    
+
       } catch (error) {
         statusBox.innerHTML = "❌ OLSEDG Helper is not running.";
       }
