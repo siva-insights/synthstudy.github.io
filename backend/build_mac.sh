@@ -2,6 +2,9 @@
 
 pip install -r requirements.txt
 
-pyinstaller --onefile --name OLSEDG-Helper app.py
+pyinstaller \
+  --windowed \
+  --name "OLSEDG Helper" \
+  app.py
 
-echo "Done. Helper created at: dist/OLSEDG-Helper"
+echo "Done. Mac app created at: dist/OLSEDG Helper.app"
