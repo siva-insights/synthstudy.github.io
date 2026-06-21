@@ -1,4 +1,7 @@
 fastapi
 uvicorn
 requests
+datasets
+pandas
+python-docx
 pyinstaller

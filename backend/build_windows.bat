@@ -2,7 +2,7 @@ pip install -r requirements.txt
 
 pyinstaller ^
   --onefile ^
-  --windowed ^
+  --console ^
   --name "OLSEDG-Helper" ^
   app.py
 
