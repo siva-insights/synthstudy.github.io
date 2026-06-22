@@ -404,6 +404,14 @@
         <div class="preview-box">
           <div class="preview-title">Generating Synthetic Responses...</div>
           <p>This may take several minutes because OLSEDG generates one respondent at a time.</p>
+    
+          <div class="progress-container">
+            <div id="generationProgressBar" class="progress-bar"></div>
+          </div>
+    
+          <div id="generationProgressText" class="progress-text">
+            Starting generation...
+          </div>
         </div>
       `;
     
@@ -418,29 +426,17 @@
     
         const data = await response.json();
     
-        if (data.success) {
-          previewArea.innerHTML = `
-            <div class="preview-box">
-              <div class="preview-title">Generation Complete</div>
-              <p><strong>Total responses generated:</strong> ${data.total_responses}</p>
-    
-              <a href="${data.csv_url}" download>
-                <button type="button">Download CSV Responses</button>
-              </a>
-    
-              <a href="${data.docx_url}" download>
-                <button type="button">Download Study Inputs Word Doc</button>
-              </a>
-            </div>
-          `;
-        } else {
+        if (!data.success) {
           previewArea.innerHTML = `
             <div class="preview-box">
               <div class="preview-title">Generation Failed</div>
-              <p>Please check OLSEDG Helper and Ollama.</p>
+              <p>Could not start generation.</p>
             </div>
           `;
+          return;
         }
+    
+        pollGenerationProgress(data.job_id);
     
       } catch (error) {
         previewArea.innerHTML = `
@@ -452,6 +448,82 @@
       }
     }
 
+    async function pollGenerationProgress(jobId) {
+      const previewArea = document.getElementById("previewArea");
+    
+      const interval = setInterval(async () => {
+        try {
+          const response = await fetch(`http://localhost:8000/progress/${jobId}`);
+          const data = await response.json();
+    
+          if (!data.success) {
+            clearInterval(interval);
+            return;
+          }
+    
+          const completed = data.completed || 0;
+          const total = data.total || 1;
+          const pending = total - completed;
+          const percent = Math.round((completed / total) * 100);
+    
+          const progressBar = document.getElementById("generationProgressBar");
+          const progressText = document.getElementById("generationProgressText");
+    
+          if (progressBar) {
+            progressBar.style.width = `${percent}%`;
+          }
+    
+          if (progressText) {
+            progressText.innerHTML = `
+              ${completed}/${total} respondents completed.
+              ${pending} pending.
+              Progress: ${percent}%.
+            `;
+          }
+    
+          if (data.status === "complete") {
+            clearInterval(interval);
+    
+            previewArea.innerHTML = `
+              <div class="preview-box">
+                <div class="preview-title">Generation Complete</div>
+                <p><strong>Total responses generated:</strong> ${data.total}</p>
+    
+                <a href="${data.csv_url}" download>
+                  <button type="button">Download CSV Responses</button>
+                </a>
+    
+                <a href="${data.docx_url}" download>
+                  <button type="button">Download Study Inputs Word Doc</button>
+                </a>
+              </div>
+            `;
+          }
+    
+          if (data.status === "error") {
+            clearInterval(interval);
+    
+            previewArea.innerHTML = `
+              <div class="preview-box">
+                <div class="preview-title">Generation Failed</div>
+                <p>${data.message}</p>
+              </div>
+            `;
+          }
+    
+        } catch (error) {
+          clearInterval(interval);
+    
+          previewArea.innerHTML = `
+            <div class="preview-box">
+              <div class="preview-title">Generation Failed</div>
+              <p>Lost connection to OLSEDG Helper.</p>
+            </div>
+          `;
+        }
+      }, 1000);
+    }
+    
     function escapeHTML(text) {
       return String(text)
         .replace(/&/g, "&amp;")
