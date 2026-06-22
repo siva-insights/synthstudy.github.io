@@ -197,7 +197,7 @@
         <td>
           <input type="number" id="conditionCount" min="1" max="20"
             placeholder="Enter number of conditions"
-            oninput="showConditionInputs()">
+            oninput="showConditionInputs(); updateInputEstimate();">
         </td>
       </tr>
 
@@ -298,13 +298,12 @@
           </span>
         </span>
       `;
-      message += `<br>Selected model approximate limit: ${limit.toLocaleString()} words`;
-      
+    
       if (selectedModel) {
         const limit = getModelWordLimit(selectedModel.value);
     
         if (limit) {
-          message += ` / model limit ≈ ${limit.toLocaleString()} words`;
+          message += `<br>Selected model approximate limit: ${limit.toLocaleString()} words`;
     
           if (estimatedTotalWords > limit) {
             message += `<br><span style="color:#dc2626;">Warning: Estimated input may exceed the selected model's approximate word limit.</span>`;
@@ -312,6 +311,8 @@
             message += `<br><span style="color:#16a34a;">Estimated input is within the selected model's approximate word limit.</span>`;
           }
         }
+      } else {
+        message += `<br><span style="color:#64748b;">Select a model to compare this estimate against the model's approximate input limit.</span>`;
       }
     
       document.getElementById("inputEstimateBox").innerHTML = message;
