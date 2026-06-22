@@ -258,13 +258,29 @@ def run_generation_job(job_id: str, data: GenerateRequest):
 
         random.shuffle(condition_numbers)
 
-        rows = []
         condition_lookup = {c.condition_number: c.stimuli for c in data.conditions}
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_model_name = data.model_name.replace(":", "-").replace("/", "-")
+        num_conditions = len(data.conditions)
+        samples_per_condition = data.sample_count_per_condition
+
+        csv_filename = f"OLSEDG_{safe_model_name}_{num_conditions}cond_{samples_per_condition}ppc_{timestamp}.csv"
+        docx_filename = f"OLSEDG_INPUTS_{safe_model_name}_{num_conditions}cond_{samples_per_condition}ppc_{timestamp}.docx"
+
+        csv_path = OUTPUT_DIR / csv_filename
+        docx_path = OUTPUT_DIR / docx_filename
+
+        question_columns = [f"Q{q.question_number}" for q in data.questions]
+        columns = ["respondent_id", "pid", "persona_summary", "condition"] + question_columns
+
+        pd.DataFrame(columns=columns).to_csv(csv_path, index=False)
 
         update_job(
             job_id,
             status="generating",
-            message="Generating synthetic responses..."
+            message=f"Generating synthetic responses. Output is being saved continuously to {csv_path}",
+            csv_url=f"http://localhost:8000/outputs/{csv_filename}"
         )
 
         for i in range(total_needed):
@@ -287,26 +303,25 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             }
 
             row.update(answers)
-            rows.append(row)
+
+            pd.DataFrame([row]).to_csv(
+                csv_path,
+                mode="a",
+                header=False,
+                index=False
+            )
+
+            completed = i + 1
+            pending = total_needed - completed
+            percent = round((completed / total_needed) * 100, 1)
 
             update_job(
                 job_id,
-                completed=i + 1,
-                message=f"{i + 1}/{total_needed} respondents completed"
+                completed=completed,
+                percent=percent,
+                message=f"{completed}/{total_needed} respondents completed. {pending} remaining."
             )
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_model_name = data.model_name.replace(":", "-").replace("/", "-")
-        num_conditions = len(data.conditions)
-        samples_per_condition = data.sample_count_per_condition
-
-        csv_filename = f"OLSEDG_{safe_model_name}_{num_conditions}cond_{samples_per_condition}ppc_{timestamp}.csv"
-        docx_filename = f"OLSEDG_INPUTS_{safe_model_name}_{num_conditions}cond_{samples_per_condition}ppc_{timestamp}.docx"
-
-        csv_path = OUTPUT_DIR / csv_filename
-        docx_path = OUTPUT_DIR / docx_filename
-
-        pd.DataFrame(rows).to_csv(csv_path, index=False)
         create_docx(data, docx_path)
 
         update_job(
@@ -314,6 +329,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             status="complete",
             message="Generation complete",
             completed=total_needed,
+            percent=100,
             csv_url=f"http://localhost:8000/outputs/{csv_filename}",
             docx_url=f"http://localhost:8000/outputs/{docx_filename}"
         )
@@ -324,7 +340,6 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             status="error",
             message=str(e)
         )
-
 
 @app.post("/generate")
 def generate(data: GenerateRequest):
