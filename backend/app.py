@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from pathlib import Path
 from datetime import datetime
+from threading import Thread, Lock
 import uvicorn
 
 OLLAMA_URL = "http://localhost:11434"
@@ -30,6 +31,14 @@ app.add_middleware(
 )
 
 app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR), name="outputs")
+
+JOBS = {}
+JOBS_LOCK = Lock()
+
+
+def update_job(job_id, **kwargs):
+    with JOBS_LOCK:
+        JOBS[job_id].update(kwargs)
 
 
 class Condition(BaseModel):
