@@ -131,49 +131,29 @@
     <div class="section">
       <h2>Model Selection</h2>
 
-      <label>Select the language model for response generation:</label>
+      <label>
+        Select the language model for response generation:
+        <span class="tooltip">?
+          <span class="tooltip-text">
+            Approximate context limits:<br>
+            qwen2.5:14b: 40,960 tokens ≈ 30,000 words<br>
+            qwen2.5:7b: 40,960 tokens ≈ 30,000 words<br>
+            llama3.1:8b: 131,072 tokens ≈ 98,000 words<br>
+            qwen3:14b: 40,960 tokens ≈ 30,000 words<br>
+            mistral-small3.2:24b: 131,072 tokens ≈ 98,000 words<br>
+            gemma3:12b: 131,072 tokens ≈ 98,000 words<br>
+            deepseek-r1:14b: 131,072 tokens ≈ 98,000 words
+          </span>
+        </span>
+      </label>
       <div class="radio-options">
-        <label>
-          <input type="radio" name="modelChoice" value="qwen2.5:14b" onchange="updateInputEstimate()">
-          qwen2.5:14b
-          <div class="model-limit">Context: 40,960 tokens ≈ 30,000 words</div>
-        </label>
-      
-        <label>
-          <input type="radio" name="modelChoice" value="qwen2.5:7b" onchange="updateInputEstimate()">
-          qwen2.5:7b
-          <div class="model-limit">Context: 40,960 tokens ≈ 30,000 words</div>
-        </label>
-      
-        <label>
-          <input type="radio" name="modelChoice" value="llama3.1:8b" onchange="updateInputEstimate()">
-          llama3.1:8b
-          <div class="model-limit">Context: 131,072 tokens ≈ 98,000 words</div>
-        </label>
-      
-        <label>
-          <input type="radio" name="modelChoice" value="qwen3:14b" onchange="updateInputEstimate()">
-          qwen3:14b
-          <div class="model-limit">Context: 40,960 tokens ≈ 30,000 words</div>
-        </label>
-      
-        <label>
-          <input type="radio" name="modelChoice" value="mistral-small3.2:24b" onchange="updateInputEstimate()">
-          mistral-small3.2:24b
-          <div class="model-limit">Context: 131,072 tokens ≈ 98,000 words</div>
-        </label>
-      
-        <label>
-          <input type="radio" name="modelChoice" value="gemma3:12b" onchange="updateInputEstimate()">
-          gemma3:12b
-          <div class="model-limit">Context: 131,072 tokens ≈ 98,000 words</div>
-        </label>
-      
-        <label>
-          <input type="radio" name="modelChoice" value="deepseek-r1:14b" onchange="updateInputEstimate()">
-          deepseek-r1:14b
-          <div class="model-limit">Context: 131,072 tokens ≈ 98,000 words</div>
-        </label>
+        <label><input type="radio" name="modelChoice" value="qwen2.5:14b" onchange="updateInputEstimate()"> qwen2.5:14b</label>
+        <label><input type="radio" name="modelChoice" value="qwen2.5:7b" onchange="updateInputEstimate()"> qwen2.5:7b</label>
+        <label><input type="radio" name="modelChoice" value="llama3.1:8b" onchange="updateInputEstimate()"> llama3.1:8b</label>
+        <label><input type="radio" name="modelChoice" value="qwen3:14b" onchange="updateInputEstimate()"> qwen3:14b</label>
+        <label><input type="radio" name="modelChoice" value="mistral-small3.2:24b" onchange="updateInputEstimate()"> mistral-small3.2:24b</label>
+        <label><input type="radio" name="modelChoice" value="gemma3:12b" onchange="updateInputEstimate()"> gemma3:12b</label>
+        <label><input type="radio" name="modelChoice" value="deepseek-r1:14b" onchange="updateInputEstimate()"> deepseek-r1:14b</label>
       </div>
 
       <label for="temperature">
@@ -310,7 +290,15 @@
       const personaMaxWords = 3061;
       const estimatedTotalWords = personaMaxWords + maxStimuliWords + questionWords;
     
-      let message = `Approximate input size per respondent: ${estimatedTotalWords.toLocaleString()} words`;
+      let message = `
+        Estimated prompt length per synthetic respondent: ${estimatedTotalWords.toLocaleString()} words
+        <span class="tooltip">?
+          <span class="tooltip-text">
+            This estimate includes the longest condition stimulus, all survey questions, all response scale labels, and OLSEDG's maximum persona-summary length.
+          </span>
+        </span>
+      `;
+      message += `<br>Selected model approximate limit: ${limit.toLocaleString()} words`;
       
       if (selectedModel) {
         const limit = getModelWordLimit(selectedModel.value);
