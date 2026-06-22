@@ -238,67 +238,131 @@ def create_docx(data, filepath):
     doc.save(filepath)
 
 
+def run_generation_job(job_id: str, data: GenerateRequest):
+    try:
+        total_needed = data.sample_count_per_condition * len(data.conditions)
+
+        update_job(
+            job_id,
+            status="loading_personas",
+            message="Loading respondent personas...",
+            completed=0,
+            total=total_needed
+        )
+
+        df_personas = load_personas(total_needed)
+
+        condition_numbers = []
+        for c in data.conditions:
+            condition_numbers.extend([c.condition_number] * data.sample_count_per_condition)
+
+        random.shuffle(condition_numbers)
+
+        rows = []
+        condition_lookup = {c.condition_number: c.stimuli for c in data.conditions}
+
+        update_job(
+            job_id,
+            status="generating",
+            message="Generating synthetic responses..."
+        )
+
+        for i in range(total_needed):
+            respondent_id = i + 1
+            condition_number = condition_numbers[i]
+            stimuli = condition_lookup[condition_number]
+
+            pid = df_personas.loc[i, "pid"]
+            persona = df_personas.loc[i, "persona_summary"]
+
+            prompt = build_prompt(persona, stimuli, data.questions)
+            raw_response = call_ollama(data.model_name, prompt, data.temperature)
+            answers = parse_answers(raw_response, data.questions)
+
+            row = {
+                "respondent_id": respondent_id,
+                "pid": pid,
+                "persona_summary": persona,
+                "condition": condition_number,
+            }
+
+            row.update(answers)
+            rows.append(row)
+
+            update_job(
+                job_id,
+                completed=i + 1,
+                message=f"{i + 1}/{total_needed} respondents completed"
+            )
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_model_name = data.model_name.replace(":", "-").replace("/", "-")
+        num_conditions = len(data.conditions)
+        samples_per_condition = data.sample_count_per_condition
+
+        csv_filename = f"OLSEDG_{safe_model_name}_{num_conditions}cond_{samples_per_condition}ppc_{timestamp}.csv"
+        docx_filename = f"OLSEDG_INPUTS_{safe_model_name}_{num_conditions}cond_{samples_per_condition}ppc_{timestamp}.docx"
+
+        csv_path = OUTPUT_DIR / csv_filename
+        docx_path = OUTPUT_DIR / docx_filename
+
+        pd.DataFrame(rows).to_csv(csv_path, index=False)
+        create_docx(data, docx_path)
+
+        update_job(
+            job_id,
+            status="complete",
+            message="Generation complete",
+            completed=total_needed,
+            csv_url=f"http://localhost:8000/outputs/{csv_filename}",
+            docx_url=f"http://localhost:8000/outputs/{docx_filename}"
+        )
+
+    except Exception as e:
+        update_job(
+            job_id,
+            status="error",
+            message=str(e)
+        )
+
+
 @app.post("/generate")
 def generate(data: GenerateRequest):
     total_needed = data.sample_count_per_condition * len(data.conditions)
+    job_id = str(uuid.uuid4())
 
-    df_personas = load_personas(total_needed)
-
-    condition_numbers = []
-    for c in data.conditions:
-        condition_numbers.extend([c.condition_number] * data.sample_count_per_condition)
-
-    random.shuffle(condition_numbers)
-
-    rows = []
-
-    condition_lookup = {
-        c.condition_number: c.stimuli for c in data.conditions
+    JOBS[job_id] = {
+        "job_id": job_id,
+        "status": "started",
+        "message": "Generation started",
+        "completed": 0,
+        "total": total_needed,
+        "csv_url": None,
+        "docx_url": None
     }
 
-    for i in range(total_needed):
-        respondent_id = i + 1
-        condition_number = condition_numbers[i]
-        stimuli = condition_lookup[condition_number]
-
-        pid = df_personas.loc[i, "pid"]
-        persona = df_personas.loc[i, "persona_summary"]
-
-        prompt = build_prompt(persona, stimuli, data.questions)
-        raw_response = call_ollama(data.model_name, prompt, data.temperature)
-        answers = parse_answers(raw_response, data.questions)
-
-        row = {
-            "respondent_id": respondent_id,
-            "pid": pid,
-            "persona_summary": persona,
-            "condition": condition_number,
-        }
-
-        row.update(answers)
-        rows.append(row)
-
-    file_id = str(uuid.uuid4())[:8]
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_model_name = data.model_name.replace(":", "-").replace("/", "-")
-    
-    csv_filename = f"olsedg_responses_{safe_model_name}_{timestamp}.csv"
-    docx_filename = f"olsedg_study_inputs_{safe_model_name}_{timestamp}.docx"
-
-    csv_path = OUTPUT_DIR / csv_filename
-    docx_path = OUTPUT_DIR / docx_filename
-
-    pd.DataFrame(rows).to_csv(csv_path, index=False)
-    create_docx(data, docx_path)
+    thread = Thread(target=run_generation_job, args=(job_id, data), daemon=True)
+    thread.start()
 
     return {
         "success": True,
-        "total_responses": total_needed,
-        "csv_url": f"http://localhost:8000/outputs/{csv_filename}",
-        "docx_url": f"http://localhost:8000/outputs/{docx_filename}"
+        "job_id": job_id,
+        "total_responses": total_needed
     }
 
+
+@app.get("/progress/{job_id}")
+def get_progress(job_id: str):
+    if job_id not in JOBS:
+        return {
+            "success": False,
+            "message": "Job not found"
+        }
+
+    return {
+        "success": True,
+        **JOBS[job_id]
+    }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
