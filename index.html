@@ -45,6 +45,27 @@
     .close { font-size: 28px; cursor: pointer; }
     .citation-row { display: grid; grid-template-columns: 90px 1fr; gap: 15px; margin: 18px 0; line-height: 1.4; }
     .citation-style { font-weight: bold; color: #555; }
+
+    .progress-container {
+      margin-top: 15px;
+      background: #e5e7eb;
+      border-radius: 999px;
+      height: 18px;
+      overflow: hidden;
+    }
+    
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #2563eb;
+      transition: width 0.3s ease;
+    }
+    
+    .progress-text {
+      margin-top: 10px;
+      font-weight: bold;
+      color: #475569;
+    }
   </style>
 </head>
 
