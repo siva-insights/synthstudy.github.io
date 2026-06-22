@@ -46,6 +46,57 @@
     .citation-row { display: grid; grid-template-columns: 90px 1fr; gap: 15px; margin: 18px 0; line-height: 1.4; }
     .citation-style { font-weight: bold; color: #555; }
 
+    .tooltip {
+      display: inline-block;
+      margin-left: 6px;
+      background: #2563eb;
+      color: white;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      text-align: center;
+      font-size: 12px;
+      line-height: 18px;
+      cursor: help;
+      position: relative;
+    }
+    
+    .tooltip .tooltip-text {
+      visibility: hidden;
+      width: 330px;
+      background: #1f2937;
+      color: white;
+      text-align: left;
+      padding: 10px;
+      border-radius: 8px;
+      position: absolute;
+      z-index: 10;
+      top: 25px;
+      left: 0;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    
+    .tooltip:hover .tooltip-text {
+      visibility: visible;
+    }
+    
+    .model-limit {
+      font-size: 13px;
+      color: #64748b;
+      margin-left: 24px;
+    }
+    
+    .input-estimate-box {
+      margin-top: 20px;
+      padding: 14px;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-weight: bold;
+      color: #1e3a8a;
+    }
+    
     .progress-container {
       margin-top: 15px;
       background: #e5e7eb;
@@ -82,17 +133,58 @@
 
       <label>Select the language model for response generation:</label>
       <div class="radio-options">
-        <label><input type="radio" name="modelChoice" value="qwen2.5:14b"> qwen2.5:14b</label>
-        <label><input type="radio" name="modelChoice" value="qwen2.5:7b"> qwen2.5:7b</label>
-        <label><input type="radio" name="modelChoice" value="llama3.1:8b"> llama3.1:8b</label>
-        <label><input type="radio" name="modelChoice" value="qwen3:14b"> qwen3:14b</label>
-        <label><input type="radio" name="modelChoice" value="mistral-small3.2:24b"> mistral-small3.2:24b</label>
-        <label><input type="radio" name="modelChoice" value="gemma3:12b"> gemma3:12b</label>
-        <label><input type="radio" name="modelChoice" value="deepseek-r1:14b"> deepseek-r1:14b</label>
+        <label>
+          <input type="radio" name="modelChoice" value="qwen2.5:14b" onchange="updateInputEstimate()">
+          qwen2.5:14b
+          <div class="model-limit">Context: 40,960 tokens ≈ 30,000 words</div>
+        </label>
+      
+        <label>
+          <input type="radio" name="modelChoice" value="qwen2.5:7b" onchange="updateInputEstimate()">
+          qwen2.5:7b
+          <div class="model-limit">Context: 40,960 tokens ≈ 30,000 words</div>
+        </label>
+      
+        <label>
+          <input type="radio" name="modelChoice" value="llama3.1:8b" onchange="updateInputEstimate()">
+          llama3.1:8b
+          <div class="model-limit">Context: 131,072 tokens ≈ 98,000 words</div>
+        </label>
+      
+        <label>
+          <input type="radio" name="modelChoice" value="qwen3:14b" onchange="updateInputEstimate()">
+          qwen3:14b
+          <div class="model-limit">Context: 40,960 tokens ≈ 30,000 words</div>
+        </label>
+      
+        <label>
+          <input type="radio" name="modelChoice" value="mistral-small3.2:24b" onchange="updateInputEstimate()">
+          mistral-small3.2:24b
+          <div class="model-limit">Context: 131,072 tokens ≈ 98,000 words</div>
+        </label>
+      
+        <label>
+          <input type="radio" name="modelChoice" value="gemma3:12b" onchange="updateInputEstimate()">
+          gemma3:12b
+          <div class="model-limit">Context: 131,072 tokens ≈ 98,000 words</div>
+        </label>
+      
+        <label>
+          <input type="radio" name="modelChoice" value="deepseek-r1:14b" onchange="updateInputEstimate()">
+          deepseek-r1:14b
+          <div class="model-limit">Context: 131,072 tokens ≈ 98,000 words</div>
+        </label>
       </div>
 
-      <label for="temperature">Response Randomness / Temperature:</label>
-      <input type="number" id="temperature" min="0" max="2" step="0.1" value="0.7">
+      <label for="temperature">
+        Response Randomness / Temperature:
+        <span class="tooltip">?
+          <span class="tooltip-text">
+            The Twin-2K-500 dataset contains 2,058 unique personas. If your requested sample size exceeds the number of unique personas, some personas may be reused. Setting temperature above 0 can help produce less repetitive responses from repeated personas.
+          </span>
+        </span>
+      </label>
+      <input type="number" id="temperature" min="0" max="2" step="0.1" value="0">
 
       <div class="download-grid">
         <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.2/OLSEDG-Helper.zip" download>
@@ -146,6 +238,10 @@
       </div>
     </div>
 
+    <div id="inputEstimateBox" class="input-estimate-box">
+      Approximate input size: Not calculated yet
+    </div> 
+    
     <div class="action-buttons">
       <button onclick="showPreview()">Preview</button>
       <button onclick="generateResponses()">Generate</button>
@@ -169,6 +265,70 @@
     let currentPreviewIndex = 0;
     let questionCount = 0;
 
+    function countWords(text) {
+      if (!text) return 0;
+      return text.trim().split(/\s+/).filter(Boolean).length;
+    }
+    
+    function getModelWordLimit(modelName) {
+      const limits = {
+        "qwen2.5:14b": 30000,
+        "qwen2.5:7b": 30000,
+        "llama3.1:8b": 98000,
+        "qwen3:14b": 30000,
+        "mistral-small3.2:24b": 98000,
+        "gemma3:12b": 98000,
+        "deepseek-r1:14b": 98000
+      };
+    
+      return limits[modelName] || null;
+    }
+    
+    function updateInputEstimate() {
+      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
+    
+      let maxStimuliWords = 0;
+    
+      for (let c = 1; c <= conditionCount; c++) {
+        const stimuliText = document.getElementById(`condition${c}Stimuli`)?.value || "";
+        maxStimuliWords = Math.max(maxStimuliWords, countWords(stimuliText));
+      }
+    
+      let questionWords = 0;
+    
+      for (let q = 1; q <= questionCount; q++) {
+        questionWords += countWords(document.getElementById(`question${q}`)?.value || "");
+    
+        const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`)?.value) || 0;
+    
+        for (let s = 1; s <= scaleCount; s++) {
+          questionWords += countWords(document.getElementById(`question${q}Scale${s}`)?.value || "");
+        }
+      }
+    
+      const personaMaxWords = 3061;
+      const estimatedTotalWords = personaMaxWords + maxStimuliWords + questionWords;
+    
+      let message = `Approximate input size per respondent: ${estimatedTotalWords.toLocaleString()} words`;
+      
+      if (selectedModel) {
+        const limit = getModelWordLimit(selectedModel.value);
+    
+        if (limit) {
+          message += ` / model limit ≈ ${limit.toLocaleString()} words`;
+    
+          if (estimatedTotalWords > limit) {
+            message += `<br><span style="color:#dc2626;">Warning: Estimated input may exceed the selected model's approximate word limit.</span>`;
+          } else {
+            message += `<br><span style="color:#16a34a;">Estimated input is within the selected model's approximate word limit.</span>`;
+          }
+        }
+      }
+    
+      document.getElementById("inputEstimateBox").innerHTML = message;
+    }
+    
     function showConditionInputs() {
       const count = parseInt(document.getElementById("conditionCount").value);
       const container = document.getElementById("conditionFields");
@@ -191,7 +351,7 @@
         html += `
           <div class="condition-card">
             <label>Enter stimuli for Condition ${i}:</label>
-            <textarea id="condition${i}Stimuli" placeholder="Example: Intro text {Q1} follow-up text {Q2}"></textarea>
+            <textarea id="condition${i}Stimuli" oninput="updateInputEstimate()" placeholder="Example: Intro text {Q1} follow-up text {Q2}"></textarea>
           </div>
         `;
       }
@@ -208,7 +368,7 @@
       const questionHtml = `
         <div class="question-card" id="questionCard${questionCount}">
           <label>Question {Q${questionCount}}:</label>
-          <input type="text" id="question${questionCount}" placeholder="Enter question ${questionCount}">
+          <input type="text" id="question${questionCount}" oninput="updateInputEstimate()" placeholder="Enter question ${questionCount}">
 
           <label>What response scale would you like to use for this question?</label>
           <input type="number" min="2" max="20"
@@ -239,6 +399,7 @@
             <label>Scale Point ${s} (${requiredText}):</label>
             <input type="text" ${requiredAttribute}
               id="question${questionNumber}Scale${s}"
+              oninput="updateInputEstimate()"
               placeholder="Enter label for scale point ${s}">
           </div>
         `;
