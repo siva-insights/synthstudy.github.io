@@ -281,6 +281,7 @@ def call_ollama(model_name, prompt, temperature):
 
 def parse_answers(raw_text, questions):
     answers = {}
+    invalid_questions = []
 
     for q in questions:
         q_num = q.question_number
@@ -291,15 +292,39 @@ def parse_answers(raw_text, questions):
 
         if match:
             value = int(match.group(1))
+
             if 1 <= value <= max_code:
                 answers[f"Q{q_num}"] = value
             else:
                 answers[f"Q{q_num}"] = ""
+                invalid_questions.append(f"Q{q_num}")
         else:
             answers[f"Q{q_num}"] = ""
+            invalid_questions.append(f"Q{q_num}")
 
-    return answers
+    validation = "valid" if not invalid_questions else "invalid"
 
+    return answers, validation, invalid_questions
+
+def get_valid_response_with_retries(model_name, prompt, temperature, questions, max_retries=5):
+    last_raw_response = ""
+    last_answers = {}
+    last_validation = "invalid"
+    last_invalid_questions = []
+
+    for attempt in range(1, max_retries + 1):
+        raw_response = call_ollama(model_name, prompt, temperature)
+        answers, validation, invalid_questions = parse_answers(raw_response, questions)
+
+        if validation == "valid":
+            return answers, validation, invalid_questions, attempt, raw_response
+
+        last_raw_response = raw_response
+        last_answers = answers
+        last_validation = validation
+        last_invalid_questions = invalid_questions
+
+    return last_answers, last_validation, last_invalid_questions, max_retries, last_raw_response
 
 def create_docx(data, filepath):
     doc = Document()
@@ -361,7 +386,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         docx_path = OUTPUT_DIR / docx_filename
 
         question_columns = [f"Q{q.question_number}" for q in data.questions]
-        columns = ["respondent_id", "pid", "persona_summary", "condition"] + question_columns
+        columns = ["respondent_id", "pid", "persona_summary", "condition", "validation", "retry_count"] + question_columns
 
         pd.DataFrame(columns=columns).to_csv(csv_path, index=False)
 
@@ -383,7 +408,13 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             prompt = build_prompt(persona, stimuli, data.questions)
             start_time = time.time()
 
-            raw_response = call_ollama(data.model_name, prompt, data.temperature)
+            answers, validation, invalid_questions, retry_count, raw_response = get_valid_response_with_retries(
+                data.model_name,
+                prompt,
+                data.temperature,
+                data.questions,
+                max_retries=5
+            )
             
             end_time = time.time()
             seconds_taken = round(end_time - start_time, 3)
@@ -403,6 +434,8 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 "pid": pid,
                 "persona_summary": persona,
                 "condition": condition_number,
+                "validation": validation,
+                "retry_count": retry_count,
             }
 
             row.update(answers)
