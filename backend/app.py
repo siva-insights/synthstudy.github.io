@@ -40,7 +40,7 @@ JOBS_LOCK = Lock()
 
 def estimate_num_ctx(prompt: str) -> int:
     prompt_words = len(str(prompt).split())
-    num_ctx = (prompt_words + 500) * 2
+    num_ctx = (prompt_words + 500 + + 3061) * 2
     return int(num_ctx)
     
 def load_history():
