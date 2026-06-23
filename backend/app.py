@@ -14,11 +14,14 @@ from pathlib import Path
 from datetime import datetime
 from threading import Thread, Lock
 import uvicorn
+import json
+import time
 
 OLLAMA_URL = "http://localhost:11434"
 
 OUTPUT_DIR = Path.home() / "OLSEDG_outputs"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+HISTORY_FILE = OUTPUT_DIR / "generation_history.json"
 
 app = FastAPI(title="OLSEDG Helper")
 
@@ -35,7 +38,38 @@ app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR), name="outputs")
 JOBS = {}
 JOBS_LOCK = Lock()
 
+def load_history():
+    if not HISTORY_FILE.exists():
+        return []
 
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_history_entry(entry):
+    history = load_history()
+    history.append(entry)
+
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, indent=2)
+
+
+def get_average_seconds_per_respondent(model_name):
+    history = load_history()
+    model_rows = [h for h in history if h.get("model_name") == model_name]
+
+    if not model_rows:
+        return None
+
+    values = [h["seconds_taken"] for h in model_rows if h.get("seconds_taken")]
+    if not values:
+        return None
+
+    return sum(values) / len(values)
+    
 def update_job(job_id, **kwargs):
     with JOBS_LOCK:
         JOBS[job_id].update(kwargs)
@@ -65,6 +99,30 @@ class GenerateRequest(BaseModel):
 def health():
     return {"helper_running": True, "message": "OLSEDG Helper is running"}
 
+@app.get("/estimate-time/{model_name}/{total_respondents}")
+def estimate_time(model_name: str, total_respondents: int):
+    avg_seconds = get_average_seconds_per_respondent(model_name)
+
+    if avg_seconds is None:
+        return {
+            "success": True,
+            "has_history": False,
+            "message": "No prior timing history available for this model."
+        }
+
+    estimated_seconds = avg_seconds * total_respondents
+    estimated_minutes = round(estimated_seconds / 60, 1)
+
+    return {
+        "success": True,
+        "has_history": True,
+        "model_name": model_name,
+        "average_seconds_per_respondent": round(avg_seconds, 2),
+        "total_respondents": total_respondents,
+        "estimated_seconds": round(estimated_seconds, 1),
+        "estimated_minutes": estimated_minutes,
+        "message": f"Estimated generation time: approximately {estimated_minutes} minutes."
+    }
 
 @app.get("/check-model/{model_name}")
 def check_model(model_name: str):
@@ -292,8 +350,22 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             persona = df_personas.loc[i, "persona_summary"]
 
             prompt = build_prompt(persona, stimuli, data.questions)
+            start_time = time.time()
+
             raw_response = call_ollama(data.model_name, prompt, data.temperature)
+            
+            end_time = time.time()
+            seconds_taken = round(end_time - start_time, 3)
+            
             answers = parse_answers(raw_response, data.questions)
+            
+            save_history_entry({
+                "timestamp": datetime.now().isoformat(),
+                "model_name": data.model_name,
+                "seconds_taken": seconds_taken,
+                "respondent_id": respondent_id,
+                "condition": condition_number
+            })
 
             row = {
                 "respondent_id": respondent_id,

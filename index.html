@@ -263,6 +263,41 @@
     
       return limits[modelName] || null;
     }
+
+    async function showEstimatedGenerationTime() {
+      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const conditionCount = parseInt(document.getElementById("conditionCount").value);
+      const sampleCount = parseInt(document.getElementById("sampleCount").value);
+    
+      if (!selectedModel || !conditionCount || !sampleCount) {
+        return "";
+      }
+    
+      const totalRespondents = conditionCount * sampleCount;
+    
+      try {
+        const response = await fetch(
+          `http://localhost:8000/estimate-time/${encodeURIComponent(selectedModel.value)}/${totalRespondents}`
+        );
+    
+        const data = await response.json();
+    
+        if (data.has_history) {
+          return `
+            <p><strong>Estimated generation time:</strong> ${data.estimated_minutes} minutes
+            <br><span style="color:#64748b;">Based on previous ${selectedModel.value} runs on this machine.</span></p>
+          `;
+        }
+    
+        return `
+          <p><strong>Estimated generation time:</strong> Not available yet.
+          <br><span style="color:#64748b;">OLSEDG will learn timing after this model completes at least one run.</span></p>
+        `;
+    
+      } catch (error) {
+        return "";
+      }
+    }
     
     function updateInputEstimate() {
       const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
@@ -550,10 +585,16 @@
     
       const previewArea = document.getElementById("previewArea");
     
+      const estimateHtml = await showEstimatedGenerationTime();
+
       previewArea.innerHTML = `
         <div class="preview-box">
           <div class="preview-title">Generating Synthetic Responses...</div>
           <p>This may take several minutes because OLSEDG generates one respondent at a time.</p>
+          ${estimateHtml}
+          <p style="color:#64748b;">
+            Output is saved continuously to your local <strong>OLSEDG_outputs</strong> folder.
+          </p>
     
           <div class="progress-container">
             <div id="generationProgressBar" class="progress-bar"></div>
