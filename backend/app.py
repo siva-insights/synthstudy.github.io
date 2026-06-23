@@ -287,25 +287,28 @@ def parse_answers(raw_text, questions):
         q_num = q.question_number
         max_code = len(q.scale_points)
 
-        pattern = rf"Q{q_num}\s*=\s*(\d+)"
+        # Allows normal numbers and negative numbers, so invalid values are still captured
+        pattern = rf"Q{q_num}\s*=\s*(-?\d+)"
         match = re.search(pattern, raw_text, re.IGNORECASE)
 
         if match:
             value = int(match.group(1))
 
-            if 1 <= value <= max_code:
-                answers[f"Q{q_num}"] = value
-            else:
-                answers[f"Q{q_num}"] = ""
+            # Store the value even if invalid
+            answers[f"Q{q_num}"] = value
+
+            # But mark it invalid if outside the allowed range
+            if not (1 <= value <= max_code):
                 invalid_questions.append(f"Q{q_num}")
         else:
+            # No answer found
             answers[f"Q{q_num}"] = ""
             invalid_questions.append(f"Q{q_num}")
 
     validation = "valid" if not invalid_questions else "invalid"
 
     return answers, validation, invalid_questions
-
+    
 def get_valid_response_with_retries(model_name, prompt, temperature, questions, max_retries=5):
     last_raw_response = ""
     last_answers = {}
@@ -386,8 +389,22 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         docx_path = OUTPUT_DIR / docx_filename
 
         question_columns = [f"Q{q.question_number}" for q in data.questions]
-        columns = ["respondent_id", "pid", "persona_summary", "condition", "validation", "retry_count"] + question_columns
-
+        columns = [
+            "respondent_id",
+            "pid",
+            "persona_summary",
+            "condition",
+            "condition_stimuli",
+            "model_name",
+            "temperature",
+            "validation",
+            "invalid_questions",
+            "retry_count",
+            "seconds_taken",
+            "prompt_words",
+            "num_ctx_used",
+            "raw_response"
+        ] + question_columns
         pd.DataFrame(columns=columns).to_csv(csv_path, index=False)
 
         update_job(
@@ -434,15 +451,29 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 "condition": condition_number
             })
 
+            prompt_words = len(str(prompt).split())
+            num_ctx_used = estimate_num_ctx(prompt)
+            
             row = {
                 "respondent_id": respondent_id,
                 "pid": pid,
                 "persona_summary": persona,
                 "condition": condition_number,
+                "condition_stimuli": stimuli,
+                "model_name": data.model_name,
+                "temperature": data.temperature,
                 "validation": validation,
+                "invalid_questions": ",".join(invalid_questions),
                 "retry_count": retry_count,
+                "seconds_taken": seconds_taken,
+                "prompt_words": prompt_words,
+                "num_ctx_used": num_ctx_used,
+                "raw_response": str(raw_response).replace("\n", " | "),
             }
-
+            
+            if not isinstance(answers, dict):
+                raise ValueError(f"answers should be a dictionary, but got {type(answers)}: {answers}")
+            
             row.update(answers)
 
             pd.DataFrame([row]).to_csv(
