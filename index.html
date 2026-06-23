@@ -139,6 +139,22 @@
     .duplicate-question-btn:hover {
       background: #115e59;
     }
+
+    .question-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .remove-question-btn {
+      margin-top: 0;
+      padding: 8px 12px;
+      font-size: 13px;
+      background: #dc2626;
+    }
+    
+    .remove-question-btn:hover {
+      background: #b91c1c;
+    }
   </style>
 </head>
 
@@ -278,6 +294,13 @@
     let currentPreviewIndex = 0;
     let questionCount = 0;
 
+    function getExistingQuestionNumbers() {
+      return Array.from(document.querySelectorAll(".question-card"))
+        .map(card => parseInt(card.id.replace("questionCard", "")))
+        .filter(num => !isNaN(num))
+        .sort((a, b) => a - b);
+    }
+    
     function countWords(text) {
       if (!text) return 0;
       return text.trim().split(/\s+/).filter(Boolean).length;
@@ -291,9 +314,16 @@
         <div class="question-card" id="questionCard${questionCount}">
           <div class="question-header">
             <label>Question {Q${questionCount}}:</label>
-            <button type="button" class="duplicate-question-btn" onclick="duplicateQuestion(${questionCount})">
-              Duplicate Question
-            </button>
+    
+            <div class="question-actions">
+              <button type="button" class="duplicate-question-btn" onclick="duplicateQuestion(${questionCount})">
+                Duplicate Question
+              </button>
+    
+              <button type="button" class="remove-question-btn" onclick="removeQuestion(${questionCount})">
+                Remove Question
+              </button>
+            </div>
           </div>
     
           <input type="text"
@@ -331,6 +361,20 @@
       }
     
       updateInputEstimate();
+    }
+
+    function removeQuestion(questionNumber) {
+      const card = document.getElementById(`questionCard${questionNumber}`);
+    
+      if (card) {
+        card.remove();
+      }
+    
+      const remainingQuestions = getExistingQuestionNumbers();
+      questionCount = remainingQuestions.length > 0 ? Math.max(...remainingQuestions) : 0;
+    
+      updateInputEstimate();
+      document.getElementById("previewArea").innerHTML = "";
     }
 
     function duplicateQuestion(sourceQuestionNumber) {
@@ -468,7 +512,9 @@
     
       let questionWords = 0;
     
-      for (let q = 1; q <= questionCount; q++) {
+      const questionNumbers = getExistingQuestionNumbers();
+
+      for (const q of questionNumbers) {
         questionWords += countWords(document.getElementById(`question${q}`)?.value || "");
     
         const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`)?.value) || 0;
@@ -613,7 +659,9 @@
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
         let htmlStimuli = escapeHTML(stimuli);
 
-        for (let q = 1; q <= questionCount; q++) {
+        const questionNumbers = getExistingQuestionNumbers();
+
+        for (const q of questionNumbers) {
           const questionHtml = buildQuestionPreview(q);
           const placeholder = new RegExp(`\\{Q${q}\\}`, "g");
           htmlStimuli = htmlStimuli.replace(placeholder, questionHtml);
@@ -665,6 +713,7 @@
 
     async function generateResponses() {
       const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const questionNumbers = getExistingQuestionNumbers();
     
       if (!selectedModel) {
         alert("Please select a language model.");
@@ -676,7 +725,7 @@
       const sampleCount = parseInt(document.getElementById("sampleCount").value);
       const temperature = parseFloat(document.getElementById("temperature").value);
     
-      if (!studyName || !conditionCount || !sampleCount || questionCount < 1) {
+      if (!studyName || !conditionCount || !sampleCount || questionNumbers.length < 1) {
         alert("Please complete study name, conditions, samples, and at least one question.");
         return;
       }
@@ -692,7 +741,7 @@
     
       const questions = [];
     
-      for (let q = 1; q <= questionCount; q++) {
+      for (const q of questionNumbers) {
         const questionText = document.getElementById(`question${q}`).value.trim();
         const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`).value);
     
