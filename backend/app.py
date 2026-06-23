@@ -38,6 +38,11 @@ app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR), name="outputs")
 JOBS = {}
 JOBS_LOCK = Lock()
 
+def estimate_num_ctx(prompt: str) -> int:
+    prompt_words = len(str(prompt).split())
+    num_ctx = (prompt_words + 500) * 2
+    return int(num_ctx)
+    
 def load_history():
     if not HISTORY_FILE.exists():
         return []
@@ -254,6 +259,8 @@ Important rules:
 
 
 def call_ollama(model_name, prompt, temperature):
+    num_ctx = estimate_num_ctx(prompt)
+
     response = requests.post(
         f"{OLLAMA_URL}/api/generate",
         json={
@@ -261,7 +268,8 @@ def call_ollama(model_name, prompt, temperature):
             "prompt": prompt,
             "stream": False,
             "options": {
-                "temperature": temperature
+                "temperature": temperature,
+                "num_ctx": num_ctx
             }
         },
         timeout=300
