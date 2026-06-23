@@ -175,7 +175,7 @@ def load_personas(total_needed: int):
 
 
 def build_prompt(persona, stimuli, questions):
-    question_blocks = []
+    question_lookup = {}
 
     for q in questions:
         min_code = 1
@@ -185,48 +185,71 @@ def build_prompt(persona, stimuli, questions):
             [f"{i + 1} = {label}" for i, label in enumerate(q.scale_points)]
         )
 
-        question_blocks.append(
-            f"""
-Q{q.question_number}: {q.question_text}
+        embedded_question = f"""
+[Q{q.question_number}]
+Question: {q.question_text}
 Allowed response codes: {min_code} to {max_code}
 Response scale:
 {scale_text}
-"""
+[/Q{q.question_number}]
+""".strip()
+
+        question_lookup[q.question_number] = embedded_question
+
+    embedded_stimuli = stimuli
+
+    for q in questions:
+        placeholder = f"{{Q{q.question_number}}}"
+        embedded_stimuli = embedded_stimuli.replace(
+            placeholder,
+            question_lookup[q.question_number]
         )
 
-    questions_text = "\n".join(question_blocks)
+    # If the user forgot to include placeholders, append unanswered questions at the end.
+    missing_questions = []
+
+    for q in questions:
+        placeholder = f"{{Q{q.question_number}}}"
+        if placeholder not in stimuli:
+            missing_questions.append(question_lookup[q.question_number])
+
+    if missing_questions:
+        embedded_stimuli += """
+
+Questions not embedded in the study materials:
+""" + "\n\n".join(missing_questions)
+
+    answer_template = "\n".join(
+        [f"Q{q.question_number}=?" for q in questions]
+    )
 
     prompt = f"""
 You are simulating one synthetic survey respondent.
 
 Your task:
 1. Read the respondent persona.
-2. Read the experimental stimulus.
-3. Answer the survey questions from this respondent's perspective.
-4. Wherever a placeholder such as {{Q1}}, {{Q2}}, etc. appears in the stimulus, treat that as the point where the corresponding question is asked.
+2. Read the study materials exactly as a survey participant would see them.
+3. Answer each embedded survey question from this respondent's perspective.
+4. Use the respondent persona, the study materials, and the response scale for each question when choosing answers.
 
 Respondent persona:
 {persona}
 
-Experimental stimulus:
-{stimuli}
-
-Survey questions:
-{questions_text}
+Study materials with embedded questions:
+{embedded_stimuli}
 
 Important rules:
-- Choose only allowed option codes for single-choice questions.
+- Choose only allowed option codes for each question.
 - Each answer must be an integer within the allowed response-code range for that question.
 - Do not choose values below the minimum code or above the maximum code.
-- For all questions, return only an integer.
+- Return only the final answer values.
 - Do not include explanations.
 - Do not include markdown.
 - Do not repeat the questions.
 - Return answers only in this format:
-Q1=?
-Q2=?
-Q3=?
-"""
+{answer_template}
+""".strip()
+
     return prompt
 
 
