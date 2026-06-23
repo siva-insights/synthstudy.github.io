@@ -272,7 +272,7 @@ def call_ollama(model_name, prompt, temperature):
                 "num_ctx": num_ctx
             }
         },
-        timeout=300
+        timeout=900
     )
 
     response.raise_for_status()
