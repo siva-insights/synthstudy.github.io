@@ -400,6 +400,24 @@
     
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    function formatMetricNumber(value) {
+      const num = Number(value) || 0;
+    
+      if (num >= 1_000_000_000) {
+        return (num / 1_000_000_000).toFixed(1).replace(".0", "") + "B";
+      }
+    
+      if (num >= 1_000_000) {
+        return (num / 1_000_000).toFixed(1).replace(".0", "") + "M";
+      }
+    
+      if (num >= 1_000) {
+        return (num / 1_000).toFixed(1).replace(".0", "") + "K";
+      }
+    
+      return num.toString();
+    }
+    
     async function incrementSiteMetric(metricName) {
       try {
         const { error } = await supabaseClient.rpc("increment_site_metric", {
@@ -443,9 +461,9 @@
         });
     
         metricsBox.innerHTML = `
-          Page views: ${pageViews.toLocaleString()} · Synthetic responses generated: ${syntheticResponsesGenerated.toLocaleString()}
+          Page views: ${formatMetricNumber(pageViews)} · Synthetic responses generated: ${formatMetricNumber(syntheticResponsesGenerated)}
         `;
-    
+                
       } catch (error) {
         console.error("Could not load site metrics:", error);
       }
