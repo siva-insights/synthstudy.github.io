@@ -419,7 +419,6 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             end_time = time.time()
             seconds_taken = round(end_time - start_time, 3)
             
-            answers = parse_answers(raw_response, data.questions)
             
             save_history_entry({
                 "timestamp": datetime.now().isoformat(),
