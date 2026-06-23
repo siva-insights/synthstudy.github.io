@@ -40,7 +40,7 @@ JOBS_LOCK = Lock()
 
 def estimate_num_ctx(prompt: str) -> int:
     prompt_words = len(str(prompt).split())
-    num_ctx = (prompt_words + 500 + + 3061) * 2
+    num_ctx = (prompt_words + 500 + 3061) * 2
     return int(num_ctx)
     
 def load_history():
@@ -453,7 +453,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
 
             prompt_words = len(str(prompt).split())
             num_ctx_used = estimate_num_ctx(prompt)
-            
+                        
             row = {
                 "respondent_id": respondent_id,
                 "pid": pid,
@@ -471,11 +471,18 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 "raw_response": str(raw_response).replace("\n", " | "),
             }
             
+            # Safety check: if answers accidentally comes as a tuple, take only the answers dictionary
+            if isinstance(answers, tuple):
+                answers = answers[0]
+            
+            # Safety check: if answers is still not a dictionary, stop with a clear error
             if not isinstance(answers, dict):
                 raise ValueError(f"answers should be a dictionary, but got {type(answers)}: {answers}")
             
-            row.update(answers)
-
+            # Add each question answer manually instead of using row.update()
+            for q in data.questions:
+                q_col = f"Q{q.question_number}"
+                row[q_col] = answers.get(q_col, "")
             pd.DataFrame([row]).to_csv(
                 csv_path,
                 mode="a",
