@@ -394,8 +394,14 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             job_id,
             status="generating",
             message=f"Generating synthetic responses. Output is being saved continuously to {csv_path}",
-            csv_url=f"http://localhost:8000/outputs/{csv_filename}"
+            completed=0,
+            total=total_needed,
+            percent=0,
+            csv_url=f"http://localhost:8000/outputs/{csv_filename}",
+            docx_url=None
         )
+
+        job_start_time = time.time()
 
         for i in range(total_needed):
             respondent_id = i + 1
@@ -406,6 +412,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             persona = df_personas.loc[i, "persona_summary"]
 
             prompt = build_prompt(persona, stimuli, data.questions)
+
             start_time = time.time()
 
             answers, validation, invalid_questions, retry_count, raw_response = get_valid_response_with_retries(
@@ -415,11 +422,10 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 data.questions,
                 max_retries=5
             )
-            
+
             end_time = time.time()
             seconds_taken = round(end_time - start_time, 3)
-            
-            
+
             save_history_entry({
                 "timestamp": datetime.now().isoformat(),
                 "model_name": data.model_name,
@@ -450,10 +456,21 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             pending = total_needed - completed
             percent = round((completed / total_needed) * 100, 1)
 
+            elapsed_seconds = time.time() - job_start_time
+            avg_seconds_current_run = elapsed_seconds / completed
+            estimated_remaining_seconds = avg_seconds_current_run * pending
+            estimated_total_seconds = elapsed_seconds + estimated_remaining_seconds
+
             update_job(
                 job_id,
                 completed=completed,
+                total=total_needed,
+                pending=pending,
                 percent=percent,
+                elapsed_seconds=round(elapsed_seconds, 1),
+                average_seconds_per_respondent=round(avg_seconds_current_run, 2),
+                estimated_remaining_seconds=round(estimated_remaining_seconds, 1),
+                estimated_total_seconds=round(estimated_total_seconds, 1),
                 message=f"{completed}/{total_needed} respondents completed. {pending} remaining."
             )
 
@@ -464,7 +481,10 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             status="complete",
             message="Generation complete",
             completed=total_needed,
+            total=total_needed,
+            pending=0,
             percent=100,
+            estimated_remaining_seconds=0,
             csv_url=f"http://localhost:8000/outputs/{csv_filename}",
             docx_url=f"http://localhost:8000/outputs/{docx_filename}"
         )
@@ -475,7 +495,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             status="error",
             message=str(e)
         )
-
+        
 @app.post("/generate")
 def generate(data: GenerateRequest):
     total_needed = data.sample_count_per_condition * len(data.conditions)
