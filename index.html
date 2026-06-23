@@ -217,7 +217,7 @@
 
 <body>
   <div id="siteMetrics" class="site-metrics">
-    Page views: -- · Generations started: --
+    Page views: -- · Synthetic responses generated: --
   </div>
   <div class="container">
     <h1>OPEN LLM SYNTHETIC EXPERIMENTAL DATA GENERATOR (OLSEDG)</h1>
@@ -430,24 +430,39 @@
         }
     
         let pageViews = 0;
-        let generationsStarted = 0;
+        let syntheticResponsesGenerated = 0;
     
         data.forEach((item) => {
           if (item.metric_name === "page_views") {
             pageViews = item.metric_count;
           }
     
-          if (item.metric_name === "generations_started") {
-            generationsStarted = item.metric_count;
+          if (item.metric_name === "synthetic_responses_generated") {
+            syntheticResponsesGenerated = item.metric_count;
           }
         });
     
         metricsBox.innerHTML = `
-          Page views: ${pageViews.toLocaleString()} · Generations started: ${generationsStarted.toLocaleString()}
+          Page views: ${pageViews.toLocaleString()} · Synthetic responses generated: ${syntheticResponsesGenerated.toLocaleString()}
         `;
     
       } catch (error) {
         console.error("Could not load site metrics:", error);
+      }
+    }
+
+    async function incrementSiteMetricBy(metricName, amount) {
+      try {
+        const { error } = await supabaseClient.rpc("increment_site_metric_by", {
+          metric: metricName,
+          amount_to_add: amount
+        });
+    
+        if (error) {
+          console.error("Could not update site metric:", error);
+        }
+      } catch (error) {
+        console.error("Could not update site metric:", error);
       }
     }
     
@@ -1048,7 +1063,9 @@
           return;
         }
         
-        await incrementSiteMetric("generations_started");
+        const totalSyntheticResponses = conditionCount * sampleCount;
+
+        await incrementSiteMetricBy("synthetic_responses_generated", totalSyntheticResponses);
         await loadSiteMetrics();
         
         pollGenerationProgress(data.job_id);
