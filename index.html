@@ -133,14 +133,14 @@
         Local Setup and Model Settings
       </h2>
 
-      <h3>
+      <label>
         Download OLSEDG Helper
         <span class="tooltip">?
           <span class="tooltip-text">
             OLSEDG Helper connects this website to your locally installed Ollama models. It checks whether the selected model is available, manages response generation, tracks progress, and saves outputs directly to your computer. All generation runs locally.
           </span>
         </span>
-      </h3>
+      </label>
       
       <div class="download-grid">
         <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.2/OLSEDG-Helper.zip" download>
@@ -194,26 +194,29 @@
       <div id="helperStatus" class="note"></div>
     </div>
 
-    <table class="input-table">
-      <tr>
-        <td><label for="studyName">Study Name:</label></td>
-        <td><input type="text" id="studyName" placeholder="Enter study name"></td>
-      </tr>
+    <div class="section">
+      <h2>Study Setup</h2>
+      <table class="input-table">
+        <tr>
+          <td><label for="studyName">Study Name:</label></td>
+          <td><input type="text" id="studyName" placeholder="Enter study name"></td>
+        </tr>
 
-      <tr>
-        <td><label for="conditionCount">Enter Number of Conditions:</label></td>
-        <td>
-          <input type="number" id="conditionCount" min="1" max="20"
-            placeholder="Enter number of conditions"
-            oninput="showConditionInputs(); updateInputEstimate();">
-        </td>
-      </tr>
+        <tr>
+          <td><label for="conditionCount">Enter Number of Conditions:</label></td>
+          <td>
+            <input type="number" id="conditionCount" min="1" max="20"
+              placeholder="Enter number of conditions"
+              oninput="showConditionInputs(); updateInputEstimate();">
+          </td>
+        </tr>
 
-      <tr>
-        <td><label for="sampleCount">Enter Required Number of Samples per Condition:</label></td>
-        <td><input type="number" id="sampleCount" min="1" placeholder="Enter samples per condition"></td>
-      </tr>
-    </table>
+        <tr>
+          <td><label for="sampleCount">Enter Required Number of Samples per Condition:</label></td>
+          <td><input type="number" id="sampleCount" min="1" placeholder="Enter samples per condition"></td>
+        </tr>
+      </table>
+    </div>
 
     <div id="conditionFields"></div>
 
