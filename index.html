@@ -117,6 +117,28 @@
       font-weight: bold;
       color: #475569;
     }
+
+    .question-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .question-header label {
+      margin-top: 0;
+    }
+    
+    .duplicate-question-btn {
+      margin-top: 0;
+      padding: 8px 12px;
+      font-size: 13px;
+      background: #0f766e;
+    }
+    
+    .duplicate-question-btn:hover {
+      background: #115e59;
+    }
   </style>
 </head>
 
@@ -259,6 +281,77 @@
     function countWords(text) {
       if (!text) return 0;
       return text.trim().split(/\s+/).filter(Boolean).length;
+    }
+
+    function addQuestion(prefill = null) {
+      questionCount++;
+      const container = document.getElementById("questionFields");
+    
+      const questionHtml = `
+        <div class="question-card" id="questionCard${questionCount}">
+          <div class="question-header">
+            <label>Question {Q${questionCount}}:</label>
+            <button type="button" class="duplicate-question-btn" onclick="duplicateQuestion(${questionCount})">
+              Duplicate Question
+            </button>
+          </div>
+    
+          <input type="text"
+            id="question${questionCount}"
+            oninput="updateInputEstimate()"
+            placeholder="Enter question ${questionCount}">
+    
+          <label>What response scale would you like to use for this question?</label>
+          <input type="number" min="2" max="20"
+            id="question${questionCount}ScaleCount"
+            placeholder="Enter number of response scale points"
+            oninput="showScaleOptions(${questionCount}, this.value)">
+    
+          <div id="question${questionCount}ScaleOptions"></div>
+        </div>
+      `;
+    
+      container.insertAdjacentHTML("beforeend", questionHtml);
+    
+      if (prefill) {
+        document.getElementById(`question${questionCount}`).value = prefill.questionText || "";
+    
+        if (prefill.scaleCount && prefill.scaleCount >= 2) {
+          document.getElementById(`question${questionCount}ScaleCount`).value = prefill.scaleCount;
+    
+          showScaleOptions(questionCount, prefill.scaleCount);
+    
+          for (let s = 1; s <= prefill.scaleCount; s++) {
+            const scaleInput = document.getElementById(`question${questionCount}Scale${s}`);
+            if (scaleInput) {
+              scaleInput.value = prefill.scaleLabels[s - 1] || "";
+            }
+          }
+        }
+      }
+    
+      updateInputEstimate();
+    }
+
+    function duplicateQuestion(sourceQuestionNumber) {
+      const questionText = document.getElementById(`question${sourceQuestionNumber}`)?.value || "";
+    
+      const scaleCount = parseInt(
+        document.getElementById(`question${sourceQuestionNumber}ScaleCount`)?.value
+      ) || 0;
+    
+      const scaleLabels = [];
+    
+      for (let s = 1; s <= scaleCount; s++) {
+        const label = document.getElementById(`question${sourceQuestionNumber}Scale${s}`)?.value || "";
+        scaleLabels.push(label);
+      }
+    
+      addQuestion({
+        questionText: questionText,
+        scaleCount: scaleCount,
+        scaleLabels: scaleLabels
+      });
     }
 
     async function checkSetup() {
@@ -491,6 +584,8 @@
           </div>
         `;
       }
+
+      updateInputEstimate();
     }
 
     function getScaleLabels(questionNumber) {
