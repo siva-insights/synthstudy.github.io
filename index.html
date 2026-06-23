@@ -179,8 +179,7 @@
       </div>
 
       <div class="helper-buttons">
-        <button onclick="checkHelper()">Check Helper</button>
-        <button onclick="checkSelectedModel()">Check Selected Model</button>
+        <button onclick="checkSetup()">Check Setup</button>
       </div>
 
       <div id="helperStatus" class="note"></div>
@@ -248,6 +247,58 @@
     function countWords(text) {
       if (!text) return 0;
       return text.trim().split(/\s+/).filter(Boolean).length;
+    }
+
+    async function checkSetup() {
+      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const statusBox = document.getElementById("helperStatus");
+    
+      if (!selectedModel) {
+        statusBox.innerHTML = "Please select a language model first.";
+        return;
+      }
+    
+      const modelName = selectedModel.value;
+      statusBox.innerHTML = "Checking OLSEDG Helper, Ollama, and selected model...";
+    
+      try {
+        const healthResponse = await fetch("http://localhost:8000/health");
+        const healthData = await healthResponse.json();
+    
+        if (!healthData.helper_running) {
+          statusBox.innerHTML = "❌ OLSEDG Helper is not responding. Please download and open OLSEDG Helper.";
+          return;
+        }
+    
+        const modelResponse = await fetch(`http://localhost:8000/check-model/${encodeURIComponent(modelName)}`);
+        const modelData = await modelResponse.json();
+    
+        if (!modelData.ollama_running) {
+          statusBox.innerHTML = `
+            ❌ OLSEDG Helper is running, but Ollama is not running or not installed.<br>
+            Please install/open Ollama before generating responses.
+          `;
+          return;
+        }
+    
+        if (!modelData.ready_to_use) {
+          statusBox.innerHTML = `
+            ❌ OLSEDG Helper and Ollama are running, but <b>${modelName}</b> is not installed locally.<br>
+            Please install this model in Ollama first.
+          `;
+          return;
+        }
+    
+        statusBox.innerHTML = `
+          ✅ Setup complete. OLSEDG Helper is running, Ollama is available, and <b>${modelName}</b> is ready to use.
+        `;
+    
+      } catch (error) {
+        statusBox.innerHTML = `
+          ❌ OLSEDG Helper is not running.<br>
+          Please download and open OLSEDG Helper, then click <b>Check Setup</b> again.
+        `;
+      }
     }
     
     function getModelWordLimit(modelName) {
@@ -593,7 +644,7 @@
           <p>This may take several minutes because OLSEDG generates one respondent at a time.</p>
           ${estimateHtml}
           <p style="color:#64748b;">
-            Output is saved continuously to your local <strong>OLSEDG_outputs</strong> folder.
+            Generated responses are continuously saved to your local <strong>OLSEDG_outputs</strong> folder. Once processing is complete, both the final response dataset and study-input document can be downloaded directly from this page.
           </p>
     
           <div class="progress-container">
