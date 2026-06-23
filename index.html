@@ -117,10 +117,108 @@
       font-weight: bold;
       color: #475569;
     }
+
+    .question-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .question-header label {
+      margin-top: 0;
+    }
+    
+    .duplicate-question-btn {
+      margin-top: 0;
+      padding: 8px 12px;
+      font-size: 13px;
+      background: #0f766e;
+    }
+    
+    .duplicate-question-btn:hover {
+      background: #115e59;
+    }
+
+    .question-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .remove-question-btn {
+      margin-top: 0;
+      padding: 8px 12px;
+      font-size: 13px;
+      background: #dc2626;
+    }
+    
+    .remove-question-btn:hover {
+      background: #b91c1c;
+    }
+
+    .comment-item {
+      margin-top: 12px;
+      padding: 12px;
+      background: white;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+    }
+    
+    .comment-item p {
+      margin: 8px 0;
+    }
+    
+    .comment-item small {
+      color: #64748b;
+    }
+
+    .site-metrics {
+      position: fixed;
+      top: 12px;
+      right: 16px;
+      z-index: 999;
+      font-size: 12px;
+      color: #64748b;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid #e2e8f0;
+      border-radius: 999px;
+      padding: 6px 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .setup-tip {
+      margin-top: 14px;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #475569;
+    }
+    
+    .setup-tip summary {
+      cursor: pointer;
+      font-weight: bold;
+      color: #1e3a8a;
+    }
+    
+    .setup-tip code {
+      display: block;
+      margin-top: 8px;
+      padding: 10px;
+      background: #0f172a;
+      color: #e5e7eb;
+      border-radius: 6px;
+      font-size: 13px;
+      overflow-x: auto;
+    }
   </style>
 </head>
 
 <body>
+  <div id="siteMetrics" class="site-metrics">
+    Page views: -- · Synthetic responses generated: --
+  </div>
   <div class="container">
     <h1>OPEN LLM SYNTHETIC EXPERIMENTAL DATA GENERATOR (OLSEDG)</h1>
 
@@ -151,6 +249,30 @@
           <div class="download-title">Download OLSEDG Helper for Windows</div>
         </a>
       </div>
+
+      <details class="setup-tip">
+        <summary>OLSEDG Helper Mac/Windows opening tip</summary>
+      
+        <p>
+          <strong>Windows:</strong> If Windows shows a security warning, click
+          <strong>More info</strong>, then <strong>Run anyway</strong>.
+        </p>
+      
+        <p>
+          <strong>Mac:</strong> After downloading, keep the extracted
+          <strong>OLSEDG Helper.app</strong> in your Downloads folder. If macOS says
+          “Apple could not verify OLSEDG Helper is free of malware,” click
+          <strong>Done</strong>, then open Terminal and run:
+        </p>
+      
+        <code>xattr -dr com.apple.quarantine ~/Downloads/OLSEDG\ Helper.app</code>
+      
+        <p>
+          Then open <strong>OLSEDG Helper.app</strong>. A browser tab should open at
+          <strong>localhost:8000/health</strong>. If you see
+          <strong>{"helper_running": true}</strong>, the helper is ready.
+        </p>
+      </details>
       
       <label>
         Select the language model for response generation:
@@ -239,6 +361,22 @@
     </div>
 
     <div id="previewArea"></div>
+
+    <div class="section">
+      <h2>Comments</h2>
+    
+      <label for="commentName">Name:</label>
+      <input type="text" id="commentName" placeholder="Enter your name">
+    
+      <label for="commentText">Comment:</label>
+      <textarea id="commentText" placeholder="Share your thoughts here"></textarea>
+    
+      <button type="button" onclick="submitComment()">Submit Comment</button>
+    
+      <div id="commentStatus" class="note"></div>
+    
+      <div id="commentList"></div>
+    </div>
   </div>
 
   <div id="citationModal" class="modal">
@@ -251,14 +389,282 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     let previews = [];
     let currentPreviewIndex = 0;
     let questionCount = 0;
 
+    const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsaGh0Zm1iamRicnJ0Zmlwa2h3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMjM2MzcsImV4cCI6MjA5Nzc5OTYzN30.Qfw7pjfGFYgnwO1J-P-jePmk8pFMrchIAZ_mfE-VB14";
+    
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function formatMetricNumber(value) {
+      const num = Number(value) || 0;
+    
+      if (num >= 1_000_000_000) {
+        return (num / 1_000_000_000).toFixed(1).replace(".0", "") + "B";
+      }
+    
+      if (num >= 1_000_000) {
+        return (num / 1_000_000).toFixed(1).replace(".0", "") + "M";
+      }
+    
+      if (num >= 1_000) {
+        return (num / 1_000).toFixed(1).replace(".0", "") + "K";
+      }
+    
+      return num.toString();
+    }
+    
+    async function incrementSiteMetric(metricName) {
+      try {
+        const { error } = await supabaseClient.rpc("increment_site_metric", {
+          metric: metricName
+        });
+    
+        if (error) {
+          console.error("Could not update site metric:", error);
+        }
+      } catch (error) {
+        console.error("Could not update site metric:", error);
+      }
+    }
+    
+    async function loadSiteMetrics() {
+      const metricsBox = document.getElementById("siteMetrics");
+    
+      if (!metricsBox) return;
+    
+      try {
+        const { data, error } = await supabaseClient
+          .from("site_metrics")
+          .select("metric_name, metric_count");
+    
+        if (error) {
+          console.error("Could not load site metrics:", error);
+          return;
+        }
+    
+        let pageViews = 0;
+        let syntheticResponsesGenerated = 0;
+    
+        data.forEach((item) => {
+          if (item.metric_name === "page_views") {
+            pageViews = item.metric_count;
+          }
+    
+          if (item.metric_name === "synthetic_responses_generated") {
+            syntheticResponsesGenerated = item.metric_count;
+          }
+        });
+    
+        metricsBox.innerHTML = `
+          Page views: ${formatMetricNumber(pageViews)} · Synthetic responses generated: ${formatMetricNumber(syntheticResponsesGenerated)}
+        `;
+                
+      } catch (error) {
+        console.error("Could not load site metrics:", error);
+      }
+    }
+
+    async function incrementSiteMetricBy(metricName, amount) {
+      try {
+        const { error } = await supabaseClient.rpc("increment_site_metric_by", {
+          metric: metricName,
+          amount_to_add: amount
+        });
+    
+        if (error) {
+          console.error("Could not update site metric:", error);
+        }
+      } catch (error) {
+        console.error("Could not update site metric:", error);
+      }
+    }
+    
+    async function recordPageView() {
+      await incrementSiteMetric("page_views");
+      await loadSiteMetrics();
+    }
+
+    async function submitComment() {
+      const nameInput = document.getElementById("commentName");
+      const commentInput = document.getElementById("commentText");
+      const statusBox = document.getElementById("commentStatus");
+    
+      const name = nameInput.value.trim();
+      const comment = commentInput.value.trim();
+    
+      if (!name || !comment) {
+        statusBox.innerHTML = "Please enter both name and comment.";
+        return;
+      }
+    
+      statusBox.innerHTML = "Submitting comment...";
+    
+      const { error } = await supabaseClient
+        .from("comments")
+        .insert([
+          {
+            name: name,
+            comment: comment
+          }
+        ]);
+    
+      if (error) {
+        statusBox.innerHTML = "Comment could not be submitted.";
+        console.error(error);
+        return;
+      }
+    
+      nameInput.value = "";
+      commentInput.value = "";
+    
+      statusBox.innerHTML = "Comment submitted. It will appear after approval.";
+    }
+    
+    async function loadComments() {
+      const commentList = document.getElementById("commentList");
+    
+      if (!commentList) return;
+    
+      const { data, error } = await supabaseClient
+        .from("comments")
+        .select("name, comment, created_at")
+        .eq("approved", true)
+        .order("created_at", { ascending: false });
+    
+      if (error) {
+        commentList.innerHTML = "Could not load comments.";
+        console.error(error);
+        return;
+      }
+    
+      if (!data || data.length === 0) {
+        commentList.innerHTML = `<p class="note">No comments yet.</p>`;
+        return;
+      }
+    
+      commentList.innerHTML = "";
+    
+      data.forEach((item) => {
+        commentList.innerHTML += `
+          <div class="comment-item">
+            <strong>${escapeHTML(item.name)}</strong>
+            <p>${escapeHTML(item.comment)}</p>
+            <small>${new Date(item.created_at).toLocaleString()}</small>
+          </div>
+        `;
+      });
+    }
+    
+    window.addEventListener("load", loadComments);
+    window.addEventListener("load", recordPageView);
+    
+    function getExistingQuestionNumbers() {
+      return Array.from(document.querySelectorAll(".question-card"))
+        .map(card => parseInt(card.id.replace("questionCard", "")))
+        .filter(num => !isNaN(num))
+        .sort((a, b) => a - b);
+    }
+    
     function countWords(text) {
       if (!text) return 0;
       return text.trim().split(/\s+/).filter(Boolean).length;
+    }
+
+    function addQuestion(prefill = null) {
+      questionCount++;
+      const container = document.getElementById("questionFields");
+    
+      const questionHtml = `
+        <div class="question-card" id="questionCard${questionCount}">
+          <div class="question-header">
+            <label>Question {Q${questionCount}}:</label>
+    
+            <div class="question-actions">
+              <button type="button" class="duplicate-question-btn" onclick="duplicateQuestion(${questionCount})">
+                Duplicate Question
+              </button>
+    
+              <button type="button" class="remove-question-btn" onclick="removeQuestion(${questionCount})">
+                Remove Question
+              </button>
+            </div>
+          </div>
+    
+          <input type="text"
+            id="question${questionCount}"
+            oninput="updateInputEstimate()"
+            placeholder="Enter question ${questionCount}">
+    
+          <label>What response scale would you like to use for this question?</label>
+          <input type="number" min="2" max="20"
+            id="question${questionCount}ScaleCount"
+            placeholder="Enter number of response scale points"
+            oninput="showScaleOptions(${questionCount}, this.value)">
+    
+          <div id="question${questionCount}ScaleOptions"></div>
+        </div>
+      `;
+    
+      container.insertAdjacentHTML("beforeend", questionHtml);
+    
+      if (prefill) {
+        document.getElementById(`question${questionCount}`).value = prefill.questionText || "";
+    
+        if (prefill.scaleCount && prefill.scaleCount >= 2) {
+          document.getElementById(`question${questionCount}ScaleCount`).value = prefill.scaleCount;
+    
+          showScaleOptions(questionCount, prefill.scaleCount);
+    
+          for (let s = 1; s <= prefill.scaleCount; s++) {
+            const scaleInput = document.getElementById(`question${questionCount}Scale${s}`);
+            if (scaleInput) {
+              scaleInput.value = prefill.scaleLabels[s - 1] || "";
+            }
+          }
+        }
+      }
+    
+      updateInputEstimate();
+    }
+
+    function removeQuestion(questionNumber) {
+      const card = document.getElementById(`questionCard${questionNumber}`);
+    
+      if (card) {
+        card.remove();
+      }
+    
+      const remainingQuestions = getExistingQuestionNumbers();
+      questionCount = remainingQuestions.length > 0 ? Math.max(...remainingQuestions) : 0;
+    
+      updateInputEstimate();
+      document.getElementById("previewArea").innerHTML = "";
+    }
+
+    function duplicateQuestion(sourceQuestionNumber) {
+      const questionText = document.getElementById(`question${sourceQuestionNumber}`)?.value || "";
+    
+      const scaleCount = parseInt(
+        document.getElementById(`question${sourceQuestionNumber}ScaleCount`)?.value
+      ) || 0;
+    
+      const scaleLabels = [];
+    
+      for (let s = 1; s <= scaleCount; s++) {
+        const label = document.getElementById(`question${sourceQuestionNumber}Scale${s}`)?.value || "";
+        scaleLabels.push(label);
+      }
+    
+      addQuestion({
+        questionText: questionText,
+        scaleCount: scaleCount,
+        scaleLabels: scaleLabels
+      });
     }
 
     async function checkSetup() {
@@ -375,7 +781,9 @@
     
       let questionWords = 0;
     
-      for (let q = 1; q <= questionCount; q++) {
+      const questionNumbers = getExistingQuestionNumbers();
+
+      for (const q of questionNumbers) {
         questionWords += countWords(document.getElementById(`question${q}`)?.value || "");
     
         const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`)?.value) || 0;
@@ -448,28 +856,6 @@
       document.getElementById("previewArea").innerHTML = "";
     }
 
-    function addQuestion() {
-      questionCount++;
-      const container = document.getElementById("questionFields");
-
-      const questionHtml = `
-        <div class="question-card" id="questionCard${questionCount}">
-          <label>Question {Q${questionCount}}:</label>
-          <input type="text" id="question${questionCount}" oninput="updateInputEstimate()" placeholder="Enter question ${questionCount}">
-
-          <label>What response scale would you like to use for this question?</label>
-          <input type="number" min="2" max="20"
-            id="question${questionCount}ScaleCount"
-            placeholder="Enter number of response scale points"
-            oninput="showScaleOptions(${questionCount}, this.value)">
-
-          <div id="question${questionCount}ScaleOptions"></div>
-        </div>
-      `;
-
-      container.insertAdjacentHTML("beforeend", questionHtml);
-    }
-
     function showScaleOptions(questionNumber, scaleCountValue) {
       const scaleCount = parseInt(scaleCountValue);
       const container = document.getElementById(`question${questionNumber}ScaleOptions`);
@@ -491,6 +877,8 @@
           </div>
         `;
       }
+
+      updateInputEstimate();
     }
 
     function getScaleLabels(questionNumber) {
@@ -540,7 +928,9 @@
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
         let htmlStimuli = escapeHTML(stimuli);
 
-        for (let q = 1; q <= questionCount; q++) {
+        const questionNumbers = getExistingQuestionNumbers();
+
+        for (const q of questionNumbers) {
           const questionHtml = buildQuestionPreview(q);
           const placeholder = new RegExp(`\\{Q${q}\\}`, "g");
           htmlStimuli = htmlStimuli.replace(placeholder, questionHtml);
@@ -592,6 +982,7 @@
 
     async function generateResponses() {
       const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const questionNumbers = getExistingQuestionNumbers();
     
       if (!selectedModel) {
         alert("Please select a language model.");
@@ -603,7 +994,7 @@
       const sampleCount = parseInt(document.getElementById("sampleCount").value);
       const temperature = parseFloat(document.getElementById("temperature").value);
     
-      if (!studyName || !conditionCount || !sampleCount || questionCount < 1) {
+      if (!studyName || !conditionCount || !sampleCount || questionNumbers.length < 1) {
         alert("Please complete study name, conditions, samples, and at least one question.");
         return;
       }
@@ -619,7 +1010,7 @@
     
       const questions = [];
     
-      for (let q = 1; q <= questionCount; q++) {
+      for (const q of questionNumbers) {
         const questionText = document.getElementById(`question${q}`).value.trim();
         const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`).value);
     
@@ -689,7 +1080,12 @@
           `;
           return;
         }
-    
+        
+        const totalSyntheticResponses = conditionCount * sampleCount;
+
+        await incrementSiteMetricBy("synthetic_responses_generated", totalSyntheticResponses);
+        await loadSiteMetrics();
+        
         pollGenerationProgress(data.job_id);
     
       } catch (error) {
@@ -736,7 +1132,6 @@
               ${completed}/${total} respondents completed.
               ${pending} pending.
               Progress: ${percent}%.
-              <br>Estimated time remaining: ${remainingMinutes} minute(s).
             `;
           }
           
@@ -868,5 +1263,6 @@
       }
     }
   </script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
