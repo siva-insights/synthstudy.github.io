@@ -171,10 +171,27 @@
     .comment-item small {
       color: #64748b;
     }
+
+    .site-metrics {
+      position: fixed;
+      top: 12px;
+      right: 16px;
+      z-index: 999;
+      font-size: 12px;
+      color: #64748b;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid #e2e8f0;
+      border-radius: 999px;
+      padding: 6px 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
   </style>
 </head>
 
 <body>
+  <div id="siteMetrics" class="site-metrics">
+    Page views: -- · Generations started: --
+  </div>
   <div class="container">
     <h1>OPEN LLM SYNTHETIC EXPERIMENTAL DATA GENERATOR (OLSEDG)</h1>
 
@@ -332,6 +349,62 @@
     
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    async function incrementSiteMetric(metricName) {
+      try {
+        const { error } = await supabaseClient.rpc("increment_site_metric", {
+          metric: metricName
+        });
+    
+        if (error) {
+          console.error("Could not update site metric:", error);
+        }
+      } catch (error) {
+        console.error("Could not update site metric:", error);
+      }
+    }
+    
+    async function loadSiteMetrics() {
+      const metricsBox = document.getElementById("siteMetrics");
+    
+      if (!metricsBox) return;
+    
+      try {
+        const { data, error } = await supabaseClient
+          .from("site_metrics")
+          .select("metric_name, metric_count");
+    
+        if (error) {
+          console.error("Could not load site metrics:", error);
+          return;
+        }
+    
+        let pageViews = 0;
+        let generationsStarted = 0;
+    
+        data.forEach((item) => {
+          if (item.metric_name === "page_views") {
+            pageViews = item.metric_count;
+          }
+    
+          if (item.metric_name === "generations_started") {
+            generationsStarted = item.metric_count;
+          }
+        });
+    
+        metricsBox.innerHTML = `
+          Page views: ${pageViews.toLocaleString()} · Generations started: ${generationsStarted.toLocaleString()}
+        `;
+    
+      } catch (error) {
+        console.error("Could not load site metrics:", error);
+      }
+    }
+    
+    async function recordPageView() {
+      await incrementSiteMetric("page_views");
+      await loadSiteMetrics();
+    }
+
     async function submitComment() {
       const nameInput = document.getElementById("commentName");
       const commentInput = document.getElementById("commentText");
@@ -404,6 +477,7 @@
     }
     
     window.addEventListener("load", loadComments);
+    window.addEventListener("load", recordPageView);
     
     function getExistingQuestionNumbers() {
       return Array.from(document.querySelectorAll(".question-card"))
@@ -922,7 +996,10 @@
           `;
           return;
         }
-    
+        
+        await incrementSiteMetric("generations_started");
+        await loadSiteMetrics();
+        
         pollGenerationProgress(data.job_id);
     
       } catch (error) {
