@@ -129,8 +129,25 @@
     </div>
 
     <div class="section">
-      <h2>Model Selection</h2>
+      <h2>
+        Local Setup and Model Settings
+        <span class="tooltip">?
+          <span class="tooltip-text">
+            OLSEDG Helper connects this website to your locally installed Ollama models. It checks model availability, manages response generation, tracks progress, and saves outputs directly to your computer. All generation occurs locally and no study data is sent to external servers.
+          </span>
+        </span>
+      </h2>
 
+      <div class="download-grid">
+        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.2/OLSEDG-Helper.zip" download>
+          <div class="download-title">Download OLSEDG Helper for Mac</div>
+        </a>
+
+        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.1/OLSEDG-Helper.zip" download>
+          <div class="download-title">Download OLSEDG Helper for Windows</div>
+        </a>
+      </div>
+      
       <label>
         Select the language model for response generation:
         <span class="tooltip">?
@@ -165,18 +182,6 @@
         </span>
       </label>
       <input type="number" id="temperature" min="0" max="2" step="0.1" value="0">
-
-      <div class="download-grid">
-        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.2/OLSEDG-Helper.zip" download>
-          <div class="download-title">Download for Mac</div>
-          <div class="download-subtitle">OLSEDG Helper v1.2</div>
-        </a>
-
-        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.1/OLSEDG-Helper.zip" download>
-          <div class="download-title">Download for Windows</div>
-          <div class="download-subtitle">OLSEDG Helper v1.1</div>
-        </a>
-      </div>
 
       <div class="helper-buttons">
         <button onclick="checkSetup()">Validate Setup</button>
