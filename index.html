@@ -129,8 +129,29 @@
     </div>
 
     <div class="section">
-      <h2>Model Selection</h2>
+      <h2>
+        Local Setup and Model Settings
+      </h2>
 
+      <label>
+        Download OLSEDG Helper
+        <span class="tooltip">?
+          <span class="tooltip-text">
+            OLSEDG Helper connects this website to your locally installed Ollama models. It checks whether the selected model is available, manages response generation, tracks progress, and saves outputs directly to your computer. All generation runs locally.
+          </span>
+        </span>
+      </label>
+      
+      <div class="download-grid">
+        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.2/OLSEDG-Helper.zip" download>
+          <div class="download-title">Download OLSEDG Helper for Mac</div>
+        </a>
+
+        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.1/OLSEDG-Helper.zip" download>
+          <div class="download-title">Download OLSEDG Helper for Windows</div>
+        </a>
+      </div>
+      
       <label>
         Select the language model for response generation:
         <span class="tooltip">?
@@ -166,46 +187,36 @@
       </label>
       <input type="number" id="temperature" min="0" max="2" step="0.1" value="0">
 
-      <div class="download-grid">
-        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.2/OLSEDG-Helper.zip" download>
-          <div class="download-title">Download for Mac</div>
-          <div class="download-subtitle">OLSEDG Helper v1.2</div>
-        </a>
-
-        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.1/OLSEDG-Helper.zip" download>
-          <div class="download-title">Download for Windows</div>
-          <div class="download-subtitle">OLSEDG Helper v1.1</div>
-        </a>
-      </div>
-
       <div class="helper-buttons">
-        <button onclick="checkHelper()">Check Helper</button>
-        <button onclick="checkSelectedModel()">Check Selected Model</button>
+        <button onclick="checkSetup()">Validate Setup</button>
       </div>
 
       <div id="helperStatus" class="note"></div>
     </div>
 
-    <table class="input-table">
-      <tr>
-        <td><label for="studyName">Study Name:</label></td>
-        <td><input type="text" id="studyName" placeholder="Enter study name"></td>
-      </tr>
+    <div class="section">
+      <h2>Study Setup</h2>
+      <table class="input-table">
+        <tr>
+          <td><label for="studyName">Study Name:</label></td>
+          <td><input type="text" id="studyName" placeholder="Enter study name"></td>
+        </tr>
 
-      <tr>
-        <td><label for="conditionCount">Enter Number of Conditions:</label></td>
-        <td>
-          <input type="number" id="conditionCount" min="1" max="20"
-            placeholder="Enter number of conditions"
-            oninput="showConditionInputs(); updateInputEstimate();">
-        </td>
-      </tr>
+        <tr>
+          <td><label for="conditionCount">Enter Number of Conditions:</label></td>
+          <td>
+            <input type="number" id="conditionCount" min="1" max="20"
+              placeholder="Enter number of conditions"
+              oninput="showConditionInputs(); updateInputEstimate();">
+          </td>
+        </tr>
 
-      <tr>
-        <td><label for="sampleCount">Enter Required Number of Samples per Condition:</label></td>
-        <td><input type="number" id="sampleCount" min="1" placeholder="Enter samples per condition"></td>
-      </tr>
-    </table>
+        <tr>
+          <td><label for="sampleCount">Enter Required Number of Samples per Condition:</label></td>
+          <td><input type="number" id="sampleCount" min="1" placeholder="Enter samples per condition"></td>
+        </tr>
+      </table>
+    </div>
 
     <div id="conditionFields"></div>
 
@@ -248,6 +259,58 @@
     function countWords(text) {
       if (!text) return 0;
       return text.trim().split(/\s+/).filter(Boolean).length;
+    }
+
+    async function checkSetup() {
+      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const statusBox = document.getElementById("helperStatus");
+    
+      if (!selectedModel) {
+        statusBox.innerHTML = "Please select a language model first.";
+        return;
+      }
+    
+      const modelName = selectedModel.value;
+      statusBox.innerHTML = "Checking OLSEDG Helper, Ollama, and selected model...";
+    
+      try {
+        const healthResponse = await fetch("http://localhost:8000/health");
+        const healthData = await healthResponse.json();
+    
+        if (!healthData.helper_running) {
+          statusBox.innerHTML = "❌ OLSEDG Helper is not responding. Please download and open OLSEDG Helper.";
+          return;
+        }
+    
+        const modelResponse = await fetch(`http://localhost:8000/check-model/${encodeURIComponent(modelName)}`);
+        const modelData = await modelResponse.json();
+    
+        if (!modelData.ollama_running) {
+          statusBox.innerHTML = `
+            ❌ OLSEDG Helper is running, but Ollama is not running or not installed.<br>
+            Please install/open Ollama before generating responses.
+          `;
+          return;
+        }
+    
+        if (!modelData.ready_to_use) {
+          statusBox.innerHTML = `
+            ❌ OLSEDG Helper and Ollama are running, but <b>${modelName}</b> is not installed locally.<br>
+            Please install this model in Ollama first.
+          `;
+          return;
+        }
+    
+        statusBox.innerHTML = `
+          ✅ Setup complete. OLSEDG Helper is running, Ollama is available, and <b>${modelName}</b> is ready to use.
+        `;
+    
+      } catch (error) {
+        statusBox.innerHTML = `
+          ❌ OLSEDG Helper is not running.<br>
+          Please download and open OLSEDG Helper, then click <b>Check Setup</b> again.
+        `;
+      }
     }
     
     function getModelWordLimit(modelName) {
@@ -593,7 +656,7 @@
           <p>This may take several minutes because OLSEDG generates one respondent at a time.</p>
           ${estimateHtml}
           <p style="color:#64748b;">
-            Output is saved continuously to your local <strong>OLSEDG_outputs</strong> folder.
+            Generated responses are continuously saved to your local <strong>OLSEDG_outputs</strong> folder. Once processing is complete, both the final response dataset and study-input document can be downloaded directly from this page.
           </p>
     
           <div class="progress-container">

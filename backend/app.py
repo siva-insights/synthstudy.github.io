@@ -38,6 +38,11 @@ app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR), name="outputs")
 JOBS = {}
 JOBS_LOCK = Lock()
 
+def estimate_num_ctx(prompt: str) -> int:
+    prompt_words = len(str(prompt).split())
+    num_ctx = (prompt_words + 500) * 2
+    return int(num_ctx)
+    
 def load_history():
     if not HISTORY_FILE.exists():
         return []
@@ -175,7 +180,7 @@ def load_personas(total_needed: int):
 
 
 def build_prompt(persona, stimuli, questions):
-    question_blocks = []
+    question_lookup = {}
 
     for q in questions:
         min_code = 1
@@ -185,52 +190,77 @@ def build_prompt(persona, stimuli, questions):
             [f"{i + 1} = {label}" for i, label in enumerate(q.scale_points)]
         )
 
-        question_blocks.append(
-            f"""
-Q{q.question_number}: {q.question_text}
+        embedded_question = f"""
+[Q{q.question_number}]
+Question: {q.question_text}
 Allowed response codes: {min_code} to {max_code}
 Response scale:
 {scale_text}
-"""
+[/Q{q.question_number}]
+""".strip()
+
+        question_lookup[q.question_number] = embedded_question
+
+    embedded_stimuli = stimuli
+
+    for q in questions:
+        placeholder = f"{{Q{q.question_number}}}"
+        embedded_stimuli = embedded_stimuli.replace(
+            placeholder,
+            question_lookup[q.question_number]
         )
 
-    questions_text = "\n".join(question_blocks)
+    # If the user forgot to include placeholders, append unanswered questions at the end.
+    missing_questions = []
+
+    for q in questions:
+        placeholder = f"{{Q{q.question_number}}}"
+        if placeholder not in stimuli:
+            missing_questions.append(question_lookup[q.question_number])
+
+    if missing_questions:
+        embedded_stimuli += """
+
+Questions not embedded in the study materials:
+""" + "\n\n".join(missing_questions)
+
+    answer_template = "\n".join(
+        [f"Q{q.question_number}=?" for q in questions]
+    )
 
     prompt = f"""
 You are simulating one synthetic survey respondent.
 
 Your task:
 1. Read the respondent persona.
-2. Read the experimental stimulus.
-3. Answer the survey questions from this respondent's perspective.
-4. Wherever a placeholder such as {{Q1}}, {{Q2}}, etc. appears in the stimulus, treat that as the point where the corresponding question is asked.
+2. Read the study materials exactly as a survey participant would see them.
+3. Answer each embedded survey question from this respondent's perspective.
+4. Use the respondent persona, the study materials, and the response scale for each question when choosing answers.
 
 Respondent persona:
 {persona}
 
-Experimental stimulus:
-{stimuli}
-
-Survey questions:
-{questions_text}
+Study materials with embedded questions:
+{embedded_stimuli}
 
 Important rules:
-- Choose only allowed option codes for single-choice questions.
+- Choose only allowed option codes for each question.
 - Each answer must be an integer within the allowed response-code range for that question.
 - Do not choose values below the minimum code or above the maximum code.
-- For all questions, return only an integer.
+- Return only the final answer values.
 - Do not include explanations.
 - Do not include markdown.
 - Do not repeat the questions.
 - Return answers only in this format:
-Q1=?
-Q2=?
-Q3=?
-"""
+{answer_template}
+""".strip()
+
     return prompt
 
 
 def call_ollama(model_name, prompt, temperature):
+    num_ctx = estimate_num_ctx(prompt)
+
     response = requests.post(
         f"{OLLAMA_URL}/api/generate",
         json={
@@ -238,7 +268,8 @@ def call_ollama(model_name, prompt, temperature):
             "prompt": prompt,
             "stream": False,
             "options": {
-                "temperature": temperature
+                "temperature": temperature,
+                "num_ctx": num_ctx
             }
         },
         timeout=300
@@ -250,6 +281,7 @@ def call_ollama(model_name, prompt, temperature):
 
 def parse_answers(raw_text, questions):
     answers = {}
+    invalid_questions = []
 
     for q in questions:
         q_num = q.question_number
@@ -260,15 +292,39 @@ def parse_answers(raw_text, questions):
 
         if match:
             value = int(match.group(1))
+
             if 1 <= value <= max_code:
                 answers[f"Q{q_num}"] = value
             else:
                 answers[f"Q{q_num}"] = ""
+                invalid_questions.append(f"Q{q_num}")
         else:
             answers[f"Q{q_num}"] = ""
+            invalid_questions.append(f"Q{q_num}")
 
-    return answers
+    validation = "valid" if not invalid_questions else "invalid"
 
+    return answers, validation, invalid_questions
+
+def get_valid_response_with_retries(model_name, prompt, temperature, questions, max_retries=5):
+    last_raw_response = ""
+    last_answers = {}
+    last_validation = "invalid"
+    last_invalid_questions = []
+
+    for attempt in range(1, max_retries + 1):
+        raw_response = call_ollama(model_name, prompt, temperature)
+        answers, validation, invalid_questions = parse_answers(raw_response, questions)
+
+        if validation == "valid":
+            return answers, validation, invalid_questions, attempt, raw_response
+
+        last_raw_response = raw_response
+        last_answers = answers
+        last_validation = validation
+        last_invalid_questions = invalid_questions
+
+    return last_answers, last_validation, last_invalid_questions, max_retries, last_raw_response
 
 def create_docx(data, filepath):
     doc = Document()
@@ -330,7 +386,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         docx_path = OUTPUT_DIR / docx_filename
 
         question_columns = [f"Q{q.question_number}" for q in data.questions]
-        columns = ["respondent_id", "pid", "persona_summary", "condition"] + question_columns
+        columns = ["respondent_id", "pid", "persona_summary", "condition", "validation", "retry_count"] + question_columns
 
         pd.DataFrame(columns=columns).to_csv(csv_path, index=False)
 
@@ -352,7 +408,13 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             prompt = build_prompt(persona, stimuli, data.questions)
             start_time = time.time()
 
-            raw_response = call_ollama(data.model_name, prompt, data.temperature)
+            answers, validation, invalid_questions, retry_count, raw_response = get_valid_response_with_retries(
+                data.model_name,
+                prompt,
+                data.temperature,
+                data.questions,
+                max_retries=5
+            )
             
             end_time = time.time()
             seconds_taken = round(end_time - start_time, 3)
@@ -372,6 +434,8 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 "pid": pid,
                 "persona_summary": persona,
                 "condition": condition_number,
+                "validation": validation,
+                "retry_count": retry_count,
             }
 
             row.update(answers)
