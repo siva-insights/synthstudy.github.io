@@ -727,14 +727,19 @@
             progressBar.style.width = `${percent}%`;
           }
     
+          const remainingMinutes = data.estimated_remaining_seconds
+            ? Math.round(data.estimated_remaining_seconds / 60)
+            : 0;
+          
           if (progressText) {
             progressText.innerHTML = `
               ${completed}/${total} respondents completed.
               ${pending} pending.
               Progress: ${percent}%.
+              <br>Estimated time remaining: ${remainingMinutes} minute(s).
             `;
           }
-    
+          
           if (data.status === "complete") {
             clearInterval(interval);
     
