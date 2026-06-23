@@ -40,7 +40,7 @@ JOBS_LOCK = Lock()
 
 def estimate_num_ctx(prompt: str) -> int:
     prompt_words = len(str(prompt).split())
-    num_ctx = (prompt_words + 500) * 2
+    num_ctx = (prompt_words + 500 + 3061) * 2
     return int(num_ctx)
     
 def load_history():
@@ -287,25 +287,28 @@ def parse_answers(raw_text, questions):
         q_num = q.question_number
         max_code = len(q.scale_points)
 
-        pattern = rf"Q{q_num}\s*=\s*(\d+)"
+        # Allows normal numbers and negative numbers, so invalid values are still captured
+        pattern = rf"Q{q_num}\s*=\s*(-?\d+)"
         match = re.search(pattern, raw_text, re.IGNORECASE)
 
         if match:
             value = int(match.group(1))
 
-            if 1 <= value <= max_code:
-                answers[f"Q{q_num}"] = value
-            else:
-                answers[f"Q{q_num}"] = ""
+            # Store the value even if invalid
+            answers[f"Q{q_num}"] = value
+
+            # But mark it invalid if outside the allowed range
+            if not (1 <= value <= max_code):
                 invalid_questions.append(f"Q{q_num}")
         else:
+            # No answer found
             answers[f"Q{q_num}"] = ""
             invalid_questions.append(f"Q{q_num}")
 
     validation = "valid" if not invalid_questions else "invalid"
 
     return answers, validation, invalid_questions
-
+    
 def get_valid_response_with_retries(model_name, prompt, temperature, questions, max_retries=5):
     last_raw_response = ""
     last_answers = {}
@@ -386,16 +389,36 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         docx_path = OUTPUT_DIR / docx_filename
 
         question_columns = [f"Q{q.question_number}" for q in data.questions]
-        columns = ["respondent_id", "pid", "persona_summary", "condition", "validation", "retry_count"] + question_columns
-
+        columns = [
+            "respondent_id",
+            "pid",
+            "persona_summary",
+            "condition",
+            "condition_stimuli",
+            "model_name",
+            "temperature",
+            "validation",
+            "invalid_questions",
+            "retry_count",
+            "seconds_taken",
+            "prompt_words",
+            "num_ctx_used",
+            "raw_response"
+        ] + question_columns
         pd.DataFrame(columns=columns).to_csv(csv_path, index=False)
 
         update_job(
             job_id,
             status="generating",
             message=f"Generating synthetic responses. Output is being saved continuously to {csv_path}",
-            csv_url=f"http://localhost:8000/outputs/{csv_filename}"
+            completed=0,
+            total=total_needed,
+            percent=0,
+            csv_url=f"http://localhost:8000/outputs/{csv_filename}",
+            docx_url=None
         )
+
+        job_start_time = time.time()
 
         for i in range(total_needed):
             respondent_id = i + 1
@@ -406,6 +429,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             persona = df_personas.loc[i, "persona_summary"]
 
             prompt = build_prompt(persona, stimuli, data.questions)
+
             start_time = time.time()
 
             answers, validation, invalid_questions, retry_count, raw_response = get_valid_response_with_retries(
@@ -415,12 +439,10 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 data.questions,
                 max_retries=5
             )
-            
+
             end_time = time.time()
             seconds_taken = round(end_time - start_time, 3)
-            
-            answers = parse_answers(raw_response, data.questions)
-            
+
             save_history_entry({
                 "timestamp": datetime.now().isoformat(),
                 "model_name": data.model_name,
@@ -429,17 +451,38 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 "condition": condition_number
             })
 
+            prompt_words = len(str(prompt).split())
+            num_ctx_used = estimate_num_ctx(prompt)
+                        
             row = {
                 "respondent_id": respondent_id,
                 "pid": pid,
                 "persona_summary": persona,
                 "condition": condition_number,
+                "condition_stimuli": stimuli,
+                "model_name": data.model_name,
+                "temperature": data.temperature,
                 "validation": validation,
+                "invalid_questions": ",".join(invalid_questions),
                 "retry_count": retry_count,
+                "seconds_taken": seconds_taken,
+                "prompt_words": prompt_words,
+                "num_ctx_used": num_ctx_used,
+                "raw_response": str(raw_response).replace("\n", " | "),
             }
-
-            row.update(answers)
-
+            
+            # Safety check: if answers accidentally comes as a tuple, take only the answers dictionary
+            if isinstance(answers, tuple):
+                answers = answers[0]
+            
+            # Safety check: if answers is still not a dictionary, stop with a clear error
+            if not isinstance(answers, dict):
+                raise ValueError(f"answers should be a dictionary, but got {type(answers)}: {answers}")
+            
+            # Add each question answer manually instead of using row.update()
+            for q in data.questions:
+                q_col = f"Q{q.question_number}"
+                row[q_col] = answers.get(q_col, "")
             pd.DataFrame([row]).to_csv(
                 csv_path,
                 mode="a",
@@ -451,10 +494,21 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             pending = total_needed - completed
             percent = round((completed / total_needed) * 100, 1)
 
+            elapsed_seconds = time.time() - job_start_time
+            avg_seconds_current_run = elapsed_seconds / completed
+            estimated_remaining_seconds = avg_seconds_current_run * pending
+            estimated_total_seconds = elapsed_seconds + estimated_remaining_seconds
+
             update_job(
                 job_id,
                 completed=completed,
+                total=total_needed,
+                pending=pending,
                 percent=percent,
+                elapsed_seconds=round(elapsed_seconds, 1),
+                average_seconds_per_respondent=round(avg_seconds_current_run, 2),
+                estimated_remaining_seconds=round(estimated_remaining_seconds, 1),
+                estimated_total_seconds=round(estimated_total_seconds, 1),
                 message=f"{completed}/{total_needed} respondents completed. {pending} remaining."
             )
 
@@ -465,7 +519,10 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             status="complete",
             message="Generation complete",
             completed=total_needed,
+            total=total_needed,
+            pending=0,
             percent=100,
+            estimated_remaining_seconds=0,
             csv_url=f"http://localhost:8000/outputs/{csv_filename}",
             docx_url=f"http://localhost:8000/outputs/{docx_filename}"
         )
@@ -476,7 +533,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             status="error",
             message=str(e)
         )
-
+        
 @app.post("/generate")
 def generate(data: GenerateRequest):
     total_needed = data.sample_count_per_condition * len(data.conditions)
