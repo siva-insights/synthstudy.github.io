@@ -185,6 +185,33 @@
       padding: 6px 10px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     }
+
+    .setup-tip {
+      margin-top: 14px;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #475569;
+    }
+    
+    .setup-tip summary {
+      cursor: pointer;
+      font-weight: bold;
+      color: #1e3a8a;
+    }
+    
+    .setup-tip code {
+      display: block;
+      margin-top: 8px;
+      padding: 10px;
+      background: #0f172a;
+      color: #e5e7eb;
+      border-radius: 6px;
+      font-size: 13px;
+      overflow-x: auto;
+    }
   </style>
 </head>
 
@@ -222,6 +249,30 @@
           <div class="download-title">Download OLSEDG Helper for Windows</div>
         </a>
       </div>
+
+      <details class="setup-tip">
+        <summary>Mac/Windows opening tip</summary>
+      
+        <p>
+          <strong>Windows:</strong> If Windows shows a security warning, click
+          <strong>More info</strong>, then <strong>Run anyway</strong>.
+        </p>
+      
+        <p>
+          <strong>Mac:</strong> After downloading, keep the extracted
+          <strong>OLSEDG Helper.app</strong> in your Downloads folder. If macOS says
+          “Apple could not verify OLSEDG Helper is free of malware,” click
+          <strong>Done</strong>, then open Terminal and run:
+        </p>
+      
+        <code>xattr -dr com.apple.quarantine ~/Downloads/OLSEDG\ Helper.app</code>
+      
+        <p>
+          Then open <strong>OLSEDG Helper.app</strong>. A browser tab should open at
+          <strong>localhost:8000/health</strong>. If you see
+          <strong>{"helper_running": true}</strong>, the helper is ready.
+        </p>
+      </details>
       
       <label>
         Select the language model for response generation:
