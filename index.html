@@ -8,7 +8,14 @@
     h1 { text-align: center; color: #1e3a8a; margin-bottom: 12px; }
     .cite-button-wrap { text-align: center; margin-bottom: 30px; }
     label { font-weight: bold; display: block; margin-top: 18px; margin-bottom: 6px; }
-    input[type="text"], input[type="number"], textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; box-sizing: border-box; }
+    input[type="text"], input[type="number"], textarea, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
     textarea { min-height: 90px; resize: vertical; }
     .input-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
     .input-table td { padding: 10px; vertical-align: middle; }
@@ -279,26 +286,34 @@
         <span class="tooltip">?
           <span class="tooltip-text">
             Approximate context limits:<br>
-            qwen2.5:14b: 40,960 tokens ≈ 30,000 words<br>
-            qwen2.5:7b: 40,960 tokens ≈ 30,000 words<br>
-            llama3.1:8b: 131,072 tokens ≈ 98,000 words<br>
-            qwen3:14b: 40,960 tokens ≈ 30,000 words<br>
-            mistral-small3.2:24b: 131,072 tokens ≈ 98,000 words<br>
+            deepseek-r1:14b: 131,072 tokens ≈ 98,000 words<br>
+            gemma3:4b: 131,072 tokens ≈ 98,000 words<br>
             gemma3:12b: 131,072 tokens ≈ 98,000 words<br>
-            deepseek-r1:14b: 131,072 tokens ≈ 98,000 words
+            llama3.1:8b: 131,072 tokens ≈ 98,000 words<br>
+            llama3.2:3b: 131,072 tokens ≈ 98,000 words<br>
+            mistral:7b-instruct: 32,000 tokens ≈ 24,000 words<br>
+            mistral-small3.2:24b: 131,072 tokens ≈ 98,000 words<br>
+            qwen2.5:7b: 40,960 tokens ≈ 30,000 words<br>
+            qwen2.5:7b-instruct: 40,960 tokens ≈ 30,000 words<br>
+            qwen2.5:14b: 40,960 tokens ≈ 30,000 words<br>
+            qwen3:14b: 40,960 tokens ≈ 30,000 words
           </span>
         </span>
       </label>
-      <div class="radio-options">
-        <label><input type="radio" name="modelChoice" value="qwen2.5:14b" onchange="updateInputEstimate()"> qwen2.5:14b</label>
-        <label><input type="radio" name="modelChoice" value="qwen2.5:7b" onchange="updateInputEstimate()"> qwen2.5:7b</label>
-        <label><input type="radio" name="modelChoice" value="llama3.1:8b" onchange="updateInputEstimate()"> llama3.1:8b</label>
-        <label><input type="radio" name="modelChoice" value="qwen3:14b" onchange="updateInputEstimate()"> qwen3:14b</label>
-        <label><input type="radio" name="modelChoice" value="mistral-small3.2:24b" onchange="updateInputEstimate()"> mistral-small3.2:24b</label>
-        <label><input type="radio" name="modelChoice" value="gemma3:12b" onchange="updateInputEstimate()"> gemma3:12b</label>
-        <label><input type="radio" name="modelChoice" value="deepseek-r1:14b" onchange="updateInputEstimate()"> deepseek-r1:14b</label>
-      </div>
-
+      <select id="modelChoice" name="modelChoice" onchange="updateInputEstimate()">
+        <option value="">Select the language model for response generation:</option>
+        <option value="deepseek-r1:14b">deepseek-r1:14b</option>
+        <option value="gemma3:4b">gemma3:4b</option>
+        <option value="gemma3:12b">gemma3:12b</option>
+        <option value="llama3.1:8b">llama3.1:8b</option>
+        <option value="llama3.2:3b">llama3.2:3b</option>
+        <option value="mistral:7b-instruct">mistral:7b-instruct</option>
+        <option value="mistral-small3.2:24b">mistral-small3.2:24b</option>
+        <option value="qwen2.5:7b">qwen2.5:7b</option>
+        <option value="qwen2.5:7b-instruct">qwen2.5:7b-instruct</option>
+        <option value="qwen2.5:14b">qwen2.5:14b</option>
+        <option value="qwen3:14b">qwen3:14b</option>
+      </select>
       <label for="temperature">
         Response Randomness / Temperature:
         <span class="tooltip">?
@@ -668,10 +683,10 @@
     }
 
     async function checkSetup() {
-      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const selectedModel = document.getElementById("modelChoice");
       const statusBox = document.getElementById("helperStatus");
     
-      if (!selectedModel) {
+      if (!selectedModel || !selectedModel.value) {
         statusBox.innerHTML = "Please select a language model first.";
         return;
       }
@@ -721,20 +736,24 @@
     
     function getModelWordLimit(modelName) {
       const limits = {
-        "qwen2.5:14b": 30000,
-        "qwen2.5:7b": 30000,
-        "llama3.1:8b": 98000,
-        "qwen3:14b": 30000,
-        "mistral-small3.2:24b": 98000,
+        "deepseek-r1:14b": 98000,
+        "gemma3:4b": 98000,
         "gemma3:12b": 98000,
-        "deepseek-r1:14b": 98000
+        "llama3.1:8b": 98000,
+        "llama3.2:3b": 98000,
+        "mistral:7b-instruct": 24000,
+        "mistral-small3.2:24b": 98000,
+        "qwen2.5:7b": 30000,
+        "qwen2.5:7b-instruct": 30000,
+        "qwen2.5:14b": 30000,
+        "qwen3:14b": 30000
       };
     
       return limits[modelName] || null;
     }
 
     async function showEstimatedGenerationTime() {
-      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const selectedModel = document.getElementById("modelChoice");
       const conditionCount = parseInt(document.getElementById("conditionCount").value);
       const sampleCount = parseInt(document.getElementById("sampleCount").value);
     
@@ -769,7 +788,7 @@
     }
     
     function updateInputEstimate() {
-      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const selectedModel = document.getElementById("modelChoice");
       const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
     
       let maxStimuliWords = 0;
@@ -805,7 +824,7 @@
         </span>
       `;
     
-      if (selectedModel) {
+      if (selectedModel && selectedModel.value) {
         const limit = getModelWordLimit(selectedModel.value);
     
         if (limit) {
@@ -981,10 +1000,10 @@
     }
 
     async function generateResponses() {
-      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const selectedModel = document.getElementById("modelChoice");
       const questionNumbers = getExistingQuestionNumbers();
     
-      if (!selectedModel) {
+      if (!selectedModel || !selectedModel.value) {
         alert("Please select a language model.");
         return;
       }
@@ -1232,10 +1251,10 @@
     }
 
     async function checkSelectedModel() {
-      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const selectedModel = document.getElementById("modelChoice");
       const statusBox = document.getElementById("helperStatus");
 
-      if (!selectedModel) {
+      if (!selectedModel || !selectedModel.value) {
         statusBox.innerHTML = "Please select a language model first.";
         return;
       }
