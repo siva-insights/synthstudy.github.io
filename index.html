@@ -948,6 +948,15 @@
       document.getElementById("inputEstimateBox").innerHTML = message;
     }
     
+    function togglePersonaUpload() {
+      const personaSelection = document.getElementById("personaSelection");
+      const personaUploadSection = document.getElementById("personaUploadSection");
+
+      if (!personaSelection || !personaUploadSection) return;
+
+      personaUploadSection.hidden = personaSelection.value !== "custom";
+    }
+
     function showConditionInputs() {
       const count = parseInt(document.getElementById("conditionCount").value);
       const container = document.getElementById("conditionFields");
@@ -956,6 +965,28 @@
       if (!count || count < 1) return;
 
       let html = `
+        <div class="section">
+          <h2>Persona Selection</h2>
+
+          <label for="personaSelection">Choose persona source:
+            <span class="tooltip">?
+              <span class="tooltip-text">
+                Default persona uses 2,058 unique human personas adapted from Toubia et al. (2025).
+              </span>
+            </span>
+          </label>
+          <select id="personaSelection" name="personaSelection" onchange="togglePersonaUpload()">
+            <option value="default">Default persona</option>
+            <option value="custom">Input persona</option>
+          </select>
+
+          <div id="personaUploadSection" hidden>
+            <label for="personaSheet">Upload persona Excel sheet:</label>
+            <input type="file" id="personaSheet" name="personaSheet" accept=".xlsx,.xls">
+            <div class="note">Upload an Excel sheet with exactly two columns: <b>pid</b> and <b>persona</b>.</div>
+          </div>
+        </div>
+
         <div class="section">
           <h2>Stimuli</h2>
 
