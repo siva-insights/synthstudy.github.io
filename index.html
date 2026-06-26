@@ -439,6 +439,39 @@
       </div>
     </div>
 
+    <div class="section">
+      <h2>Generic Instruction for LLM Input</h2>
+      <div class="note">
+        This default instruction is used to guide the LLM response format. Update it only if needed, and keep
+        <b>{persona}</b> and <b>{embedded_stimuli}</b> unchanged.
+        <b>{embedded_stimuli}</b> represents the study stimuli with survey questions inserted in the intended places.
+      </div>
+      <textarea id="genericInstruction" name="genericInstruction" rows="20">You are simulating one synthetic survey respondent.
+
+Your task:
+1. Read the respondent persona.
+2. Read the study materials exactly as a survey participant would see them.
+3. Answer each embedded survey question from this respondent's perspective.
+4. Use the respondent persona, the study materials, and the response scale for each question when choosing answers.
+
+Respondent persona:
+{persona}
+
+Study materials with embedded questions:
+{embedded_stimuli}
+
+Important rules:
+- Choose only allowed option codes for each question.
+- Each answer must be an integer within the allowed response-code range for that question.
+- Do not choose values below the minimum code or above the maximum code.
+- Return only the final answer values.
+- Do not include explanations.
+- Do not include markdown.
+- Do not repeat the questions.
+- Return answers only in this format:
+{answer_template}</textarea>
+    </div>
+
     <div id="inputEstimateBox" class="input-estimate-box">
       Approximate input size: Not calculated yet
     </div> 
