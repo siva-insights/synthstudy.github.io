@@ -229,11 +229,25 @@
   <div class="container">
     <h1>SYNTHETIC EXPERIMENTAL DATA GENERATOR (SEDG)</h1>
 
+    <!--
     <div class="cite-button-wrap">
       <button onclick="showCitations()">Cite this generator</button>
     </div>
+    -->
 
     <div class="section">
+      <h2>Select LLM Model Provider</h2>
+      <label>
+        <input type="radio" name="llmProviderType" value="local" onchange="toggleLlmProviderSections()">
+        Open LLM using Local Machine
+      </label>
+      <label>
+        <input type="radio" name="llmProviderType" value="cloud" onchange="toggleLlmProviderSections()">
+        Proprietary LLM using Cloud
+      </label>
+    </div>
+
+    <div id="localModelSection" class="section" hidden>
       <h2>
         Local Setup and Model Settings
       </h2>
@@ -334,6 +348,62 @@
       <div id="helperStatus" class="note"></div>
     </div>
 
+    <div id="cloudModelSection" class="section" hidden>
+      <h2>Proprietary LLM using Cloud</h2>
+      <label for="cloudModelProvider">Select a cloud LLM provider:</label>
+      <select id="cloudModelProvider" name="cloudModelProvider" onchange="toggleCloudProviderSettings()">
+        <option value="">Select a provider</option>
+        <option value="openai-gpt">OpenAI GPT</option>
+        <option value="google-gemini">Google Gemini</option>
+        <option value="anthropic-claude">Anthropic Claude</option>
+      </select>
+
+      <div id="openAiSettings" hidden>
+        <label for="openAiApiKey">Enter OpenAI API key:</label>
+        <input type="password" id="openAiApiKey" name="openAiApiKey" placeholder="Enter OpenAI API key">
+
+        <label for="openAiModelChoice">Select OpenAI model:</label>
+        <select id="openAiModelChoice" name="openAiModelChoice">
+          <option value="">Select a model</option>
+          <option value="gpt-5.5">GPT-5.5</option>
+          <option value="gpt-5.4">GPT-5.4</option>
+          <option value="gpt-5.4-mini">GPT-5.4 mini</option>
+          <option value="gpt-4.1">GPT-4.1</option>
+          <option value="gpt-4.1-mini">GPT-4.1 mini</option>
+          <option value="gpt-4o-mini">GPT-4o mini</option>
+        </select>
+      </div>
+
+      <div id="geminiSettings" hidden>
+        <label for="geminiApiKey">Enter Google Gemini API key:</label>
+        <input type="password" id="geminiApiKey" name="geminiApiKey" placeholder="Enter Google Gemini API key">
+
+        <label for="geminiModelChoice">Select Google Gemini model:</label>
+        <select id="geminiModelChoice" name="geminiModelChoice">
+          <option value="">Select a model</option>
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+          <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
+        </select>
+      </div>
+
+      <div id="claudeSettings" hidden>
+        <label for="claudeApiKey">Enter Anthropic Claude API key:</label>
+        <input type="password" id="claudeApiKey" name="claudeApiKey" placeholder="Enter Anthropic Claude API key">
+
+        <label for="claudeModelChoice">Select Anthropic Claude model:</label>
+        <select id="claudeModelChoice" name="claudeModelChoice">
+          <option value="">Select a model</option>
+          <option value="claude-opus-4.5">Claude Opus 4.5</option>
+          <option value="claude-sonnet-4.5">Claude Sonnet 4.5</option>
+          <option value="claude-sonnet-4">Claude Sonnet 4</option>
+          <option value="claude-haiku-4">Claude Haiku 4</option>
+        </select>
+      </div>
+
+      <div class="note">Cloud LLM provider support is a placeholder for now. API integration is not yet available.</div>
+    </div>
+
     <div class="section">
       <h2>Study Setup</h2>
       <table class="input-table">
@@ -411,6 +481,38 @@
   <script>
     let previews = [];
     let currentPreviewIndex = 0;
+
+    function toggleLlmProviderSections() {
+      const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
+      const localModelSection = document.getElementById("localModelSection");
+      const cloudModelSection = document.getElementById("cloudModelSection");
+
+      if (!localModelSection || !cloudModelSection) return;
+
+      localModelSection.hidden = !selectedProvider || selectedProvider.value !== "local";
+      cloudModelSection.hidden = !selectedProvider || selectedProvider.value !== "cloud";
+
+      if (cloudModelSection.hidden) {
+        const cloudModelProvider = document.getElementById("cloudModelProvider");
+        if (cloudModelProvider) cloudModelProvider.value = "";
+      }
+
+      toggleCloudProviderSettings();
+    }
+
+    function toggleCloudProviderSettings() {
+      const cloudModelProvider = document.getElementById("cloudModelProvider");
+      const openAiSettings = document.getElementById("openAiSettings");
+      const geminiSettings = document.getElementById("geminiSettings");
+      const claudeSettings = document.getElementById("claudeSettings");
+
+      if (!cloudModelProvider || !openAiSettings || !geminiSettings || !claudeSettings) return;
+
+      openAiSettings.hidden = cloudModelProvider.value !== "openai-gpt";
+      geminiSettings.hidden = cloudModelProvider.value !== "google-gemini";
+      claudeSettings.hidden = cloudModelProvider.value !== "anthropic-claude";
+    }
+
     let questionCount = 0;
 
     const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
@@ -846,6 +948,15 @@
       document.getElementById("inputEstimateBox").innerHTML = message;
     }
     
+    function togglePersonaUpload() {
+      const personaSelection = document.getElementById("personaSelection");
+      const personaUploadSection = document.getElementById("personaUploadSection");
+
+      if (!personaSelection || !personaUploadSection) return;
+
+      personaUploadSection.hidden = personaSelection.value !== "custom";
+    }
+
     function showConditionInputs() {
       const count = parseInt(document.getElementById("conditionCount").value);
       const container = document.getElementById("conditionFields");
@@ -854,6 +965,28 @@
       if (!count || count < 1) return;
 
       let html = `
+        <div class="section">
+          <h2>Persona Selection</h2>
+
+          <label for="personaSelection">Choose persona source:
+            <span class="tooltip">?
+              <span class="tooltip-text">
+                Default persona uses 2,058 unique human personas adapted from Toubia et al. (2025).
+              </span>
+            </span>
+          </label>
+          <select id="personaSelection" name="personaSelection" onchange="togglePersonaUpload()">
+            <option value="default">Default persona</option>
+            <option value="custom">Input persona</option>
+          </select>
+
+          <div id="personaUploadSection" hidden>
+            <label for="personaSheet">Upload persona Excel sheet:</label>
+            <input type="file" id="personaSheet" name="personaSheet" accept=".xlsx,.xls">
+            <div class="note">Upload an Excel sheet with exactly two columns: <b>pid</b> and <b>persona</b>.</div>
+          </div>
+        </div>
+
         <div class="section">
           <h2>Stimuli</h2>
 
