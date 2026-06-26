@@ -490,6 +490,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             "invalid_questions",
             "retry_count",
             "seconds_taken",
+            "prompt",
             "prompt_words",
             "num_ctx_used",
             "raw_response"
@@ -561,6 +562,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 "invalid_questions": ",".join(invalid_questions),
                 "retry_count": retry_count,
                 "seconds_taken": seconds_taken,
+                "prompt": prompt,
                 "prompt_words": prompt_words,
                 "num_ctx_used": num_ctx_used,
                 "raw_response": str(raw_response).replace("\n", " | "),

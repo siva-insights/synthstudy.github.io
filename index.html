@@ -44,6 +44,11 @@
     .preview-question { margin: 8px 0; padding: 10px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; }
     .scale-radio { display: inline-flex; align-items: center; gap: 4px; margin-right: 16px; margin-top: 8px; font-weight: normal; }
     .preview-nav { margin-top: 15px; display: flex; justify-content: space-between; align-items: center; }
+    .preview-output-wrap { margin-top: 16px; overflow-x: auto; }
+    .preview-output-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #ffffff; }
+    .preview-output-table th, .preview-output-table td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; vertical-align: top; }
+    .preview-output-table th { background: #dbeafe; color: #1e3a8a; }
+    .preview-output-table td { max-width: 320px; white-space: pre-wrap; }
     .preview-counter { font-weight: bold; color: #475569; }
 
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.35); }
@@ -1085,6 +1090,141 @@ Important rules:
       return scaleLabels;
     }
 
+    function buildEmbeddedQuestionText(questionNumber) {
+      const question = document.getElementById(`question${questionNumber}`)?.value.trim() || "";
+      const scaleLabels = getScaleLabels(questionNumber);
+      const scaleText = scaleLabels
+        .map((label) => label.replace(/^([0-9]+)-/, "$1 = "))
+        .join("\n");
+
+      return `[Q${questionNumber}]\nQuestion: ${question}\nAllowed response codes: 1 to ${scaleLabels.length}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
+    }
+
+    function buildEmbeddedStimuliText(stimuli, questionNumbers) {
+      let embeddedStimuli = stimuli;
+      const missingQuestions = [];
+
+      for (const q of questionNumbers) {
+        const placeholder = `{Q${q}}`;
+        const embeddedQuestion = buildEmbeddedQuestionText(q);
+
+        if (stimuli.includes(placeholder)) {
+          embeddedStimuli = embeddedStimuli.split(placeholder).join(embeddedQuestion);
+        } else {
+          missingQuestions.push(embeddedQuestion);
+        }
+      }
+
+      if (missingQuestions.length > 0) {
+        embeddedStimuli += `\n\nQuestions not embedded in the study materials:\n${missingQuestions.join("\n\n")}`;
+      }
+
+      return embeddedStimuli;
+    }
+
+    function sanitizeNoPersonaInstruction(promptTemplate) {
+      return promptTemplate
+        .replace(/\n?Respondent persona:\s*\n\{persona\}\s*\n/, "\n")
+        .replace(/\n?\d+\.\s*Read the respondent persona\.\s*/, "\n")
+        .replaceAll("the respondent persona, ", "")
+        .replaceAll("the respondent persona,", "");
+    }
+
+    function buildPreviewPrompt(persona, embeddedStimuli, questionNumbers, includePersona) {
+      const answerTemplate = questionNumbers.map((q) => `Q${q}=?`).join("\n");
+      let promptTemplate = document.getElementById("genericInstruction")?.value.trim() || "";
+
+      if (!includePersona) {
+        promptTemplate = sanitizeNoPersonaInstruction(promptTemplate);
+      }
+
+      return promptTemplate
+        .replaceAll("{persona}", includePersona ? persona : "")
+        .replaceAll("{embedded_stimuli}", embeddedStimuli)
+        .replaceAll("{answer_template}", answerTemplate);
+    }
+
+    async function getPreviewPersona() {
+      const personaSelection = document.getElementById("personaSelection")?.value || "default";
+
+      if (personaSelection === "none") {
+        return { pid: "no_persona_1", persona: "", includePersona: false };
+      }
+
+      if (personaSelection === "custom") {
+        const personaSheet = document.getElementById("personaSheet")?.files?.[0];
+
+        if (!personaSheet) {
+          throw new Error("Please upload a persona Excel sheet before previewing the output row.");
+        }
+
+        const personas = await readPersonaSheet(personaSheet);
+        return { ...personas[0], includePersona: true };
+      }
+
+      return {
+        pid: "preview_default_persona",
+        persona: "Preview default persona sampled from the Twin-2K-500 dataset during generation.",
+        includePersona: true
+      };
+    }
+
+    function buildPreviewOutputTable(preview) {
+      const columns = [
+        "respondent_id",
+        "pid",
+        "persona_summary",
+        "condition",
+        "condition_stimuli",
+        "model_name",
+        "temperature",
+        "validation",
+        "invalid_questions",
+        "retry_count",
+        "seconds_taken",
+        "prompt",
+        "prompt_words",
+        "num_ctx_used",
+        "raw_response",
+        ...preview.questionNumbers.map((q) => `Q${q}`)
+      ];
+      const row = {
+        respondent_id: "1",
+        pid: preview.pid,
+        persona_summary: preview.persona,
+        condition: preview.condition,
+        condition_stimuli: preview.stimuli,
+        model_name: document.getElementById("modelChoice")?.value || "Selected model",
+        temperature: document.getElementById("temperature")?.value || "0",
+        validation: "valid",
+        invalid_questions: "",
+        retry_count: "0",
+        seconds_taken: "0.000",
+        prompt: preview.prompt,
+        prompt_words: String(countWords(preview.prompt)),
+        num_ctx_used: "Calculated during generation",
+        raw_response: preview.questionNumbers.map((q) => `Q${q}=?`).join(" | ")
+      };
+
+      for (const q of preview.questionNumbers) {
+        row[`Q${q}`] = "?";
+      }
+
+      return `
+        <div class="preview-output-wrap">
+          <div class="preview-title">Output File Preview (1 Sample Row)</div>
+          <table class="preview-output-table">
+            <thead>
+              <tr>${columns.map((column) => `<th>${escapeHTML(column)}</th>`).join("")}</tr>
+            </thead>
+            <tbody>
+              <tr>${columns.map((column) => `<td>${escapeHTML(String(row[column] ?? ""))}</td>`).join("")}</tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
     function buildQuestionPreview(questionNumber) {
       const question = document.getElementById(`question${questionNumber}`)?.value.trim() || "";
       const scaleLabels = getScaleLabels(questionNumber);
@@ -1104,7 +1244,7 @@ Important rules:
       return html;
     }
 
-    function showPreview() {
+    async function showPreview() {
       const conditionCount = parseInt(document.getElementById("conditionCount").value);
       const sampleCount = document.getElementById("sampleCount").value || "";
       previews = [];
@@ -1114,11 +1254,19 @@ Important rules:
         return;
       }
 
+      const questionNumbers = getExistingQuestionNumbers();
+      let previewPersona;
+
+      try {
+        previewPersona = await getPreviewPersona();
+      } catch (error) {
+        alert(error.message || "Could not prepare persona for preview.");
+        return;
+      }
+
       for (let c = 1; c <= conditionCount; c++) {
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
         let htmlStimuli = escapeHTML(stimuli);
-
-        const questionNumbers = getExistingQuestionNumbers();
 
         for (const q of questionNumbers) {
           const questionHtml = buildQuestionPreview(q);
@@ -1126,10 +1274,24 @@ Important rules:
           htmlStimuli = htmlStimuli.replace(placeholder, questionHtml);
         }
 
+        const embeddedStimuli = buildEmbeddedStimuliText(stimuli, questionNumbers);
+        const prompt = buildPreviewPrompt(
+          previewPersona.persona,
+          embeddedStimuli,
+          questionNumbers,
+          previewPersona.includePersona
+        );
+
         previews.push({
           condition: c,
           sampleCount: sampleCount,
-          html: htmlStimuli || "No stimuli entered for this condition."
+          html: htmlStimuli || "No stimuli entered for this condition.",
+          stimuli: stimuli,
+          embeddedStimuli: embeddedStimuli,
+          prompt: prompt,
+          pid: previewPersona.pid,
+          persona: previewPersona.persona,
+          questionNumbers: questionNumbers
         });
       }
 
@@ -1146,6 +1308,7 @@ Important rules:
           <div class="preview-title">Preview: Condition ${preview.condition}</div>
           <p><strong>Required Samples per Condition:</strong> ${escapeHTML(preview.sampleCount || "Not entered")}</p>
           <div class="preview-stimuli">${preview.html}</div>
+          ${buildPreviewOutputTable(preview)}
 
           <div class="preview-nav">
             <button onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
