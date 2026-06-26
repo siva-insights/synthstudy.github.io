@@ -1,14 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Open LLM Synthetic Experimental Data Generator</title>
+  <title>Synthetic Experimental Data Generator</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; color: #1f2937; }
     .container { max-width: 850px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
     h1 { text-align: center; color: #1e3a8a; margin-bottom: 12px; }
     .cite-button-wrap { text-align: center; margin-bottom: 30px; }
     label { font-weight: bold; display: block; margin-top: 18px; margin-bottom: 6px; }
-    input[type="text"], input[type="number"], textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; box-sizing: border-box; }
+    input[type="text"], input[type="number"], textarea, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
     textarea { min-height: 90px; resize: vertical; }
     .input-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
     .input-table td { padding: 10px; vertical-align: middle; }
@@ -220,15 +227,29 @@
     Page views: -- · Synthetic responses generated: --
   </div>
   <div class="container">
-    <h1>OPEN LLM SYNTHETIC EXPERIMENTAL DATA GENERATOR (OLSEDG)</h1>
+    <h1>SYNTHETIC EXPERIMENTAL DATA GENERATOR (SEDG)</h1>
 
+    <!--
     <div class="cite-button-wrap">
       <button onclick="showCitations()">Cite this generator</button>
     </div>
+    -->
 
     <div class="section">
+      <h2>Select LLM Model Provider</h2>
+      <label>
+        <input type="radio" name="llmProviderType" value="local" onchange="toggleLlmProviderSections()">
+        Open LLM using Local Machine
+      </label>
+      <label>
+        <input type="radio" name="llmProviderType" value="cloud" onchange="toggleLlmProviderSections()">
+        Proprietary LLM using Cloud
+      </label>
+    </div>
+
+    <div id="localModelSection" class="section" hidden>
       <h2>
-        Local Setup and Model Settings
+        OPEN LLM SYNTHETIC EXPERIMENTAL DATA GENERATOR (OLSEDG)
       </h2>
 
       <label>
@@ -243,10 +264,13 @@
       <div class="download-grid">
         <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.2/OLSEDG-Helper.zip" download>
           <div class="download-title">Download OLSEDG Helper for Mac</div>
+          <div class="download-subtitle">Released: June 20, 2026</div>
         </a>
 
-        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.1/OLSEDG-Helper.zip" download>
+        <a class="download-card" href="https://github.com/siva-insights/olsedg-releases/releases/download/v1.0/OLSEDG-Helper-Windows.zip" download>
           <div class="download-title">Download OLSEDG Helper for Windows</div>
+          <div class="download-subtitle">Released: June 24, 2026</div>
+        </a>
         </a>
       </div>
 
@@ -279,26 +303,34 @@
         <span class="tooltip">?
           <span class="tooltip-text">
             Approximate context limits:<br>
-            qwen2.5:14b: 40,960 tokens ≈ 30,000 words<br>
-            qwen2.5:7b: 40,960 tokens ≈ 30,000 words<br>
-            llama3.1:8b: 131,072 tokens ≈ 98,000 words<br>
-            qwen3:14b: 40,960 tokens ≈ 30,000 words<br>
-            mistral-small3.2:24b: 131,072 tokens ≈ 98,000 words<br>
+            deepseek-r1:14b: 131,072 tokens ≈ 98,000 words<br>
+            gemma3:4b: 131,072 tokens ≈ 98,000 words<br>
             gemma3:12b: 131,072 tokens ≈ 98,000 words<br>
-            deepseek-r1:14b: 131,072 tokens ≈ 98,000 words
+            llama3.1:8b: 131,072 tokens ≈ 98,000 words<br>
+            llama3.2:3b: 131,072 tokens ≈ 98,000 words<br>
+            mistral:7b-instruct: 32,000 tokens ≈ 24,000 words<br>
+            mistral-small3.2:24b: 131,072 tokens ≈ 98,000 words<br>
+            qwen2.5:7b: 40,960 tokens ≈ 30,000 words<br>
+            qwen2.5:7b-instruct: 40,960 tokens ≈ 30,000 words<br>
+            qwen2.5:14b: 40,960 tokens ≈ 30,000 words<br>
+            qwen3:14b: 40,960 tokens ≈ 30,000 words
           </span>
         </span>
       </label>
-      <div class="radio-options">
-        <label><input type="radio" name="modelChoice" value="qwen2.5:14b" onchange="updateInputEstimate()"> qwen2.5:14b</label>
-        <label><input type="radio" name="modelChoice" value="qwen2.5:7b" onchange="updateInputEstimate()"> qwen2.5:7b</label>
-        <label><input type="radio" name="modelChoice" value="llama3.1:8b" onchange="updateInputEstimate()"> llama3.1:8b</label>
-        <label><input type="radio" name="modelChoice" value="qwen3:14b" onchange="updateInputEstimate()"> qwen3:14b</label>
-        <label><input type="radio" name="modelChoice" value="mistral-small3.2:24b" onchange="updateInputEstimate()"> mistral-small3.2:24b</label>
-        <label><input type="radio" name="modelChoice" value="gemma3:12b" onchange="updateInputEstimate()"> gemma3:12b</label>
-        <label><input type="radio" name="modelChoice" value="deepseek-r1:14b" onchange="updateInputEstimate()"> deepseek-r1:14b</label>
-      </div>
-
+      <select id="modelChoice" name="modelChoice" onchange="updateInputEstimate()">
+        <option value="">Select a model</option>
+        <option value="deepseek-r1:14b">deepseek-r1:14b</option>
+        <option value="gemma3:4b">gemma3:4b</option>
+        <option value="gemma3:12b">gemma3:12b</option>
+        <option value="llama3.1:8b">llama3.1:8b</option>
+        <option value="llama3.2:3b">llama3.2:3b</option>
+        <option value="mistral:7b-instruct">mistral:7b-instruct</option>
+        <option value="mistral-small3.2:24b">mistral-small3.2:24b</option>
+        <option value="qwen2.5:7b">qwen2.5:7b</option>
+        <option value="qwen2.5:7b-instruct">qwen2.5:7b-instruct</option>
+        <option value="qwen2.5:14b">qwen2.5:14b</option>
+        <option value="qwen3:14b">qwen3:14b</option>
+      </select>
       <label for="temperature">
         Response Randomness / Temperature:
         <span class="tooltip">?
@@ -314,6 +346,62 @@
       </div>
 
       <div id="helperStatus" class="note"></div>
+    </div>
+
+    <div id="cloudModelSection" class="section" hidden>
+      <h2>Proprietary LLM using Cloud</h2>
+      <label for="cloudModelProvider">Select a cloud LLM provider:</label>
+      <select id="cloudModelProvider" name="cloudModelProvider" onchange="toggleCloudProviderSettings()">
+        <option value="">Select a provider</option>
+        <option value="openai-gpt">OpenAI GPT</option>
+        <option value="google-gemini">Google Gemini</option>
+        <option value="anthropic-claude">Anthropic Claude</option>
+      </select>
+
+      <div id="openAiSettings" hidden>
+        <label for="openAiApiKey">Enter OpenAI API key:</label>
+        <input type="password" id="openAiApiKey" name="openAiApiKey" placeholder="Enter OpenAI API key">
+
+        <label for="openAiModelChoice">Select OpenAI model:</label>
+        <select id="openAiModelChoice" name="openAiModelChoice">
+          <option value="">Select a model</option>
+          <option value="gpt-5.5">GPT-5.5</option>
+          <option value="gpt-5.4">GPT-5.4</option>
+          <option value="gpt-5.4-mini">GPT-5.4 mini</option>
+          <option value="gpt-4.1">GPT-4.1</option>
+          <option value="gpt-4.1-mini">GPT-4.1 mini</option>
+          <option value="gpt-4o-mini">GPT-4o mini</option>
+        </select>
+      </div>
+
+      <div id="geminiSettings" hidden>
+        <label for="geminiApiKey">Enter Google Gemini API key:</label>
+        <input type="password" id="geminiApiKey" name="geminiApiKey" placeholder="Enter Google Gemini API key">
+
+        <label for="geminiModelChoice">Select Google Gemini model:</label>
+        <select id="geminiModelChoice" name="geminiModelChoice">
+          <option value="">Select a model</option>
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+          <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
+        </select>
+      </div>
+
+      <div id="claudeSettings" hidden>
+        <label for="claudeApiKey">Enter Anthropic Claude API key:</label>
+        <input type="password" id="claudeApiKey" name="claudeApiKey" placeholder="Enter Anthropic Claude API key">
+
+        <label for="claudeModelChoice">Select Anthropic Claude model:</label>
+        <select id="claudeModelChoice" name="claudeModelChoice">
+          <option value="">Select a model</option>
+          <option value="claude-opus-4.5">Claude Opus 4.5</option>
+          <option value="claude-sonnet-4.5">Claude Sonnet 4.5</option>
+          <option value="claude-sonnet-4">Claude Sonnet 4</option>
+          <option value="claude-haiku-4">Claude Haiku 4</option>
+        </select>
+      </div>
+
+      <!-- <div class="note">Cloud LLM provider support is a placeholder for now. API integration is not yet available.</div> -->
     </div>
 
     <div class="section">
@@ -349,6 +437,39 @@
       <div id="addQuestionButtonContainer" class="add-question-wrap">
         <button onclick="addQuestion()">+ Add Question</button>
       </div>
+    </div>
+
+    <div class="section">
+      <h2>Generic Instruction for LLM Input</h2>
+      <div class="note">
+        This default instruction is used to guide the LLM response format. Update it only if needed, and keep
+        <b>{persona}</b> and <b>{embedded_stimuli}</b> unchanged.
+        <b>{embedded_stimuli}</b> represents the study stimuli with survey questions inserted in the intended places.
+      </div>
+      <textarea id="genericInstruction" name="genericInstruction" rows="20">You are simulating one synthetic survey respondent.
+
+Your task:
+1. Read the respondent persona.
+2. Read the study materials exactly as a survey participant would see them.
+3. Answer each embedded survey question from this respondent's perspective.
+4. Use the respondent persona, the study materials, and the response scale for each question when choosing answers.
+
+Respondent persona:
+{persona}
+
+Study materials with embedded questions:
+{embedded_stimuli}
+
+Important rules:
+- Choose only allowed option codes for each question.
+- Each answer must be an integer within the allowed response-code range for that question.
+- Do not choose values below the minimum code or above the maximum code.
+- Return only the final answer values.
+- Do not include explanations.
+- Do not include markdown.
+- Do not repeat the questions.
+- Return answers only in this format:
+{answer_template}</textarea>
     </div>
 
     <div id="inputEstimateBox" class="input-estimate-box">
@@ -390,9 +511,42 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script>
     let previews = [];
     let currentPreviewIndex = 0;
+
+    function toggleLlmProviderSections() {
+      const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
+      const localModelSection = document.getElementById("localModelSection");
+      const cloudModelSection = document.getElementById("cloudModelSection");
+
+      if (!localModelSection || !cloudModelSection) return;
+
+      localModelSection.hidden = !selectedProvider || selectedProvider.value !== "local";
+      cloudModelSection.hidden = !selectedProvider || selectedProvider.value !== "cloud";
+
+      if (cloudModelSection.hidden) {
+        const cloudModelProvider = document.getElementById("cloudModelProvider");
+        if (cloudModelProvider) cloudModelProvider.value = "";
+      }
+
+      toggleCloudProviderSettings();
+    }
+
+    function toggleCloudProviderSettings() {
+      const cloudModelProvider = document.getElementById("cloudModelProvider");
+      const openAiSettings = document.getElementById("openAiSettings");
+      const geminiSettings = document.getElementById("geminiSettings");
+      const claudeSettings = document.getElementById("claudeSettings");
+
+      if (!cloudModelProvider || !openAiSettings || !geminiSettings || !claudeSettings) return;
+
+      openAiSettings.hidden = cloudModelProvider.value !== "openai-gpt";
+      geminiSettings.hidden = cloudModelProvider.value !== "google-gemini";
+      claudeSettings.hidden = cloudModelProvider.value !== "anthropic-claude";
+    }
+
     let questionCount = 0;
 
     const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
@@ -668,10 +822,10 @@
     }
 
     async function checkSetup() {
-      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const selectedModel = document.getElementById("modelChoice");
       const statusBox = document.getElementById("helperStatus");
     
-      if (!selectedModel) {
+      if (!selectedModel || !selectedModel.value) {
         statusBox.innerHTML = "Please select a language model first.";
         return;
       }
@@ -721,20 +875,24 @@
     
     function getModelWordLimit(modelName) {
       const limits = {
-        "qwen2.5:14b": 30000,
-        "qwen2.5:7b": 30000,
-        "llama3.1:8b": 98000,
-        "qwen3:14b": 30000,
-        "mistral-small3.2:24b": 98000,
+        "deepseek-r1:14b": 98000,
+        "gemma3:4b": 98000,
         "gemma3:12b": 98000,
-        "deepseek-r1:14b": 98000
+        "llama3.1:8b": 98000,
+        "llama3.2:3b": 98000,
+        "mistral:7b-instruct": 24000,
+        "mistral-small3.2:24b": 98000,
+        "qwen2.5:7b": 30000,
+        "qwen2.5:7b-instruct": 30000,
+        "qwen2.5:14b": 30000,
+        "qwen3:14b": 30000
       };
     
       return limits[modelName] || null;
     }
 
     async function showEstimatedGenerationTime() {
-      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const selectedModel = document.getElementById("modelChoice");
       const conditionCount = parseInt(document.getElementById("conditionCount").value);
       const sampleCount = parseInt(document.getElementById("sampleCount").value);
     
@@ -769,7 +927,7 @@
     }
     
     function updateInputEstimate() {
-      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const selectedModel = document.getElementById("modelChoice");
       const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
     
       let maxStimuliWords = 0;
@@ -805,7 +963,7 @@
         </span>
       `;
     
-      if (selectedModel) {
+      if (selectedModel && selectedModel.value) {
         const limit = getModelWordLimit(selectedModel.value);
     
         if (limit) {
@@ -824,6 +982,15 @@
       document.getElementById("inputEstimateBox").innerHTML = message;
     }
     
+    function togglePersonaUpload() {
+      const personaSelection = document.getElementById("personaSelection");
+      const personaUploadSection = document.getElementById("personaUploadSection");
+
+      if (!personaSelection || !personaUploadSection) return;
+
+      personaUploadSection.hidden = personaSelection.value !== "custom";
+    }
+
     function showConditionInputs() {
       const count = parseInt(document.getElementById("conditionCount").value);
       const container = document.getElementById("conditionFields");
@@ -832,6 +999,28 @@
       if (!count || count < 1) return;
 
       let html = `
+        <div class="section">
+          <h2>Persona Selection</h2>
+
+          <label for="personaSelection">Choose persona source:
+            <span class="tooltip">?
+              <span class="tooltip-text">
+                Default persona uses 2,058 unique human personas adapted from Toubia et al. (2025).
+              </span>
+            </span>
+          </label>
+          <select id="personaSelection" name="personaSelection" onchange="togglePersonaUpload()">
+            <option value="default">Default persona</option>
+            <option value="custom">Input persona</option>
+          </select>
+
+          <div id="personaUploadSection" hidden>
+            <label for="personaSheet">Upload persona Excel sheet:</label>
+            <input type="file" id="personaSheet" name="personaSheet" accept=".xlsx,.xls">
+            <div class="note">Upload an Excel sheet with exactly two columns: <b>pid</b> and <b>persona</b>.</div>
+          </div>
+        </div>
+
         <div class="section">
           <h2>Stimuli</h2>
 
@@ -980,11 +1169,35 @@
       }
     }
 
+    async function readPersonaSheet(file) {
+      if (!window.XLSX) {
+        throw new Error("Excel parser is not available. Please check your internet connection and try again.");
+      }
+
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      const personas = rows
+        .map((row) => ({
+          pid: String(row.pid ?? "").trim(),
+          persona: String(row.persona ?? "").trim()
+        }))
+        .filter((row) => row.pid && row.persona);
+
+      if (personas.length === 0) {
+        throw new Error("Please upload an Excel sheet with non-empty pid and persona columns.");
+      }
+
+      return personas;
+    }
+
     async function generateResponses() {
-      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const selectedModel = document.getElementById("modelChoice");
       const questionNumbers = getExistingQuestionNumbers();
     
-      if (!selectedModel) {
+      if (!selectedModel || !selectedModel.value) {
         alert("Please select a language model.");
         return;
       }
@@ -1028,13 +1241,35 @@
         });
       }
     
+      const personaSelection = document.getElementById("personaSelection")?.value || "default";
+      let customPersonas = null;
+
+      if (personaSelection === "custom") {
+        const personaSheet = document.getElementById("personaSheet")?.files?.[0];
+
+        if (!personaSheet) {
+          alert("Please upload a persona Excel sheet with pid and persona columns.");
+          return;
+        }
+
+        try {
+          customPersonas = await readPersonaSheet(personaSheet);
+        } catch (error) {
+          alert(error.message || "Could not read the persona Excel sheet.");
+          return;
+        }
+      }
+
       const payload = {
         study_name: studyName,
         model_name: selectedModel.value,
         temperature: temperature,
         sample_count_per_condition: sampleCount,
         conditions: conditions,
-        questions: questions
+        questions: questions,
+        generic_instruction: document.getElementById("genericInstruction")?.value || "",
+        persona_source: personaSelection,
+        custom_personas: customPersonas
       };
     
       const previewArea = document.getElementById("previewArea");
@@ -1232,10 +1467,10 @@
     }
 
     async function checkSelectedModel() {
-      const selectedModel = document.querySelector('input[name="modelChoice"]:checked');
+      const selectedModel = document.getElementById("modelChoice");
       const statusBox = document.getElementById("helperStatus");
 
-      if (!selectedModel) {
+      if (!selectedModel || !selectedModel.value) {
         statusBox.innerHTML = "Please select a language model first.";
         return;
       }
