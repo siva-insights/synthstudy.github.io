@@ -442,10 +442,15 @@
     <div class="section">
       <h2>Generic Instruction for LLM Input</h2>
       <div class="note">
-        This default instruction is used to guide the LLM response format. Update it only if needed, and keep
-        <b>{persona}</b> and <b>{embedded_stimuli}</b> unchanged.
-        <b>{embedded_stimuli}</b> represents the study stimuli with survey questions inserted in the intended places.
-        <b>answer_template follow this format: Q<question_number>=<response_code></b>
+        This instruction guides the LLM response format. Update only if necessary. Keep <b>{persona}</b> and <b>{embedded_stimuli}</b> unchanged. <b>{embedded_stimuli}</b> represents the study stimuli with survey questions inserted at the intended places.
+
+<b>answer_template is of the below format:</b>
+Q<question_number>=<response_code>
+
+<b>Example:</b>
+Q1=5
+Q2=3
+Q3=7
       </div>
       <textarea id="genericInstruction" name="genericInstruction" rows="20">You are simulating one synthetic survey respondent.
 
