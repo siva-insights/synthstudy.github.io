@@ -442,7 +442,9 @@
     <div class="section">
       <h2>Generic Instruction for LLM Input</h2>
       <div class="note">
-        This instruction guides the LLM response format. Update only if necessary. Keep <b>{persona}</b> and <b>{embedded_stimuli}</b> unchanged. <b>{embedded_stimuli}</b> represents the study stimuli with survey questions inserted at the intended places.
+        This default instruction is used to guide the LLM response format. Update it only if needed, and keep
+        <b>{persona}</b> and <b>{embedded_stimuli}</b> unchanged.
+        <b>{embedded_stimuli}</b> represents the study stimuli with survey questions inserted in the intended places.
       </div>
       <textarea id="genericInstruction" name="genericInstruction" rows="20">You are simulating one synthetic survey respondent.
 
@@ -509,6 +511,7 @@ Important rules:
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script>
     let previews = [];
     let currentPreviewIndex = 0;
@@ -1166,6 +1169,30 @@ Important rules:
       }
     }
 
+    async function readPersonaSheet(file) {
+      if (!window.XLSX) {
+        throw new Error("Excel parser is not available. Please check your internet connection and try again.");
+      }
+
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      const personas = rows
+        .map((row) => ({
+          pid: String(row.pid ?? "").trim(),
+          persona: String(row.persona ?? "").trim()
+        }))
+        .filter((row) => row.pid && row.persona);
+
+      if (personas.length === 0) {
+        throw new Error("Please upload an Excel sheet with non-empty pid and persona columns.");
+      }
+
+      return personas;
+    }
+
     async function generateResponses() {
       const selectedModel = document.getElementById("modelChoice");
       const questionNumbers = getExistingQuestionNumbers();
@@ -1214,13 +1241,35 @@ Important rules:
         });
       }
     
+      const personaSelection = document.getElementById("personaSelection")?.value || "default";
+      let customPersonas = null;
+
+      if (personaSelection === "custom") {
+        const personaSheet = document.getElementById("personaSheet")?.files?.[0];
+
+        if (!personaSheet) {
+          alert("Please upload a persona Excel sheet with pid and persona columns.");
+          return;
+        }
+
+        try {
+          customPersonas = await readPersonaSheet(personaSheet);
+        } catch (error) {
+          alert(error.message || "Could not read the persona Excel sheet.");
+          return;
+        }
+      }
+
       const payload = {
         study_name: studyName,
         model_name: selectedModel.value,
         temperature: temperature,
         sample_count_per_condition: sampleCount,
         conditions: conditions,
-        questions: questions
+        questions: questions,
+        generic_instruction: document.getElementById("genericInstruction")?.value || "",
+        persona_source: personaSelection,
+        custom_personas: customPersonas
       };
     
       const previewArea = document.getElementById("previewArea");
