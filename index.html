@@ -351,12 +351,29 @@
     <div id="cloudModelSection" class="section" hidden>
       <h2>Proprietary LLM using Cloud</h2>
       <label for="cloudModelProvider">Select a cloud LLM provider:</label>
-      <select id="cloudModelProvider" name="cloudModelProvider">
+      <select id="cloudModelProvider" name="cloudModelProvider" onchange="toggleCloudProviderSettings()">
         <option value="">Select a provider</option>
         <option value="openai-gpt">OpenAI GPT</option>
         <option value="google-gemini">Google Gemini</option>
         <option value="anthropic-claude">Anthropic Claude</option>
       </select>
+
+      <div id="openAiSettings" hidden>
+        <label for="openAiApiKey">Enter OpenAI API key:</label>
+        <input type="password" id="openAiApiKey" name="openAiApiKey" placeholder="Enter OpenAI API key">
+
+        <label for="openAiModelChoice">Select OpenAI model:</label>
+        <select id="openAiModelChoice" name="openAiModelChoice">
+          <option value="">Select a model</option>
+          <option value="gpt-5.5">GPT-5.5</option>
+          <option value="gpt-5.4">GPT-5.4</option>
+          <option value="gpt-5.4-mini">GPT-5.4 mini</option>
+          <option value="gpt-4.1">GPT-4.1</option>
+          <option value="gpt-4.1-mini">GPT-4.1 mini</option>
+          <option value="gpt-4o-mini">GPT-4o mini</option>
+        </select>
+      </div>
+
       <div class="note">Cloud LLM provider support is a placeholder for now. API integration is not yet available.</div>
     </div>
 
@@ -447,6 +464,22 @@
 
       localModelSection.hidden = !selectedProvider || selectedProvider.value !== "local";
       cloudModelSection.hidden = !selectedProvider || selectedProvider.value !== "cloud";
+
+      if (cloudModelSection.hidden) {
+        const cloudModelProvider = document.getElementById("cloudModelProvider");
+        if (cloudModelProvider) cloudModelProvider.value = "";
+      }
+
+      toggleCloudProviderSettings();
+    }
+
+    function toggleCloudProviderSettings() {
+      const cloudModelProvider = document.getElementById("cloudModelProvider");
+      const openAiSettings = document.getElementById("openAiSettings");
+
+      if (!cloudModelProvider || !openAiSettings) return;
+
+      openAiSettings.hidden = cloudModelProvider.value !== "openai-gpt";
     }
 
     let questionCount = 0;
