@@ -16,6 +16,7 @@ from threading import Thread, Lock
 import uvicorn
 import json
 import time
+from typing import Literal, Optional
 
 OLLAMA_URL = "http://localhost:11434"
 
@@ -91,13 +92,22 @@ class Question(BaseModel):
     scale_points: list[str]
 
 
+class PersonaRecord(BaseModel):
+    pid: str
+    persona: str
+
+
 class GenerateRequest(BaseModel):
     study_name: str
+    model_provider: Literal["local", "openai", "gemini", "anthropic"] = "local"
     model_name: str
     temperature: float
     sample_count_per_condition: int
     conditions: list[Condition]
     questions: list[Question]
+    generic_instruction: Optional[str] = None
+    persona_source: Literal["default", "custom"] = "default"
+    custom_personas: Optional[list[PersonaRecord]] = None
 
 
 @app.get("/health")
@@ -158,7 +168,30 @@ def check_model(model_name: str):
         }
 
 
-def load_personas(total_needed: int):
+def sample_personas(df_small: pd.DataFrame, total_needed: int):
+    replace = total_needed > len(df_small)
+    return df_small.sample(
+        n=total_needed,
+        replace=replace,
+        random_state=random.randint(1, 999999)
+    ).reset_index(drop=True)
+
+
+def load_personas(total_needed: int, custom_personas: Optional[list[PersonaRecord]] = None):
+    if custom_personas:
+        df_small = pd.DataFrame([
+            {"pid": p.pid, "persona_summary": p.persona}
+            for p in custom_personas
+        ]).dropna()
+
+        df_small["persona_summary"] = df_small["persona_summary"].astype(str).str.strip()
+        df_small = df_small[df_small["persona_summary"] != ""]
+
+        if df_small.empty:
+            raise ValueError("Custom persona file must include at least one non-empty persona.")
+
+        return sample_personas(df_small, total_needed)
+
     ds = load_dataset("LLM-Digital-Twin/Twin-2K-500", "full_persona")
 
     if hasattr(ds, "keys"):
@@ -168,18 +201,10 @@ def load_personas(total_needed: int):
         df = ds.to_pandas()
 
     df_small = df[["pid", "persona_summary"]].dropna().copy()
-
-    replace = total_needed > len(df_small)
-    df_sample = df_small.sample(
-        n=total_needed,
-        replace=replace,
-        random_state=random.randint(1, 999999)
-    ).reset_index(drop=True)
-
-    return df_sample
+    return sample_personas(df_small, total_needed)
 
 
-def build_prompt(persona, stimuli, questions):
+def build_prompt(persona, stimuli, questions, generic_instruction: Optional[str] = None):
     question_lookup = {}
 
     for q in questions:
@@ -228,7 +253,7 @@ Questions not embedded in the study materials:
         [f"Q{q.question_number}=?" for q in questions]
     )
 
-    prompt = f"""
+    prompt_template = (generic_instruction or "").strip() or """
 You are simulating one synthetic survey respondent.
 
 Your task:
@@ -254,6 +279,10 @@ Important rules:
 - Return answers only in this format:
 {answer_template}
 """.strip()
+
+    prompt = prompt_template.replace("{persona}", str(persona))
+    prompt = prompt.replace("{embedded_stimuli}", str(embedded_stimuli))
+    prompt = prompt.replace("{answer_template}", str(answer_template))
 
     return prompt
 
@@ -367,7 +396,8 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             total=total_needed
         )
 
-        df_personas = load_personas(total_needed)
+        custom_personas = data.custom_personas if data.persona_source == "custom" else None
+        df_personas = load_personas(total_needed, custom_personas)
 
         condition_numbers = []
         for c in data.conditions:
@@ -428,7 +458,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             pid = df_personas.loc[i, "pid"]
             persona = df_personas.loc[i, "persona_summary"]
 
-            prompt = build_prompt(persona, stimuli, data.questions)
+            prompt = build_prompt(persona, stimuli, data.questions, data.generic_instruction)
 
             start_time = time.time()
 
