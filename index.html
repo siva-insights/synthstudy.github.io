@@ -229,11 +229,25 @@
   <div class="container">
     <h1>SYNTHETIC EXPERIMENTAL DATA GENERATOR (SEDG)</h1>
 
+    <!--
     <div class="cite-button-wrap">
       <button onclick="showCitations()">Cite this generator</button>
     </div>
+    -->
 
     <div class="section">
+      <h2>Select LLM Model Provider</h2>
+      <label>
+        <input type="radio" name="llmProviderType" value="local" onchange="toggleLlmProviderSections()">
+        Open LLM using Local Machine
+      </label>
+      <label>
+        <input type="radio" name="llmProviderType" value="cloud" onchange="toggleLlmProviderSections()">
+        Proprietary LLM using Cloud
+      </label>
+    </div>
+
+    <div id="localModelSection" class="section" hidden>
       <h2>
         Local Setup and Model Settings
       </h2>
@@ -334,6 +348,18 @@
       <div id="helperStatus" class="note"></div>
     </div>
 
+    <div id="cloudModelSection" class="section" hidden>
+      <h2>Proprietary LLM using Cloud</h2>
+      <label for="cloudModelProvider">Select a cloud LLM provider:</label>
+      <select id="cloudModelProvider" name="cloudModelProvider">
+        <option value="">Select a provider</option>
+        <option value="openai-gpt">OpenAI GPT</option>
+        <option value="google-gemini">Google Gemini</option>
+        <option value="anthropic-claude">Anthropic Claude</option>
+      </select>
+      <div class="note">Cloud LLM provider support is a placeholder for now. API integration is not yet available.</div>
+    </div>
+
     <div class="section">
       <h2>Study Setup</h2>
       <table class="input-table">
@@ -411,6 +437,18 @@
   <script>
     let previews = [];
     let currentPreviewIndex = 0;
+
+    function toggleLlmProviderSections() {
+      const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
+      const localModelSection = document.getElementById("localModelSection");
+      const cloudModelSection = document.getElementById("cloudModelSection");
+
+      if (!localModelSection || !cloudModelSection) return;
+
+      localModelSection.hidden = !selectedProvider || selectedProvider.value !== "local";
+      cloudModelSection.hidden = !selectedProvider || selectedProvider.value !== "cloud";
+    }
+
     let questionCount = 0;
 
     const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
