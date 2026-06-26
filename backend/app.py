@@ -16,6 +16,7 @@ from threading import Thread, Lock
 import uvicorn
 import json
 import time
+from typing import Literal
 
 OLLAMA_URL = "http://localhost:11434"
 
@@ -93,6 +94,7 @@ class Question(BaseModel):
 
 class GenerateRequest(BaseModel):
     study_name: str
+    model_provider: Literal["local", "openai", "gemini", "anthropic"] = "local"
     model_name: str
     temperature: float
     sample_count_per_condition: int
