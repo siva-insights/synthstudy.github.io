@@ -229,11 +229,25 @@
   <div class="container">
     <h1>SYNTHETIC EXPERIMENTAL DATA GENERATOR (SEDG)</h1>
 
+    <!--
     <div class="cite-button-wrap">
       <button onclick="showCitations()">Cite this generator</button>
     </div>
+    -->
 
     <div class="section">
+      <h2>Select LLM Model Provider</h2>
+      <label>
+        <input type="radio" name="llmProviderType" value="local" onchange="toggleLlmProviderSections()">
+        Open LLM using Local Machine
+      </label>
+      <label>
+        <input type="radio" name="llmProviderType" value="cloud" onchange="toggleLlmProviderSections()">
+        Proprietary LLM using Cloud
+      </label>
+    </div>
+
+    <div id="localModelSection" class="section" hidden>
       <h2>
         Local Setup and Model Settings
       </h2>
@@ -334,6 +348,35 @@
       <div id="helperStatus" class="note"></div>
     </div>
 
+    <div id="cloudModelSection" class="section" hidden>
+      <h2>Proprietary LLM using Cloud</h2>
+      <label for="cloudModelProvider">Select a cloud LLM provider:</label>
+      <select id="cloudModelProvider" name="cloudModelProvider" onchange="toggleCloudProviderSettings()">
+        <option value="">Select a provider</option>
+        <option value="openai-gpt">OpenAI GPT</option>
+        <option value="google-gemini">Google Gemini</option>
+        <option value="anthropic-claude">Anthropic Claude</option>
+      </select>
+
+      <div id="openAiSettings" hidden>
+        <label for="openAiApiKey">Enter OpenAI API key:</label>
+        <input type="password" id="openAiApiKey" name="openAiApiKey" placeholder="Enter OpenAI API key">
+
+        <label for="openAiModelChoice">Select OpenAI model:</label>
+        <select id="openAiModelChoice" name="openAiModelChoice">
+          <option value="">Select a model</option>
+          <option value="gpt-5.5">GPT-5.5</option>
+          <option value="gpt-5.4">GPT-5.4</option>
+          <option value="gpt-5.4-mini">GPT-5.4 mini</option>
+          <option value="gpt-4.1">GPT-4.1</option>
+          <option value="gpt-4.1-mini">GPT-4.1 mini</option>
+          <option value="gpt-4o-mini">GPT-4o mini</option>
+        </select>
+      </div>
+
+      <div class="note">Cloud LLM provider support is a placeholder for now. API integration is not yet available.</div>
+    </div>
+
     <div class="section">
       <h2>Study Setup</h2>
       <table class="input-table">
@@ -411,6 +454,34 @@
   <script>
     let previews = [];
     let currentPreviewIndex = 0;
+
+    function toggleLlmProviderSections() {
+      const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
+      const localModelSection = document.getElementById("localModelSection");
+      const cloudModelSection = document.getElementById("cloudModelSection");
+
+      if (!localModelSection || !cloudModelSection) return;
+
+      localModelSection.hidden = !selectedProvider || selectedProvider.value !== "local";
+      cloudModelSection.hidden = !selectedProvider || selectedProvider.value !== "cloud";
+
+      if (cloudModelSection.hidden) {
+        const cloudModelProvider = document.getElementById("cloudModelProvider");
+        if (cloudModelProvider) cloudModelProvider.value = "";
+      }
+
+      toggleCloudProviderSettings();
+    }
+
+    function toggleCloudProviderSettings() {
+      const cloudModelProvider = document.getElementById("cloudModelProvider");
+      const openAiSettings = document.getElementById("openAiSettings");
+
+      if (!cloudModelProvider || !openAiSettings) return;
+
+      openAiSettings.hidden = cloudModelProvider.value !== "openai-gpt";
+    }
+
     let questionCount = 0;
 
     const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
