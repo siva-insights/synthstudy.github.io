@@ -374,6 +374,33 @@
         </select>
       </div>
 
+      <div id="geminiSettings" hidden>
+        <label for="geminiApiKey">Enter Google Gemini API key:</label>
+        <input type="password" id="geminiApiKey" name="geminiApiKey" placeholder="Enter Google Gemini API key">
+
+        <label for="geminiModelChoice">Select Google Gemini model:</label>
+        <select id="geminiModelChoice" name="geminiModelChoice">
+          <option value="">Select a model</option>
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+          <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
+        </select>
+      </div>
+
+      <div id="claudeSettings" hidden>
+        <label for="claudeApiKey">Enter Anthropic Claude API key:</label>
+        <input type="password" id="claudeApiKey" name="claudeApiKey" placeholder="Enter Anthropic Claude API key">
+
+        <label for="claudeModelChoice">Select Anthropic Claude model:</label>
+        <select id="claudeModelChoice" name="claudeModelChoice">
+          <option value="">Select a model</option>
+          <option value="claude-opus-4.5">Claude Opus 4.5</option>
+          <option value="claude-sonnet-4.5">Claude Sonnet 4.5</option>
+          <option value="claude-sonnet-4">Claude Sonnet 4</option>
+          <option value="claude-haiku-4">Claude Haiku 4</option>
+        </select>
+      </div>
+
       <div class="note">Cloud LLM provider support is a placeholder for now. API integration is not yet available.</div>
     </div>
 
@@ -476,10 +503,14 @@
     function toggleCloudProviderSettings() {
       const cloudModelProvider = document.getElementById("cloudModelProvider");
       const openAiSettings = document.getElementById("openAiSettings");
+      const geminiSettings = document.getElementById("geminiSettings");
+      const claudeSettings = document.getElementById("claudeSettings");
 
-      if (!cloudModelProvider || !openAiSettings) return;
+      if (!cloudModelProvider || !openAiSettings || !geminiSettings || !claudeSettings) return;
 
       openAiSettings.hidden = cloudModelProvider.value !== "openai-gpt";
+      geminiSettings.hidden = cloudModelProvider.value !== "google-gemini";
+      claudeSettings.hidden = cloudModelProvider.value !== "anthropic-claude";
     }
 
     let questionCount = 0;
