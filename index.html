@@ -1102,7 +1102,6 @@ Important rules:
 
     function buildEmbeddedStimuliText(stimuli, questionNumbers) {
       let embeddedStimuli = stimuli;
-      const missingQuestions = [];
 
       for (const q of questionNumbers) {
         const placeholder = `{Q${q}}`;
@@ -1110,13 +1109,7 @@ Important rules:
 
         if (stimuli.includes(placeholder)) {
           embeddedStimuli = embeddedStimuli.split(placeholder).join(embeddedQuestion);
-        } else {
-          missingQuestions.push(embeddedQuestion);
         }
-      }
-
-      if (missingQuestions.length > 0) {
-        embeddedStimuli += `\n\nQuestions not embedded in the study materials:\n${missingQuestions.join("\n\n")}`;
       }
 
       return embeddedStimuli;
