@@ -492,7 +492,8 @@ Important rules:
     <div class="action-buttons">
       <button type="button" onclick="showPreview(false)">View Preview</button>
       <button type="button" onclick="showPreview(true)">Download Preview</button>
-      <button type="button" onclick="generateResponses()">Generate</button>
+      <button type="button" onclick="downloadStudyInfo()">Download Study Info</button>
+      <button type="button" onclick="generateResponses()">Generate Responses</button>
     </div>
 
     <div id="previewArea"></div>
@@ -526,11 +527,18 @@ Important rules:
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.umd.cjs"></script>
   <script>
     let previews = [];
     let currentPreviewIndex = 0;
     let cloudGenerationRows = [];
     let cloudGenerationColumns = [];
+    let cloudGenerationTimestamp = "";
+
+    function formatTimestampForFilename(date = new Date()) {
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+    }
 
     function toggleLlmProviderSections() {
       const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
@@ -1544,6 +1552,87 @@ Important rules:
       XLSX.writeFile(workbook, `OLSEDG_preview_output_${rows.length}_samples.xlsx`);
     }
 
+    async function downloadStudyInfo() {
+      if (!window.docx) {
+        alert("Word document export is not available. Please check your internet connection and try again.");
+        return;
+      }
+
+      const { Document, Packer, Paragraph, HeadingLevel } = docx;
+
+      const studyName = document.getElementById("studyName")?.value.trim() || "";
+      const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
+      const sampleCount = parseInt(document.getElementById("sampleCount")?.value) || 0;
+      const totalSamples = conditionCount * sampleCount;
+      const temperature = document.getElementById("temperature")?.value || "";
+      const questionNumbers = getExistingQuestionNumbers();
+      const personaSelection = document.getElementById("personaSelection")?.value || "default";
+
+      const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
+      const providerLabel = selectedProvider?.value === "cloud" ? "Proprietary LLM using Cloud" : "Open LLM using Local Machine";
+      const modelName = getSelectedModelName() || "Not selected";
+
+      let personaLabel = "Default persona (Toubia et al.)";
+
+      if (personaSelection === "none") {
+        personaLabel = "No persona";
+      } else if (personaSelection === "custom") {
+        const fileName = document.getElementById("personaSheet")?.files?.[0]?.name;
+        personaLabel = fileName ? `Input persona (uploaded file: ${fileName})` : "Input persona (no file uploaded yet)";
+      }
+
+      const genericInstruction = document.getElementById("genericInstruction")?.value || "";
+
+      const children = [
+        new Paragraph({ text: "SEDG Study Inputs", heading: HeadingLevel.HEADING_1 }),
+
+        new Paragraph({ text: "Study Information", heading: HeadingLevel.HEADING_2 }),
+        new Paragraph({ text: `Study Name: ${studyName}` }),
+        new Paragraph({ text: `LLM Provider: ${providerLabel}` }),
+        new Paragraph({ text: `Model: ${modelName}` }),
+        new Paragraph({ text: `Temperature: ${temperature}` }),
+        new Paragraph({ text: `Number of Conditions: ${conditionCount}` }),
+        new Paragraph({ text: `Samples per Condition: ${sampleCount}` }),
+        new Paragraph({ text: `Total Samples: ${totalSamples}` }),
+        new Paragraph({ text: `Persona Source: ${personaLabel}` }),
+
+        new Paragraph({ text: "Generic Instruction for LLM Input", heading: HeadingLevel.HEADING_2 }),
+        new Paragraph({ text: genericInstruction }),
+
+        new Paragraph({ text: "Conditions and Stimuli", heading: HeadingLevel.HEADING_2 })
+      ];
+
+      for (let c = 1; c <= conditionCount; c++) {
+        const stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
+        children.push(new Paragraph({ text: getConditionName(c), heading: HeadingLevel.HEADING_3 }));
+        children.push(new Paragraph({ text: stimuli }));
+      }
+
+      children.push(new Paragraph({ text: "Questions and Response Scales", heading: HeadingLevel.HEADING_2 }));
+
+      for (const q of questionNumbers) {
+        const questionText = document.getElementById(`question${q}`)?.value || "";
+        const scaleLabels = getScaleLabels(q);
+
+        children.push(new Paragraph({ text: `Q${q}: ${questionText}`, heading: HeadingLevel.HEADING_3 }));
+
+        scaleLabels.forEach((label) => {
+          children.push(new Paragraph({ text: label.replace(/^([0-9]+)-/, "$1 = ") }));
+        });
+      }
+
+      const doc = new Document({ sections: [{ children }] });
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `sedg-study-info-${formatTimestampForFilename()}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
     function buildQuestionPreview(questionNumber) {
       const question = document.getElementById(`question${questionNumber}`)?.value.trim() || "";
       const scaleLabels = getScaleLabels(questionNumber);
@@ -2123,7 +2212,7 @@ Important rules:
       const worksheet = XLSX.utils.json_to_sheet(cloudGenerationRows, { header: cloudGenerationColumns });
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Generated Responses");
-      XLSX.writeFile(workbook, `OLSEDG_cloud_generated_${cloudGenerationRows.length}_samples.xlsx`);
+      XLSX.writeFile(workbook, `sedg-cloud-${cloudGenerationRows.length}-${cloudGenerationTimestamp}.xlsx`);
     }
 
     function showCloudGenerationError(message) {
@@ -2238,6 +2327,7 @@ Important rules:
 
       cloudGenerationRows = rows;
       cloudGenerationColumns = getPreviewOutputColumns(questionNumbers);
+      cloudGenerationTimestamp = formatTimestampForFilename();
 
       await incrementSiteMetricBy("synthetic_responses_generated", totalSamples);
       await loadSiteMetrics();
