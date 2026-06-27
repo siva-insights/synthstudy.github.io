@@ -1061,6 +1061,10 @@ Important rules:
       personaUploadSection.hidden = personaSelection.value !== "custom";
     }
 
+    function getConditionName(conditionNumber) {
+      return document.getElementById(`condition${conditionNumber}Name`)?.value.trim() || `Condition ${conditionNumber}`;
+    }
+
     function showConditionInputs() {
       const count = parseInt(document.getElementById("conditionCount").value);
       const container = document.getElementById("conditionFields");
@@ -1105,6 +1109,8 @@ Important rules:
       for (let i = 1; i <= count; i++) {
         html += `
           <div class="condition-card">
+            <label>Condition ${i} name:</label>
+            <input type="text" id="condition${i}Name" placeholder="Example: Control, Treatment A (defaults to Condition ${i})">
             <label>Enter stimuli for Condition ${i}:</label>
             <textarea id="condition${i}Stimuli" oninput="updateInputEstimate()" placeholder="Example: Intro text {Q1} follow-up text {Q2}"></textarea>
           </div>
@@ -1366,6 +1372,7 @@ Important rules:
         "pid",
         "persona_summary",
         "condition",
+        "condition_name",
         "condition_stimuli",
         "model_name",
         "temperature",
@@ -1395,6 +1402,7 @@ Important rules:
         pid: persona.pid,
         persona_summary: persona.persona,
         condition: preview.condition,
+        condition_name: preview.conditionName,
         condition_stimuli: preview.stimuli,
         model_name: document.getElementById("modelChoice")?.value || "",
         temperature: document.getElementById("temperature")?.value || "0",
@@ -1538,6 +1546,7 @@ Important rules:
 
         previews.push({
           condition: c,
+          conditionName: getConditionName(c),
           conditionIndex: c - 1,
           html: htmlStimuli || "No stimuli entered for this condition.",
           stimuli: stimuli,
@@ -1639,6 +1648,7 @@ Important rules:
       for (let c = 1; c <= conditionCount; c++) {
         conditions.push({
           condition_number: c,
+          condition_name: getConditionName(c),
           stimuli: document.getElementById(`condition${c}Stimuli`).value.trim()
         });
       }
