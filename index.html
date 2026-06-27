@@ -796,15 +796,61 @@ Important rules:
       updateInputEstimate();
     }
 
+    function getQuestionCardData(questionNumber) {
+      const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value) || 0;
+      const scaleLabels = [];
+
+      for (let s = 1; s <= scaleCount; s++) {
+        scaleLabels.push(document.getElementById(`question${questionNumber}Scale${s}`)?.value || "");
+      }
+
+      return {
+        questionText: document.getElementById(`question${questionNumber}`)?.value || "",
+        scaleCount: scaleCount,
+        scaleLabels: scaleLabels
+      };
+    }
+
+    function updateConditionQuestionPlaceholders(questionNumberMap) {
+      const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
+
+      for (let c = 1; c <= conditionCount; c++) {
+        const stimuliField = document.getElementById(`condition${c}Stimuli`);
+        if (!stimuliField) continue;
+
+        let stimuli = stimuliField.value;
+
+        questionNumberMap.forEach(({ oldNumber, newNumber }) => {
+          if (oldNumber !== newNumber) {
+            stimuli = stimuli.replaceAll(`{Q${oldNumber}}`, `{Q${newNumber}}`);
+          }
+        });
+
+        stimuliField.value = stimuli;
+      }
+    }
+
     function removeQuestion(questionNumber) {
       const card = document.getElementById(`questionCard${questionNumber}`);
     
       if (card) {
         card.remove();
       }
-    
-      const remainingQuestions = getExistingQuestionNumbers();
-      questionCount = remainingQuestions.length > 0 ? Math.max(...remainingQuestions) : 0;
+
+      const remainingQuestionNumbers = getExistingQuestionNumbers();
+      const remainingQuestions = remainingQuestionNumbers.map((oldNumber, index) => ({
+        oldNumber: oldNumber,
+        newNumber: index + 1,
+        data: getQuestionCardData(oldNumber)
+      }));
+
+      updateConditionQuestionPlaceholders(remainingQuestions);
+
+      const container = document.getElementById("questionFields");
+      container.innerHTML = "";
+      questionCount = 0;
+
+      remainingQuestions.forEach((question) => addQuestion(question.data));
     
       updateInputEstimate();
       document.getElementById("previewArea").innerHTML = "";
