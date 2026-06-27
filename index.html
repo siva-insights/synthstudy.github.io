@@ -44,6 +44,11 @@
     .preview-question { margin: 8px 0; padding: 10px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; }
     .scale-radio { display: inline-flex; align-items: center; gap: 4px; margin-right: 16px; margin-top: 8px; font-weight: normal; }
     .preview-nav { margin-top: 15px; display: flex; justify-content: space-between; align-items: center; }
+    .preview-output-wrap { margin-top: 16px; overflow-x: auto; }
+    .preview-output-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #ffffff; }
+    .preview-output-table th, .preview-output-table td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; vertical-align: top; }
+    .preview-output-table th { background: #dbeafe; color: #1e3a8a; }
+    .preview-output-table td { max-width: 320px; white-space: pre-wrap; }
     .preview-counter { font-weight: bold; color: #475569; }
 
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.35); }
@@ -262,9 +267,9 @@
       </label>
       
       <div class="download-grid">
-        <a class="download-card" href="https://github.com/siva-insights/synthstudy.github.io/releases/download/v1.2/OLSEDG-Helper.zip" download>
+        <a class="download-card" href="https://github.com/siva-insights/olsedg-releases/releases/download/v1.1/OLSEDG-Helper-Mac.zip" download>
           <div class="download-title">Download OLSEDG Helper for Mac</div>
-          <div class="download-subtitle">Released: June 20, 2026</div>
+          <div class="download-subtitle">Released: June 26, 2026</div>
         </a>
 
         <a class="download-card" href="https://github.com/siva-insights/olsedg-releases/releases/download/v1.0/OLSEDG-Helper-Windows.zip" download>
@@ -415,15 +420,20 @@
         <tr>
           <td><label for="conditionCount">Enter Number of Conditions:</label></td>
           <td>
-            <input type="number" id="conditionCount" min="1" max="20"
+            <input type="number" id="conditionCount" min="1" max="20" required
               placeholder="Enter number of conditions"
-              oninput="showConditionInputs(); updateInputEstimate();">
+              oninput="showConditionInputs(); updateInputEstimate(); updateTotalSamples();">
           </td>
         </tr>
 
         <tr>
           <td><label for="sampleCount">Enter Required Number of Samples per Condition:</label></td>
-          <td><input type="number" id="sampleCount" min="1" placeholder="Enter samples per condition"></td>
+          <td><input type="number" id="sampleCount" min="1" required placeholder="Enter samples per condition" oninput="updateTotalSamples(); updateInputEstimate();"></td>
+        </tr>
+
+        <tr>
+          <td><label for="totalSamples">Total Samples:</label></td>
+          <td><input type="text" id="totalSamples" value="0" readonly aria-live="polite"></td>
         </tr>
       </table>
     </div>
@@ -477,8 +487,9 @@ Important rules:
     </div> 
     
     <div class="action-buttons">
-      <button onclick="showPreview()">Preview</button>
-      <button onclick="generateResponses()">Generate</button>
+      <button type="button" onclick="showPreview(false)">View Preview</button>
+      <button type="button" onclick="showPreview(true)">Download Preview</button>
+      <button type="button" onclick="generateResponses()">Generate</button>
     </div>
 
     <div id="previewArea"></div>
@@ -786,15 +797,61 @@ Important rules:
       updateInputEstimate();
     }
 
+    function getQuestionCardData(questionNumber) {
+      const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value) || 0;
+      const scaleLabels = [];
+
+      for (let s = 1; s <= scaleCount; s++) {
+        scaleLabels.push(document.getElementById(`question${questionNumber}Scale${s}`)?.value || "");
+      }
+
+      return {
+        questionText: document.getElementById(`question${questionNumber}`)?.value || "",
+        scaleCount: scaleCount,
+        scaleLabels: scaleLabels
+      };
+    }
+
+    function updateConditionQuestionPlaceholders(questionNumberMap) {
+      const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
+
+      for (let c = 1; c <= conditionCount; c++) {
+        const stimuliField = document.getElementById(`condition${c}Stimuli`);
+        if (!stimuliField) continue;
+
+        let stimuli = stimuliField.value;
+
+        questionNumberMap.forEach(({ oldNumber, newNumber }) => {
+          if (oldNumber !== newNumber) {
+            stimuli = stimuli.replaceAll(`{Q${oldNumber}}`, `{Q${newNumber}}`);
+          }
+        });
+
+        stimuliField.value = stimuli;
+      }
+    }
+
     function removeQuestion(questionNumber) {
       const card = document.getElementById(`questionCard${questionNumber}`);
     
       if (card) {
         card.remove();
       }
-    
-      const remainingQuestions = getExistingQuestionNumbers();
-      questionCount = remainingQuestions.length > 0 ? Math.max(...remainingQuestions) : 0;
+
+      const remainingQuestionNumbers = getExistingQuestionNumbers();
+      const remainingQuestions = remainingQuestionNumbers.map((oldNumber, index) => ({
+        oldNumber: oldNumber,
+        newNumber: index + 1,
+        data: getQuestionCardData(oldNumber)
+      }));
+
+      updateConditionQuestionPlaceholders(remainingQuestions);
+
+      const container = document.getElementById("questionFields");
+      container.innerHTML = "";
+      questionCount = 0;
+
+      remainingQuestions.forEach((question) => addQuestion(question.data));
     
       updateInputEstimate();
       document.getElementById("previewArea").innerHTML = "";
@@ -873,6 +930,18 @@ Important rules:
       }
     }
     
+    function updateTotalSamples() {
+      const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
+      const sampleCount = parseInt(document.getElementById("sampleCount")?.value) || 0;
+      const totalSamplesField = document.getElementById("totalSamples");
+
+      if (!totalSamplesField) return;
+
+      totalSamplesField.value = conditionCount && sampleCount
+        ? String(conditionCount * sampleCount)
+        : "0";
+    }
+
     function getModelWordLimit(modelName) {
       const limits = {
         "deepseek-r1:14b": 98000,
@@ -1012,6 +1081,7 @@ Important rules:
           <select id="personaSelection" name="personaSelection" onchange="togglePersonaUpload()">
             <option value="default">Default persona</option>
             <option value="custom">Input persona</option>
+            <option value="none">No persona</option>
           </select>
 
           <div id="personaUploadSection" hidden>
@@ -1084,6 +1154,282 @@ Important rules:
       return scaleLabels;
     }
 
+    function buildEmbeddedQuestionText(questionNumber) {
+      const question = document.getElementById(`question${questionNumber}`)?.value.trim() || "";
+      const scaleLabels = getScaleLabels(questionNumber);
+      const scaleText = scaleLabels
+        .map((label) => label.replace(/^([0-9]+)-/, "$1 = "))
+        .join("\n");
+
+      return `[Q${questionNumber}]\nQuestion: ${question}\nAllowed response codes: 1 to ${scaleLabels.length}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
+    }
+
+    function buildEmbeddedStimuliText(stimuli, questionNumbers) {
+      let embeddedStimuli = stimuli;
+
+      for (const q of questionNumbers) {
+        const placeholder = `{Q${q}}`;
+        const embeddedQuestion = buildEmbeddedQuestionText(q);
+
+        if (stimuli.includes(placeholder)) {
+          embeddedStimuli = embeddedStimuli.split(placeholder).join(embeddedQuestion);
+        }
+      }
+
+      return embeddedStimuli;
+    }
+
+    function sanitizeNoPersonaInstruction(promptTemplate) {
+      return promptTemplate
+        .replace(/\n?Respondent persona:\s*\n\{persona\}\s*\n/, "\n")
+        .replace(/\n?\d+\.\s*Read the respondent persona\.\s*/, "\n")
+        .replaceAll("the respondent persona, ", "")
+        .replaceAll("the respondent persona,", "");
+    }
+
+    function buildPreviewPrompt(persona, embeddedStimuli, questionNumbers, includePersona) {
+      const answerTemplate = questionNumbers.map((q) => `Q${q}=?`).join("\n");
+      let promptTemplate = document.getElementById("genericInstruction")?.value.trim() || "";
+
+      if (!includePersona) {
+        promptTemplate = sanitizeNoPersonaInstruction(promptTemplate);
+      }
+
+      return promptTemplate
+        .replaceAll("{persona}", includePersona ? persona : "")
+        .replaceAll("{embedded_stimuli}", embeddedStimuli)
+        .replaceAll("{answer_template}", answerTemplate);
+    }
+
+    function shufflePreviewPersonas(personas) {
+      const shuffled = [...personas];
+
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      return shuffled;
+    }
+
+    function samplePreviewPersonas(personas, requestedCount) {
+      if (personas.length === 0) {
+        throw new Error("No personas are available for preview.");
+      }
+
+      const shuffled = shufflePreviewPersonas(personas);
+
+      if (requestedCount <= shuffled.length) {
+        return shuffled.slice(0, requestedCount);
+      }
+
+      const sampled = [...shuffled];
+
+      while (sampled.length < requestedCount) {
+        sampled.push(shuffled[Math.floor(Math.random() * shuffled.length)]);
+      }
+
+      return sampled;
+    }
+
+    async function getPreviewPersonas(totalSampleCount) {
+      const personaSelection = document.getElementById("personaSelection")?.value || "default";
+      const requestedCount = Math.max(1, parseInt(totalSampleCount) || 1);
+
+      if (personaSelection === "none") {
+        return Array.from({ length: requestedCount }, (_, index) => ({
+          pid: `no_persona_${index + 1}`,
+          persona: "",
+          includePersona: false
+        }));
+      }
+
+      if (personaSelection === "custom") {
+        const personaSheet = document.getElementById("personaSheet")?.files?.[0];
+
+        if (!personaSheet) {
+          throw new Error("Please upload a persona Excel sheet before previewing the output rows.");
+        }
+
+        const personas = await readPersonaSheet(personaSheet);
+        return samplePreviewPersonas(personas, requestedCount).map((persona) => ({
+          ...persona,
+          includePersona: true
+        }));
+      }
+
+      const personas = await fetchDefaultPreviewPersonas();
+      return samplePreviewPersonas(personas, requestedCount).map((persona) => ({
+        pid: persona.pid,
+        persona: persona.persona,
+        includePersona: true
+      }));
+    }
+
+    async function fetchDefaultPreviewPersonas() {
+      const dataset = "LLM-Digital-Twin/Twin-2K-500";
+      const config = "full_persona";
+      const split = "data";
+      const pageSize = 100;
+      const maxRows = 3000;
+      const personas = [];
+      let offset = 0;
+
+      while (offset < maxRows) {
+        const url = new URL("https://datasets-server.huggingface.co/rows");
+        url.searchParams.set("dataset", dataset);
+        url.searchParams.set("config", config);
+        url.searchParams.set("split", split);
+        url.searchParams.set("offset", String(offset));
+        url.searchParams.set("length", String(pageSize));
+
+        const response = await fetch(url.toString());
+
+        if (!response.ok) {
+          throw new Error("Could not load default Toubia et al. personas from Hugging Face for preview.");
+        }
+
+        const data = await response.json();
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+
+        if (rows.length === 0) {
+          break;
+        }
+
+        rows.forEach((item) => {
+          const row = item.row || {};
+          const pid = String(row.pid ?? "").trim();
+          const persona = String(row.persona_summary ?? "").trim();
+
+          if (pid && persona) {
+            personas.push({ pid, persona });
+          }
+        });
+
+        offset += rows.length;
+
+        if (rows.length < pageSize) {
+          break;
+        }
+      }
+
+      if (personas.length === 0) {
+        throw new Error("No default Toubia et al. personas were returned for preview.");
+      }
+
+      return personas;
+    }
+
+    function getPreviewOutputColumns(questionNumbers) {
+      return [
+        "respondent_id",
+        "pid",
+        "persona_summary",
+        "condition",
+        "condition_stimuli",
+        "model_name",
+        "temperature",
+        "validation",
+        "invalid_questions",
+        "retry_count",
+        "seconds_taken",
+        "prompt",
+        "prompt_words",
+        "num_ctx_used",
+        "raw_response",
+        ...questionNumbers.map((q) => `Q${q}`)
+      ];
+    }
+
+    function buildPreviewOutputRow(preview, respondentId = 1) {
+      const row = {
+        respondent_id: String(respondentId),
+        pid: preview.pid,
+        persona_summary: preview.persona,
+        condition: preview.condition,
+        condition_stimuli: preview.stimuli,
+        model_name: document.getElementById("modelChoice")?.value || "",
+        temperature: document.getElementById("temperature")?.value || "0",
+        validation: "",
+        invalid_questions: "",
+        retry_count: "",
+        seconds_taken: "",
+        prompt: preview.prompt,
+        prompt_words: String(countWords(preview.prompt)),
+        num_ctx_used: "",
+        raw_response: ""
+      };
+
+      for (const q of preview.questionNumbers) {
+        row[`Q${q}`] = "";
+      }
+
+      return row;
+    }
+
+    function getPreviewSampleCount(preview) {
+      return Math.max(1, parseInt(preview.sampleCount) || 1);
+    }
+
+    function getPreviewTotalSamples() {
+      return previews.reduce((total, preview) => total + getPreviewSampleCount(preview), 0);
+    }
+
+    function buildPreviewOutputRows(preview, respondentOffset = 0) {
+      const sampleCount = getPreviewSampleCount(preview);
+
+      return Array.from({ length: sampleCount }, (_, index) =>
+        buildPreviewOutputRow(preview, respondentOffset + index + 1)
+      );
+    }
+
+    function buildPreviewOutputTable(preview) {
+      const columns = getPreviewOutputColumns(preview.questionNumbers);
+      const respondentOffset = previews
+        .slice(0, currentPreviewIndex)
+        .reduce((total, item) => total + getPreviewSampleCount(item), 0);
+      const rows = buildPreviewOutputRows(preview, respondentOffset);
+
+      return `
+        <div class="preview-output-wrap">
+          <div class="preview-title">Input file for LLM response generation (Total Samples: ${getPreviewTotalSamples()})</div>
+          <table class="preview-output-table">
+            <thead>
+              <tr>${columns.map((column) => `<th>${escapeHTML(column)}</th>`).join("")}</tr>
+            </thead>
+            <tbody>
+              ${rows.map((row) => `<tr>${columns.map((column) => `<td>${escapeHTML(String(row[column] ?? ""))}</td>`).join("")}</tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    async function downloadPreviewExcel() {
+      if (!window.XLSX) {
+        alert("Excel export is not available. Please check your internet connection and try again.");
+        return;
+      }
+
+      if (!previews.length) {
+        await showPreview();
+      }
+
+      if (!previews.length) return;
+
+      const columns = getPreviewOutputColumns(previews[0].questionNumbers);
+      let respondentOffset = 0;
+      const rows = previews.flatMap((preview) => {
+        const previewRows = buildPreviewOutputRows(preview, respondentOffset);
+        respondentOffset += previewRows.length;
+        return previewRows;
+      });
+      const worksheet = XLSX.utils.json_to_sheet(rows, { header: columns });
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Preview Output");
+      XLSX.writeFile(workbook, `OLSEDG_preview_output_${rows.length}_samples.xlsx`);
+    }
+
     function buildQuestionPreview(questionNumber) {
       const question = document.getElementById(`question${questionNumber}`)?.value.trim() || "";
       const scaleLabels = getScaleLabels(questionNumber);
@@ -1103,7 +1449,7 @@ Important rules:
       return html;
     }
 
-    function showPreview() {
+    async function showPreview(downloadAfterPreview = false) {
       const conditionCount = parseInt(document.getElementById("conditionCount").value);
       const sampleCount = document.getElementById("sampleCount").value || "";
       previews = [];
@@ -1113,11 +1459,27 @@ Important rules:
         return;
       }
 
+      if (!sampleCount || parseInt(sampleCount) < 1) {
+        alert("Please enter the required number of samples per condition first.");
+        return;
+      }
+
+      const questionNumbers = getExistingQuestionNumbers();
+      let previewPersonas;
+
+      const samplesPerCondition = parseInt(sampleCount);
+      const totalSampleCount = conditionCount * samplesPerCondition;
+
+      try {
+        previewPersonas = await getPreviewPersonas(totalSampleCount);
+      } catch (error) {
+        alert(error.message || "Could not prepare personas for preview.");
+        return;
+      }
+
       for (let c = 1; c <= conditionCount; c++) {
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
         let htmlStimuli = escapeHTML(stimuli);
-
-        const questionNumbers = getExistingQuestionNumbers();
 
         for (const q of questionNumbers) {
           const questionHtml = buildQuestionPreview(q);
@@ -1125,15 +1487,37 @@ Important rules:
           htmlStimuli = htmlStimuli.replace(placeholder, questionHtml);
         }
 
+        const embeddedStimuli = buildEmbeddedStimuliText(stimuli, questionNumbers);
+        const conditionPersonas = previewPersonas.slice((c - 1) * samplesPerCondition, c * samplesPerCondition);
+        const firstPersona = conditionPersonas[0];
+        const prompt = buildPreviewPrompt(
+          firstPersona.persona,
+          embeddedStimuli,
+          questionNumbers,
+          firstPersona.includePersona
+        );
+
         previews.push({
           condition: c,
+          conditionIndex: c - 1,
           sampleCount: sampleCount,
-          html: htmlStimuli || "No stimuli entered for this condition."
+          html: htmlStimuli || "No stimuli entered for this condition.",
+          stimuli: stimuli,
+          embeddedStimuli: embeddedStimuli,
+          prompt: prompt,
+          pid: firstPersona.pid,
+          persona: firstPersona.persona,
+          personas: conditionPersonas,
+          questionNumbers: questionNumbers
         });
       }
 
       currentPreviewIndex = 0;
       renderPreview();
+
+      if (downloadAfterPreview) {
+        downloadPreviewExcel();
+      }
     }
 
     function renderPreview() {
@@ -1143,14 +1527,15 @@ Important rules:
       previewArea.innerHTML = `
         <div class="preview-box">
           <div class="preview-title">Preview: Condition ${preview.condition}</div>
-          <p><strong>Required Samples per Condition:</strong> ${escapeHTML(preview.sampleCount || "Not entered")}</p>
-          <div class="preview-stimuli">${preview.html}</div>
+          <p><strong>Total Samples:</strong> ${escapeHTML(String(getPreviewTotalSamples()))}</p>
 
           <div class="preview-nav">
-            <button onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
+            <button type="button" onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
             <span class="preview-counter">Condition ${currentPreviewIndex + 1} of ${previews.length}</span>
-            <button onclick="nextPreview()" ${currentPreviewIndex === previews.length - 1 ? "disabled" : ""}>Next</button>
+            <button type="button" onclick="nextPreview()" ${currentPreviewIndex === previews.length - 1 ? "disabled" : ""}>Next</button>
           </div>
+
+          ${buildPreviewOutputTable(preview)}
         </div>
       `;
     }
@@ -1207,10 +1592,12 @@ Important rules:
       const sampleCount = parseInt(document.getElementById("sampleCount").value);
       const temperature = parseFloat(document.getElementById("temperature").value);
     
-      if (!studyName || !conditionCount || !sampleCount || questionNumbers.length < 1) {
+      if (!studyName || !conditionCount || conditionCount < 1 || !sampleCount || sampleCount < 1 || questionNumbers.length < 1) {
         alert("Please complete study name, conditions, samples, and at least one question.");
         return;
       }
+
+      updateTotalSamples();
     
       const conditions = [];
     
