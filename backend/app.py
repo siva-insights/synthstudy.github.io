@@ -466,6 +466,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         question_columns = [f"Q{q.question_number}" for q in data.questions]
         columns = [
             "respondent_id",
+            "study_name",
             "pid",
             "persona_summary",
             "condition",
@@ -538,6 +539,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                         
             row = {
                 "respondent_id": respondent_id,
+                "study_name": data.study_name,
                 "pid": pid,
                 "persona_summary": persona,
                 "condition": condition_number,

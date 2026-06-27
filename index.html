@@ -1362,6 +1362,7 @@ Important rules:
     function getPreviewOutputColumns(questionNumbers) {
       return [
         "respondent_id",
+        "study_name",
         "pid",
         "persona_summary",
         "condition",
@@ -1390,6 +1391,7 @@ Important rules:
 
       const row = {
         respondent_id: String(respondentId),
+        study_name: document.getElementById("studyName")?.value.trim() || "",
         pid: persona.pid,
         persona_summary: persona.persona,
         condition: preview.condition,
