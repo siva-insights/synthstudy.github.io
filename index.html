@@ -2123,7 +2123,30 @@ Important rules:
       XLSX.writeFile(workbook, `OLSEDG_cloud_generated_${cloudGenerationRows.length}_samples.xlsx`);
     }
 
+    function showCloudGenerationError(message) {
+      const previewArea = document.getElementById("previewArea");
+
+      if (previewArea) {
+        previewArea.innerHTML = `
+          <div class="preview-box">
+            <div class="preview-title">Generation Failed</div>
+            <p>${escapeHTML(message)}</p>
+          </div>
+        `;
+      }
+    }
+
     async function generateCloudResponses() {
+      const previewArea = document.getElementById("previewArea");
+
+      if (previewArea) {
+        previewArea.innerHTML = `
+          <div class="preview-box">
+            <div class="preview-title">Preparing Cloud Generation...</div>
+          </div>
+        `;
+      }
+
       const questionNumbers = getExistingQuestionNumbers();
       const studyName = document.getElementById("studyName").value.trim();
       const conditionCount = parseInt(document.getElementById("conditionCount").value);
@@ -2131,21 +2154,21 @@ Important rules:
       const temperature = parseFloat(document.getElementById("temperature").value) || 0;
 
       if (!studyName || !conditionCount || conditionCount < 1 || !sampleCount || sampleCount < 1 || questionNumbers.length < 1) {
-        alert("Please complete study name, conditions, samples, and at least one question.");
+        showCloudGenerationError("Please complete study name, conditions, samples, and at least one question.");
         return;
       }
 
       const cloudModelProvider = document.getElementById("cloudModelProvider")?.value || "";
 
       if (!cloudModelProvider) {
-        alert("Please select a cloud LLM provider.");
+        showCloudGenerationError("Please select a cloud LLM provider.");
         return;
       }
 
       const modelName = getSelectedModelName();
 
       if (!modelName) {
-        alert("Please select a model for the chosen cloud provider.");
+        showCloudGenerationError("Please select a model for the chosen cloud provider.");
         return;
       }
 
@@ -2153,7 +2176,7 @@ Important rules:
       const apiKey = document.getElementById(apiKeyFieldId)?.value.trim() || "";
 
       if (!apiKey) {
-        alert("Please enter the API key for the selected cloud provider.");
+        showCloudGenerationError("Please enter the API key for the selected cloud provider.");
         return;
       }
 
@@ -2162,11 +2185,12 @@ Important rules:
       try {
         await showPreview();
       } catch (error) {
-        alert(error.message || "Could not build the preview table for generation.");
+        showCloudGenerationError(error.message || "Could not build the preview table for generation.");
         return;
       }
 
       if (!previews.length) {
+        showCloudGenerationError("Could not build the preview table for generation. Please check your conditions, samples, and persona settings above.");
         return;
       }
 
@@ -2179,7 +2203,6 @@ Important rules:
 
       const totalSamples = rows.length;
       const concurrency = CLOUD_PROVIDER_CONCURRENCY[cloudModelProvider] || 5;
-      const previewArea = document.getElementById("previewArea");
 
       previewArea.innerHTML = `
         <div class="preview-box">
