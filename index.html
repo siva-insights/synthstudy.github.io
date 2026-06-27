@@ -1217,12 +1217,13 @@ Important rules:
 
     function buildEmbeddedQuestionText(questionNumber) {
       const question = document.getElementById(`question${questionNumber}`)?.value.trim() || "";
+      const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value) || 0;
       const scaleLabels = getScaleLabels(questionNumber);
       const scaleText = scaleLabels
         .map((label) => label.replace(/^([0-9]+)-/, "$1 = "))
         .join("\n");
 
-      return `[Q${questionNumber}]\nQuestion: ${question}\nAllowed response codes: 1 to ${scaleLabels.length}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
+      return `[Q${questionNumber}]\nQuestion: ${question}\nAllowed response codes: 1 to ${scaleCount}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
     }
 
     function buildEmbeddedStimuliText(stimuli, questionNumbers) {
