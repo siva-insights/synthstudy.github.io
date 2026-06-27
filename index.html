@@ -1380,11 +1380,18 @@ Important rules:
       ];
     }
 
-    function buildPreviewOutputRow(preview, respondentId = 1) {
+    function buildPreviewOutputRow(preview, persona, respondentId = 1) {
+      const prompt = buildPreviewPrompt(
+        persona.persona,
+        preview.embeddedStimuli,
+        preview.questionNumbers,
+        persona.includePersona
+      );
+
       const row = {
         respondent_id: String(respondentId),
-        pid: preview.pid,
-        persona_summary: preview.persona,
+        pid: persona.pid,
+        persona_summary: persona.persona,
         condition: preview.condition,
         condition_stimuli: preview.stimuli,
         model_name: document.getElementById("modelChoice")?.value || "",
@@ -1393,8 +1400,8 @@ Important rules:
         invalid_questions: "",
         retry_count: "",
         seconds_taken: "",
-        prompt: preview.prompt,
-        prompt_words: String(countWords(preview.prompt)),
+        prompt: prompt,
+        prompt_words: String(countWords(prompt)),
         num_ctx_used: "",
         raw_response: ""
       };
@@ -1407,7 +1414,7 @@ Important rules:
     }
 
     function getPreviewSampleCount(preview) {
-      return Math.max(1, parseInt(preview.sampleCount) || 1);
+      return preview.personas.length;
     }
 
     function getPreviewTotalSamples() {
@@ -1415,10 +1422,8 @@ Important rules:
     }
 
     function buildPreviewOutputRows(preview, respondentOffset = 0) {
-      const sampleCount = getPreviewSampleCount(preview);
-
-      return Array.from({ length: sampleCount }, (_, index) =>
-        buildPreviewOutputRow(preview, respondentOffset + index + 1)
+      return preview.personas.map((persona, index) =>
+        buildPreviewOutputRow(preview, persona, respondentOffset + index + 1)
       );
     }
 
@@ -1528,24 +1533,13 @@ Important rules:
 
         const embeddedStimuli = buildEmbeddedStimuliText(stimuli, questionNumbers);
         const conditionPersonas = previewPersonas.slice((c - 1) * samplesPerCondition, c * samplesPerCondition);
-        const firstPersona = conditionPersonas[0];
-        const prompt = buildPreviewPrompt(
-          firstPersona.persona,
-          embeddedStimuli,
-          questionNumbers,
-          firstPersona.includePersona
-        );
 
         previews.push({
           condition: c,
           conditionIndex: c - 1,
-          sampleCount: sampleCount,
           html: htmlStimuli || "No stimuli entered for this condition.",
           stimuli: stimuli,
           embeddedStimuli: embeddedStimuli,
-          prompt: prompt,
-          pid: firstPersona.pid,
-          persona: firstPersona.persona,
           personas: conditionPersonas,
           questionNumbers: questionNumbers
         });
