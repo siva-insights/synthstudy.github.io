@@ -462,7 +462,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         num_conditions = len(data.conditions)
         samples_per_condition = data.sample_count_per_condition
 
-        csv_filename = f"OLSEDG_{safe_model_name}_{num_conditions}cond_{samples_per_condition}ppc_{timestamp}.csv"
+        csv_filename = f"sedg-local-{total_needed}-{timestamp}.csv"
         docx_filename = f"OLSEDG_INPUTS_{safe_model_name}_{num_conditions}cond_{samples_per_condition}ppc_{timestamp}.docx"
 
         csv_path = OUTPUT_DIR / csv_filename
