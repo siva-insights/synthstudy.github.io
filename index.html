@@ -558,6 +558,25 @@ Important rules:
       claudeSettings.hidden = cloudModelProvider.value !== "anthropic-claude";
     }
 
+    function getSelectedModelName() {
+      const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
+
+      if (!selectedProvider || selectedProvider.value === "local") {
+        return document.getElementById("modelChoice")?.value || "";
+      }
+
+      const cloudModelFieldByProvider = {
+        "openai-gpt": "openAiModelChoice",
+        "google-gemini": "geminiModelChoice",
+        "anthropic-claude": "claudeModelChoice"
+      };
+
+      const cloudModelProvider = document.getElementById("cloudModelProvider")?.value || "";
+      const fieldId = cloudModelFieldByProvider[cloudModelProvider];
+
+      return fieldId ? document.getElementById(fieldId)?.value || "" : "";
+    }
+
     let questionCount = 0;
 
     const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
@@ -1403,7 +1422,7 @@ Important rules:
         condition: preview.condition,
         condition_name: preview.conditionName,
         condition_stimuli: preview.stimuli,
-        model_name: document.getElementById("modelChoice")?.value || "",
+        model_name: getSelectedModelName(),
         temperature: document.getElementById("temperature")?.value || "0",
         validation: "",
         invalid_questions: "",
