@@ -251,20 +251,6 @@ Response scale:
             question_lookup[q.question_number]
         )
 
-    # If the user forgot to include placeholders, append unanswered questions at the end.
-    missing_questions = []
-
-    for q in questions:
-        placeholder = f"{{Q{q.question_number}}}"
-        if placeholder not in stimuli:
-            missing_questions.append(question_lookup[q.question_number])
-
-    if missing_questions:
-        embedded_stimuli += """
-
-Questions not embedded in the study materials:
-""" + "\n\n".join(missing_questions)
-
     answer_template = "\n".join(
         [f"Q{q.question_number}=?" for q in questions]
     )
