@@ -1144,29 +1144,49 @@ Important rules:
         .replaceAll("{answer_template}", answerTemplate);
     }
 
-    async function getPreviewPersona() {
+    async function getPreviewPersonas(sampleCount) {
       const personaSelection = document.getElementById("personaSelection")?.value || "default";
+      const requestedCount = Math.max(1, parseInt(sampleCount) || 1);
 
       if (personaSelection === "none") {
-        return { pid: "no_persona_1", persona: "", includePersona: false };
+        return Array.from({ length: requestedCount }, (_, index) => ({
+          pid: `no_persona_${index + 1}`,
+          persona: "",
+          includePersona: false
+        }));
       }
 
       if (personaSelection === "custom") {
         const personaSheet = document.getElementById("personaSheet")?.files?.[0];
 
         if (!personaSheet) {
-          throw new Error("Please upload a persona Excel sheet before previewing the output row.");
+          throw new Error("Please upload a persona Excel sheet before previewing the output rows.");
         }
 
         const personas = await readPersonaSheet(personaSheet);
-        return { ...personas[0], includePersona: true };
+        return Array.from({ length: requestedCount }, (_, index) => ({
+          ...personas[index % personas.length],
+          includePersona: true
+        }));
       }
 
-      return {
-        pid: "preview_default_persona",
-        persona: "Preview default persona sampled from the Twin-2K-500 dataset during generation.",
+      const response = await fetch(`http://localhost:8000/preview-personas/${requestedCount}`);
+
+      if (!response.ok) {
+        throw new Error("Could not load default Toubia et al. personas for preview. Please make sure the OLSEDG helper is running.");
+      }
+
+      const data = await response.json();
+
+      if (!data.success || !Array.isArray(data.personas) || data.personas.length === 0) {
+        throw new Error(data.message || "No default personas were returned for preview.");
+      }
+
+      return data.personas.map((persona) => ({
+        pid: String(persona.pid ?? ""),
+        persona: String(persona.persona ?? ""),
         includePersona: true
-      };
+      }));
     }
 
     function getPreviewOutputColumns(questionNumbers) {
@@ -1218,17 +1238,28 @@ Important rules:
 
     function buildPreviewOutputTable(preview) {
       const columns = getPreviewOutputColumns(preview.questionNumbers);
-      const row = buildPreviewOutputRow(preview);
+      const respondentOffset = ((preview.conditionIndex || 0) * preview.personas.length);
+      const rows = preview.personas.map((persona, index) => buildPreviewOutputRow({
+        ...preview,
+        pid: persona.pid,
+        persona: persona.persona,
+        prompt: buildPreviewPrompt(
+          persona.persona,
+          preview.embeddedStimuli,
+          preview.questionNumbers,
+          persona.includePersona
+        )
+      }, respondentOffset + index + 1));
 
       return `
         <div class="preview-output-wrap">
-          <div class="preview-title">Output File Preview (1 Sample Row)</div>
+          <div class="preview-title">Output File Preview (${rows.length} Sample ${rows.length === 1 ? "Row" : "Rows"})</div>
           <table class="preview-output-table">
             <thead>
               <tr>${columns.map((column) => `<th>${escapeHTML(column)}</th>`).join("")}</tr>
             </thead>
             <tbody>
-              <tr>${columns.map((column) => `<td>${escapeHTML(String(row[column] ?? ""))}</td>`).join("")}</tr>
+              ${rows.map((row) => `<tr>${columns.map((column) => `<td>${escapeHTML(String(row[column] ?? ""))}</td>`).join("")}</tr>`).join("")}
             </tbody>
           </table>
         </div>
@@ -1244,7 +1275,17 @@ Important rules:
       if (!previews.length) return;
 
       const columns = getPreviewOutputColumns(previews[0].questionNumbers);
-      const rows = previews.map((preview, index) => buildPreviewOutputRow(preview, index + 1));
+      const rows = previews.flatMap((preview) => preview.personas.map((persona, index) => buildPreviewOutputRow({
+        ...preview,
+        pid: persona.pid,
+        persona: persona.persona,
+        prompt: buildPreviewPrompt(
+          persona.persona,
+          preview.embeddedStimuli,
+          preview.questionNumbers,
+          persona.includePersona
+        )
+      }, ((preview.conditionIndex || 0) * preview.personas.length) + index + 1)));
       const worksheet = XLSX.utils.json_to_sheet(rows, { header: columns });
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Preview Output");
@@ -1281,12 +1322,12 @@ Important rules:
       }
 
       const questionNumbers = getExistingQuestionNumbers();
-      let previewPersona;
+      let previewPersonas;
 
       try {
-        previewPersona = await getPreviewPersona();
+        previewPersonas = await getPreviewPersonas(sampleCount);
       } catch (error) {
-        alert(error.message || "Could not prepare persona for preview.");
+        alert(error.message || "Could not prepare personas for preview.");
         return;
       }
 
@@ -1301,22 +1342,25 @@ Important rules:
         }
 
         const embeddedStimuli = buildEmbeddedStimuliText(stimuli, questionNumbers);
+        const firstPersona = previewPersonas[0];
         const prompt = buildPreviewPrompt(
-          previewPersona.persona,
+          firstPersona.persona,
           embeddedStimuli,
           questionNumbers,
-          previewPersona.includePersona
+          firstPersona.includePersona
         );
 
         previews.push({
           condition: c,
+          conditionIndex: c - 1,
           sampleCount: sampleCount,
           html: htmlStimuli || "No stimuli entered for this condition.",
           stimuli: stimuli,
           embeddedStimuli: embeddedStimuli,
           prompt: prompt,
-          pid: previewPersona.pid,
-          persona: previewPersona.persona,
+          pid: firstPersona.pid,
+          persona: firstPersona.persona,
+          personas: previewPersonas,
           questionNumbers: questionNumbers
         });
       }
