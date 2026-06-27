@@ -1207,9 +1207,40 @@ Important rules:
         .replaceAll("{answer_template}", answerTemplate);
     }
 
-    async function getPreviewPersonas(sampleCount) {
+    function shufflePreviewPersonas(personas) {
+      const shuffled = [...personas];
+
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      return shuffled;
+    }
+
+    function samplePreviewPersonas(personas, requestedCount) {
+      if (personas.length === 0) {
+        throw new Error("No personas are available for preview.");
+      }
+
+      const shuffled = shufflePreviewPersonas(personas);
+
+      if (requestedCount <= shuffled.length) {
+        return shuffled.slice(0, requestedCount);
+      }
+
+      const sampled = [...shuffled];
+
+      while (sampled.length < requestedCount) {
+        sampled.push(shuffled[Math.floor(Math.random() * shuffled.length)]);
+      }
+
+      return sampled;
+    }
+
+    async function getPreviewPersonas(totalSampleCount) {
       const personaSelection = document.getElementById("personaSelection")?.value || "default";
-      const requestedCount = Math.max(1, parseInt(sampleCount) || 1);
+      const requestedCount = Math.max(1, parseInt(totalSampleCount) || 1);
 
       if (personaSelection === "none") {
         return Array.from({ length: requestedCount }, (_, index) => ({
@@ -1227,36 +1258,36 @@ Important rules:
         }
 
         const personas = await readPersonaSheet(personaSheet);
-        return Array.from({ length: requestedCount }, (_, index) => ({
-          ...personas[index % personas.length],
+        return samplePreviewPersonas(personas, requestedCount).map((persona) => ({
+          ...persona,
           includePersona: true
         }));
       }
 
-      const personas = await fetchDefaultPreviewPersonas(requestedCount);
-      return personas.map((persona) => ({
+      const personas = await fetchDefaultPreviewPersonas();
+      return samplePreviewPersonas(personas, requestedCount).map((persona) => ({
         pid: persona.pid,
         persona: persona.persona,
         includePersona: true
       }));
     }
 
-    async function fetchDefaultPreviewPersonas(requestedCount) {
+    async function fetchDefaultPreviewPersonas() {
       const dataset = "LLM-Digital-Twin/Twin-2K-500";
       const config = "full_persona";
       const split = "data";
       const pageSize = 100;
+      const maxRows = 3000;
       const personas = [];
       let offset = 0;
 
-      while (personas.length < requestedCount) {
-        const length = Math.min(pageSize, requestedCount - personas.length);
+      while (offset < maxRows) {
         const url = new URL("https://datasets-server.huggingface.co/rows");
         url.searchParams.set("dataset", dataset);
         url.searchParams.set("config", config);
         url.searchParams.set("split", split);
         url.searchParams.set("offset", String(offset));
-        url.searchParams.set("length", String(length));
+        url.searchParams.set("length", String(pageSize));
 
         const response = await fetch(url.toString());
 
@@ -1282,13 +1313,17 @@ Important rules:
         });
 
         offset += rows.length;
+
+        if (rows.length < pageSize) {
+          break;
+        }
       }
 
       if (personas.length === 0) {
         throw new Error("No default Toubia et al. personas were returned for preview.");
       }
 
-      return Array.from({ length: requestedCount }, (_, index) => personas[index % personas.length]);
+      return personas;
     }
 
     function getPreviewOutputColumns(questionNumbers) {
@@ -1433,8 +1468,11 @@ Important rules:
       const questionNumbers = getExistingQuestionNumbers();
       let previewPersonas;
 
+      const samplesPerCondition = parseInt(sampleCount);
+      const totalSampleCount = conditionCount * samplesPerCondition;
+
       try {
-        previewPersonas = await getPreviewPersonas(sampleCount);
+        previewPersonas = await getPreviewPersonas(totalSampleCount);
       } catch (error) {
         alert(error.message || "Could not prepare personas for preview.");
         return;
@@ -1451,7 +1489,8 @@ Important rules:
         }
 
         const embeddedStimuli = buildEmbeddedStimuliText(stimuli, questionNumbers);
-        const firstPersona = previewPersonas[0];
+        const conditionPersonas = previewPersonas.slice((c - 1) * samplesPerCondition, c * samplesPerCondition);
+        const firstPersona = conditionPersonas[0];
         const prompt = buildPreviewPrompt(
           firstPersona.persona,
           embeddedStimuli,
@@ -1469,7 +1508,7 @@ Important rules:
           prompt: prompt,
           pid: firstPersona.pid,
           persona: firstPersona.persona,
-          personas: previewPersonas,
+          personas: conditionPersonas,
           questionNumbers: questionNumbers
         });
       }
