@@ -487,9 +487,9 @@ Important rules:
     </div> 
     
     <div class="action-buttons">
-      <button onclick="showPreview()">View Preview</button>
-      <button onclick="downloadPreviewExcel()">Download Preview</button>
-      <button onclick="generateResponses()">Generate</button>
+      <button type="button" onclick="showPreview(false)">View Preview</button>
+      <button type="button" onclick="showPreview(true)">Download Preview</button>
+      <button type="button" onclick="generateResponses()">Generate</button>
     </div>
 
     <div id="previewArea"></div>
@@ -1377,6 +1377,7 @@ Important rules:
 
     function buildPreviewOutputRows(preview, respondentOffset = 0) {
       const sampleCount = getPreviewSampleCount(preview);
+
       return Array.from({ length: sampleCount }, (_, index) =>
         buildPreviewOutputRow(preview, respondentOffset + index + 1)
       );
@@ -1388,11 +1389,10 @@ Important rules:
         .slice(0, currentPreviewIndex)
         .reduce((total, item) => total + getPreviewSampleCount(item), 0);
       const rows = buildPreviewOutputRows(preview, respondentOffset);
-      const totalSamples = getPreviewTotalSamples();
 
       return `
         <div class="preview-output-wrap">
-          <div class="preview-title">Input file for LLM response generation (Total Samples: ${totalSamples})</div>
+          <div class="preview-title">Input file for LLM response generation (Total Samples: ${getPreviewTotalSamples()})</div>
           <table class="preview-output-table">
             <thead>
               <tr>${columns.map((column) => `<th>${escapeHTML(column)}</th>`).join("")}</tr>
@@ -1449,7 +1449,7 @@ Important rules:
       return html;
     }
 
-    async function showPreview() {
+    async function showPreview(downloadAfterPreview = false) {
       const conditionCount = parseInt(document.getElementById("conditionCount").value);
       const sampleCount = document.getElementById("sampleCount").value || "";
       previews = [];
@@ -1514,6 +1514,10 @@ Important rules:
 
       currentPreviewIndex = 0;
       renderPreview();
+
+      if (downloadAfterPreview) {
+        downloadPreviewExcel();
+      }
     }
 
     function renderPreview() {
@@ -1526,9 +1530,9 @@ Important rules:
           <p><strong>Total Samples:</strong> ${escapeHTML(String(getPreviewTotalSamples()))}</p>
 
           <div class="preview-nav">
-            <button onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
+            <button type="button" onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
             <span class="preview-counter">Condition ${currentPreviewIndex + 1} of ${previews.length}</span>
-            <button onclick="nextPreview()" ${currentPreviewIndex === previews.length - 1 ? "disabled" : ""}>Next</button>
+            <button type="button" onclick="nextPreview()" ${currentPreviewIndex === previews.length - 1 ? "disabled" : ""}>Next</button>
           </div>
 
           ${buildPreviewOutputTable(preview)}
