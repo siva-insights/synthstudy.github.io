@@ -44,6 +44,11 @@
     .preview-question { margin: 8px 0; padding: 10px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; }
     .scale-radio { display: inline-flex; align-items: center; gap: 4px; margin-right: 16px; margin-top: 8px; font-weight: normal; }
     .preview-nav { margin-top: 15px; display: flex; justify-content: space-between; align-items: center; }
+    .preview-output-wrap { margin-top: 16px; overflow-x: auto; }
+    .preview-output-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #ffffff; }
+    .preview-output-table th, .preview-output-table td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; vertical-align: top; }
+    .preview-output-table th { background: #dbeafe; color: #1e3a8a; }
+    .preview-output-table td { max-width: 320px; white-space: pre-wrap; }
     .preview-counter { font-weight: bold; color: #475569; }
 
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.35); }
@@ -229,11 +234,25 @@
   <div class="container">
     <h1>SYNTHETIC EXPERIMENTAL DATA GENERATOR (SEDG)</h1>
 
+    <!--
     <div class="cite-button-wrap">
       <button onclick="showCitations()">Cite this generator</button>
     </div>
+    -->
 
     <div class="section">
+      <h2>Select LLM Model Provider</h2>
+      <label>
+        <input type="radio" name="llmProviderType" value="local" onchange="toggleLlmProviderSections()">
+        Open LLM using Local Machine
+      </label>
+      <label>
+        <input type="radio" name="llmProviderType" value="cloud" onchange="toggleLlmProviderSections()">
+        Proprietary LLM using Cloud
+      </label>
+    </div>
+
+    <div id="localModelSection" class="section" hidden>
       <h2>
         Local Setup and Model Settings
       </h2>
@@ -334,6 +353,62 @@
       <div id="helperStatus" class="note"></div>
     </div>
 
+    <div id="cloudModelSection" class="section" hidden>
+      <h2>Proprietary LLM using Cloud</h2>
+      <label for="cloudModelProvider">Select a cloud LLM provider:</label>
+      <select id="cloudModelProvider" name="cloudModelProvider" onchange="toggleCloudProviderSettings()">
+        <option value="">Select a provider</option>
+        <option value="openai-gpt">OpenAI GPT</option>
+        <option value="google-gemini">Google Gemini</option>
+        <option value="anthropic-claude">Anthropic Claude</option>
+      </select>
+
+      <div id="openAiSettings" hidden>
+        <label for="openAiApiKey">Enter OpenAI API key:</label>
+        <input type="password" id="openAiApiKey" name="openAiApiKey" placeholder="Enter OpenAI API key">
+
+        <label for="openAiModelChoice">Select OpenAI model:</label>
+        <select id="openAiModelChoice" name="openAiModelChoice">
+          <option value="">Select a model</option>
+          <option value="gpt-5.5">GPT-5.5</option>
+          <option value="gpt-5.4">GPT-5.4</option>
+          <option value="gpt-5.4-mini">GPT-5.4 mini</option>
+          <option value="gpt-4.1">GPT-4.1</option>
+          <option value="gpt-4.1-mini">GPT-4.1 mini</option>
+          <option value="gpt-4o-mini">GPT-4o mini</option>
+        </select>
+      </div>
+
+      <div id="geminiSettings" hidden>
+        <label for="geminiApiKey">Enter Google Gemini API key:</label>
+        <input type="password" id="geminiApiKey" name="geminiApiKey" placeholder="Enter Google Gemini API key">
+
+        <label for="geminiModelChoice">Select Google Gemini model:</label>
+        <select id="geminiModelChoice" name="geminiModelChoice">
+          <option value="">Select a model</option>
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+          <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
+        </select>
+      </div>
+
+      <div id="claudeSettings" hidden>
+        <label for="claudeApiKey">Enter Anthropic Claude API key:</label>
+        <input type="password" id="claudeApiKey" name="claudeApiKey" placeholder="Enter Anthropic Claude API key">
+
+        <label for="claudeModelChoice">Select Anthropic Claude model:</label>
+        <select id="claudeModelChoice" name="claudeModelChoice">
+          <option value="">Select a model</option>
+          <option value="claude-opus-4.5">Claude Opus 4.5</option>
+          <option value="claude-sonnet-4.5">Claude Sonnet 4.5</option>
+          <option value="claude-sonnet-4">Claude Sonnet 4</option>
+          <option value="claude-haiku-4">Claude Haiku 4</option>
+        </select>
+      </div>
+
+      <div class="note">Cloud LLM provider support is a placeholder for now. API integration is not yet available.</div>
+    </div>
+
     <div class="section">
       <h2>Study Setup</h2>
       <table class="input-table">
@@ -367,6 +442,39 @@
       <div id="addQuestionButtonContainer" class="add-question-wrap">
         <button onclick="addQuestion()">+ Add Question</button>
       </div>
+    </div>
+
+    <div class="section">
+      <h2>Generic Instruction for LLM Input</h2>
+      <div class="note">
+        This default instruction is used to guide the LLM response format. Update it only if needed, and keep
+        <b>{persona}</b> and <b>{embedded_stimuli}</b> unchanged.
+        <b>{embedded_stimuli}</b> represents the study stimuli with survey questions inserted in the intended places.
+      </div>
+      <textarea id="genericInstruction" name="genericInstruction" rows="20">You are simulating one synthetic survey respondent.
+
+Your task:
+1. Read the respondent persona.
+2. Read the study materials exactly as a survey participant would see them.
+3. Answer each embedded survey question from this respondent's perspective.
+4. Use the respondent persona, the study materials, and the response scale for each question when choosing answers.
+
+Respondent persona:
+{persona}
+
+Study materials with embedded questions:
+{embedded_stimuli}
+
+Important rules:
+- Choose only allowed option codes for each question.
+- Each answer must be an integer within the allowed response-code range for that question.
+- Do not choose values below the minimum code or above the maximum code.
+- Return only the final answer values.
+- Do not include explanations.
+- Do not include markdown.
+- Do not repeat the questions.
+- Return answers only in this format:
+{answer_template}</textarea>
     </div>
 
     <div id="inputEstimateBox" class="input-estimate-box">
@@ -408,9 +516,42 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script>
     let previews = [];
     let currentPreviewIndex = 0;
+
+    function toggleLlmProviderSections() {
+      const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
+      const localModelSection = document.getElementById("localModelSection");
+      const cloudModelSection = document.getElementById("cloudModelSection");
+
+      if (!localModelSection || !cloudModelSection) return;
+
+      localModelSection.hidden = !selectedProvider || selectedProvider.value !== "local";
+      cloudModelSection.hidden = !selectedProvider || selectedProvider.value !== "cloud";
+
+      if (cloudModelSection.hidden) {
+        const cloudModelProvider = document.getElementById("cloudModelProvider");
+        if (cloudModelProvider) cloudModelProvider.value = "";
+      }
+
+      toggleCloudProviderSettings();
+    }
+
+    function toggleCloudProviderSettings() {
+      const cloudModelProvider = document.getElementById("cloudModelProvider");
+      const openAiSettings = document.getElementById("openAiSettings");
+      const geminiSettings = document.getElementById("geminiSettings");
+      const claudeSettings = document.getElementById("claudeSettings");
+
+      if (!cloudModelProvider || !openAiSettings || !geminiSettings || !claudeSettings) return;
+
+      openAiSettings.hidden = cloudModelProvider.value !== "openai-gpt";
+      geminiSettings.hidden = cloudModelProvider.value !== "google-gemini";
+      claudeSettings.hidden = cloudModelProvider.value !== "anthropic-claude";
+    }
+
     let questionCount = 0;
 
     const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
@@ -846,6 +987,15 @@
       document.getElementById("inputEstimateBox").innerHTML = message;
     }
     
+    function togglePersonaUpload() {
+      const personaSelection = document.getElementById("personaSelection");
+      const personaUploadSection = document.getElementById("personaUploadSection");
+
+      if (!personaSelection || !personaUploadSection) return;
+
+      personaUploadSection.hidden = personaSelection.value !== "custom";
+    }
+
     function showConditionInputs() {
       const count = parseInt(document.getElementById("conditionCount").value);
       const container = document.getElementById("conditionFields");
@@ -854,6 +1004,29 @@
       if (!count || count < 1) return;
 
       let html = `
+        <div class="section">
+          <h2>Persona Selection</h2>
+
+          <label for="personaSelection">Choose persona source:
+            <span class="tooltip">?
+              <span class="tooltip-text">
+                Default persona uses 2,058 unique human personas adapted from Toubia et al. (2025).
+              </span>
+            </span>
+          </label>
+          <select id="personaSelection" name="personaSelection" onchange="togglePersonaUpload()">
+            <option value="default">Default persona</option>
+            <option value="custom">Input persona</option>
+            <option value="none">No persona</option>
+          </select>
+
+          <div id="personaUploadSection" hidden>
+            <label for="personaSheet">Upload persona Excel sheet:</label>
+            <input type="file" id="personaSheet" name="personaSheet" accept=".xlsx,.xls">
+            <div class="note">Upload an Excel sheet with exactly two columns: <b>pid</b> and <b>persona</b>.</div>
+          </div>
+        </div>
+
         <div class="section">
           <h2>Stimuli</h2>
 
@@ -917,6 +1090,167 @@
       return scaleLabels;
     }
 
+    function buildEmbeddedQuestionText(questionNumber) {
+      const question = document.getElementById(`question${questionNumber}`)?.value.trim() || "";
+      const scaleLabels = getScaleLabels(questionNumber);
+      const scaleText = scaleLabels
+        .map((label) => label.replace(/^([0-9]+)-/, "$1 = "))
+        .join("\n");
+
+      return `[Q${questionNumber}]\nQuestion: ${question}\nAllowed response codes: 1 to ${scaleLabels.length}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
+    }
+
+    function buildEmbeddedStimuliText(stimuli, questionNumbers) {
+      let embeddedStimuli = stimuli;
+      const missingQuestions = [];
+
+      for (const q of questionNumbers) {
+        const placeholder = `{Q${q}}`;
+        const embeddedQuestion = buildEmbeddedQuestionText(q);
+
+        if (stimuli.includes(placeholder)) {
+          embeddedStimuli = embeddedStimuli.split(placeholder).join(embeddedQuestion);
+        } else {
+          missingQuestions.push(embeddedQuestion);
+        }
+      }
+
+      if (missingQuestions.length > 0) {
+        embeddedStimuli += `\n\nQuestions not embedded in the study materials:\n${missingQuestions.join("\n\n")}`;
+      }
+
+      return embeddedStimuli;
+    }
+
+    function sanitizeNoPersonaInstruction(promptTemplate) {
+      return promptTemplate
+        .replace(/\n?Respondent persona:\s*\n\{persona\}\s*\n/, "\n")
+        .replace(/\n?\d+\.\s*Read the respondent persona\.\s*/, "\n")
+        .replaceAll("the respondent persona, ", "")
+        .replaceAll("the respondent persona,", "");
+    }
+
+    function buildPreviewPrompt(persona, embeddedStimuli, questionNumbers, includePersona) {
+      const answerTemplate = questionNumbers.map((q) => `Q${q}=?`).join("\n");
+      let promptTemplate = document.getElementById("genericInstruction")?.value.trim() || "";
+
+      if (!includePersona) {
+        promptTemplate = sanitizeNoPersonaInstruction(promptTemplate);
+      }
+
+      return promptTemplate
+        .replaceAll("{persona}", includePersona ? persona : "")
+        .replaceAll("{embedded_stimuli}", embeddedStimuli)
+        .replaceAll("{answer_template}", answerTemplate);
+    }
+
+    async function getPreviewPersona() {
+      const personaSelection = document.getElementById("personaSelection")?.value || "default";
+
+      if (personaSelection === "none") {
+        return { pid: "no_persona_1", persona: "", includePersona: false };
+      }
+
+      if (personaSelection === "custom") {
+        const personaSheet = document.getElementById("personaSheet")?.files?.[0];
+
+        if (!personaSheet) {
+          throw new Error("Please upload a persona Excel sheet before previewing the output row.");
+        }
+
+        const personas = await readPersonaSheet(personaSheet);
+        return { ...personas[0], includePersona: true };
+      }
+
+      return {
+        pid: "preview_default_persona",
+        persona: "Preview default persona sampled from the Twin-2K-500 dataset during generation.",
+        includePersona: true
+      };
+    }
+
+    function getPreviewOutputColumns(questionNumbers) {
+      return [
+        "respondent_id",
+        "pid",
+        "persona_summary",
+        "condition",
+        "condition_stimuli",
+        "model_name",
+        "temperature",
+        "validation",
+        "invalid_questions",
+        "retry_count",
+        "seconds_taken",
+        "prompt",
+        "prompt_words",
+        "num_ctx_used",
+        "raw_response",
+        ...questionNumbers.map((q) => `Q${q}`)
+      ];
+    }
+
+    function buildPreviewOutputRow(preview, respondentId = 1) {
+      const row = {
+        respondent_id: String(respondentId),
+        pid: preview.pid,
+        persona_summary: preview.persona,
+        condition: preview.condition,
+        condition_stimuli: preview.stimuli,
+        model_name: document.getElementById("modelChoice")?.value || "",
+        temperature: document.getElementById("temperature")?.value || "0",
+        validation: "",
+        invalid_questions: "",
+        retry_count: "",
+        seconds_taken: "",
+        prompt: preview.prompt,
+        prompt_words: String(countWords(preview.prompt)),
+        num_ctx_used: "",
+        raw_response: ""
+      };
+
+      for (const q of preview.questionNumbers) {
+        row[`Q${q}`] = "";
+      }
+
+      return row;
+    }
+
+    function buildPreviewOutputTable(preview) {
+      const columns = getPreviewOutputColumns(preview.questionNumbers);
+      const row = buildPreviewOutputRow(preview);
+
+      return `
+        <div class="preview-output-wrap">
+          <div class="preview-title">Output File Preview (1 Sample Row)</div>
+          <table class="preview-output-table">
+            <thead>
+              <tr>${columns.map((column) => `<th>${escapeHTML(column)}</th>`).join("")}</tr>
+            </thead>
+            <tbody>
+              <tr>${columns.map((column) => `<td>${escapeHTML(String(row[column] ?? ""))}</td>`).join("")}</tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function downloadPreviewExcel() {
+      if (!window.XLSX) {
+        alert("Excel export is not available. Please check your internet connection and try again.");
+        return;
+      }
+
+      if (!previews.length) return;
+
+      const columns = getPreviewOutputColumns(previews[0].questionNumbers);
+      const rows = previews.map((preview, index) => buildPreviewOutputRow(preview, index + 1));
+      const worksheet = XLSX.utils.json_to_sheet(rows, { header: columns });
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Preview Output");
+      XLSX.writeFile(workbook, "OLSEDG_preview_output.xlsx");
+    }
+
     function buildQuestionPreview(questionNumber) {
       const question = document.getElementById(`question${questionNumber}`)?.value.trim() || "";
       const scaleLabels = getScaleLabels(questionNumber);
@@ -936,7 +1270,7 @@
       return html;
     }
 
-    function showPreview() {
+    async function showPreview() {
       const conditionCount = parseInt(document.getElementById("conditionCount").value);
       const sampleCount = document.getElementById("sampleCount").value || "";
       previews = [];
@@ -946,11 +1280,19 @@
         return;
       }
 
+      const questionNumbers = getExistingQuestionNumbers();
+      let previewPersona;
+
+      try {
+        previewPersona = await getPreviewPersona();
+      } catch (error) {
+        alert(error.message || "Could not prepare persona for preview.");
+        return;
+      }
+
       for (let c = 1; c <= conditionCount; c++) {
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
         let htmlStimuli = escapeHTML(stimuli);
-
-        const questionNumbers = getExistingQuestionNumbers();
 
         for (const q of questionNumbers) {
           const questionHtml = buildQuestionPreview(q);
@@ -958,15 +1300,30 @@
           htmlStimuli = htmlStimuli.replace(placeholder, questionHtml);
         }
 
+        const embeddedStimuli = buildEmbeddedStimuliText(stimuli, questionNumbers);
+        const prompt = buildPreviewPrompt(
+          previewPersona.persona,
+          embeddedStimuli,
+          questionNumbers,
+          previewPersona.includePersona
+        );
+
         previews.push({
           condition: c,
           sampleCount: sampleCount,
-          html: htmlStimuli || "No stimuli entered for this condition."
+          html: htmlStimuli || "No stimuli entered for this condition.",
+          stimuli: stimuli,
+          embeddedStimuli: embeddedStimuli,
+          prompt: prompt,
+          pid: previewPersona.pid,
+          persona: previewPersona.persona,
+          questionNumbers: questionNumbers
         });
       }
 
       currentPreviewIndex = 0;
       renderPreview();
+      downloadPreviewExcel();
     }
 
     function renderPreview() {
@@ -978,6 +1335,7 @@
           <div class="preview-title">Preview: Condition ${preview.condition}</div>
           <p><strong>Required Samples per Condition:</strong> ${escapeHTML(preview.sampleCount || "Not entered")}</p>
           <div class="preview-stimuli">${preview.html}</div>
+          ${buildPreviewOutputTable(preview)}
 
           <div class="preview-nav">
             <button onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
@@ -1000,6 +1358,30 @@
         currentPreviewIndex--;
         renderPreview();
       }
+    }
+
+    async function readPersonaSheet(file) {
+      if (!window.XLSX) {
+        throw new Error("Excel parser is not available. Please check your internet connection and try again.");
+      }
+
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      const personas = rows
+        .map((row) => ({
+          pid: String(row.pid ?? "").trim(),
+          persona: String(row.persona ?? "").trim()
+        }))
+        .filter((row) => row.pid && row.persona);
+
+      if (personas.length === 0) {
+        throw new Error("Please upload an Excel sheet with non-empty pid and persona columns.");
+      }
+
+      return personas;
     }
 
     async function generateResponses() {
@@ -1050,13 +1432,35 @@
         });
       }
     
+      const personaSelection = document.getElementById("personaSelection")?.value || "default";
+      let customPersonas = null;
+
+      if (personaSelection === "custom") {
+        const personaSheet = document.getElementById("personaSheet")?.files?.[0];
+
+        if (!personaSheet) {
+          alert("Please upload a persona Excel sheet with pid and persona columns.");
+          return;
+        }
+
+        try {
+          customPersonas = await readPersonaSheet(personaSheet);
+        } catch (error) {
+          alert(error.message || "Could not read the persona Excel sheet.");
+          return;
+        }
+      }
+
       const payload = {
         study_name: studyName,
         model_name: selectedModel.value,
         temperature: temperature,
         sample_count_per_condition: sampleCount,
         conditions: conditions,
-        questions: questions
+        questions: questions,
+        generic_instruction: document.getElementById("genericInstruction")?.value || "",
+        persona_source: personaSelection,
+        custom_personas: customPersonas
       };
     
       const previewArea = document.getElementById("previewArea");
