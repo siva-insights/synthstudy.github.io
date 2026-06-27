@@ -1169,8 +1169,8 @@ Important rules:
       };
     }
 
-    function buildPreviewOutputTable(preview) {
-      const columns = [
+    function getPreviewOutputColumns(questionNumbers) {
+      return [
         "respondent_id",
         "pid",
         "persona_summary",
@@ -1186,29 +1186,39 @@ Important rules:
         "prompt_words",
         "num_ctx_used",
         "raw_response",
-        ...preview.questionNumbers.map((q) => `Q${q}`)
+        ...questionNumbers.map((q) => `Q${q}`)
       ];
+    }
+
+    function buildPreviewOutputRow(preview, respondentId = 1) {
       const row = {
-        respondent_id: "1",
+        respondent_id: String(respondentId),
         pid: preview.pid,
         persona_summary: preview.persona,
         condition: preview.condition,
         condition_stimuli: preview.stimuli,
-        model_name: document.getElementById("modelChoice")?.value || "Selected model",
+        model_name: document.getElementById("modelChoice")?.value || "",
         temperature: document.getElementById("temperature")?.value || "0",
-        validation: "valid",
+        validation: "",
         invalid_questions: "",
-        retry_count: "0",
-        seconds_taken: "0.000",
+        retry_count: "",
+        seconds_taken: "",
         prompt: preview.prompt,
         prompt_words: String(countWords(preview.prompt)),
-        num_ctx_used: "Calculated during generation",
-        raw_response: preview.questionNumbers.map((q) => `Q${q}=?`).join(" | ")
+        num_ctx_used: "",
+        raw_response: ""
       };
 
       for (const q of preview.questionNumbers) {
-        row[`Q${q}`] = "?";
+        row[`Q${q}`] = "";
       }
+
+      return row;
+    }
+
+    function buildPreviewOutputTable(preview) {
+      const columns = getPreviewOutputColumns(preview.questionNumbers);
+      const row = buildPreviewOutputRow(preview);
 
       return `
         <div class="preview-output-wrap">
@@ -1223,6 +1233,22 @@ Important rules:
           </table>
         </div>
       `;
+    }
+
+    function downloadPreviewExcel() {
+      if (!window.XLSX) {
+        alert("Excel export is not available. Please check your internet connection and try again.");
+        return;
+      }
+
+      if (!previews.length) return;
+
+      const columns = getPreviewOutputColumns(previews[0].questionNumbers);
+      const rows = previews.map((preview, index) => buildPreviewOutputRow(preview, index + 1));
+      const worksheet = XLSX.utils.json_to_sheet(rows, { header: columns });
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Preview Output");
+      XLSX.writeFile(workbook, "OLSEDG_preview_output.xlsx");
     }
 
     function buildQuestionPreview(questionNumber) {
@@ -1297,6 +1323,7 @@ Important rules:
 
       currentPreviewIndex = 0;
       renderPreview();
+      downloadPreviewExcel();
     }
 
     function renderPreview() {
