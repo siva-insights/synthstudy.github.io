@@ -631,6 +631,25 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             message=str(e)
         )
         
+
+@app.get("/preview-personas/{sample_count}")
+def preview_personas(sample_count: int):
+    if sample_count < 1:
+        sample_count = 1
+
+    df_personas = load_personas(sample_count, use_personas=True)
+
+    return {
+        "success": True,
+        "personas": [
+            {
+                "pid": str(row["pid"]),
+                "persona": str(row["persona_summary"])
+            }
+            for _, row in df_personas.iterrows()
+        ]
+    }
+
 @app.post("/generate")
 def generate(data: GenerateRequest):
     total_needed = data.sample_count_per_condition * len(data.conditions)
