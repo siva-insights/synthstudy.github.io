@@ -526,6 +526,8 @@ Important rules:
   <script>
     let previews = [];
     let currentPreviewIndex = 0;
+    let cloudGenerationRows = [];
+    let cloudGenerationColumns = [];
 
     function toggleLlmProviderSections() {
       const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
@@ -1678,9 +1680,19 @@ Important rules:
     }
 
     async function generateResponses() {
+      const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
+
+      if (selectedProvider && selectedProvider.value === "cloud") {
+        return generateCloudResponses();
+      }
+
+      return generateLocalResponses();
+    }
+
+    async function generateLocalResponses() {
       const selectedModel = document.getElementById("modelChoice");
       const questionNumbers = getExistingQuestionNumbers();
-    
+
       if (!selectedModel || !selectedModel.value) {
         alert("Please select a language model.");
         return;
@@ -1899,7 +1911,320 @@ Important rules:
         }
       }, 1000);
     }
-    
+
+    // Conservative default number of independent conversations to run at once per
+    // cloud provider. Real rate limits depend on the user's account/tier, so this
+    // is intentionally cautious rather than a verified provider limit.
+    const CLOUD_PROVIDER_CONCURRENCY = {
+      "openai-gpt": 5,
+      "google-gemini": 5,
+      "anthropic-claude": 5
+    };
+
+    const CLOUD_API_KEY_FIELD_BY_PROVIDER = {
+      "openai-gpt": "openAiApiKey",
+      "google-gemini": "geminiApiKey",
+      "anthropic-claude": "claudeApiKey"
+    };
+
+    async function callOpenAiChat(apiKey, modelName, prompt, temperature) {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [{ role: "user", content: prompt }],
+          temperature: temperature
+        })
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`OpenAI API error (${response.status}): ${errorBody}`);
+      }
+
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content || "";
+    }
+
+    async function callGeminiChat(apiKey, modelName, prompt, temperature) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: temperature }
+        })
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Gemini API error (${response.status}): ${errorBody}`);
+      }
+
+      const data = await response.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    }
+
+    async function callClaudeChat(apiKey, modelName, prompt, temperature) {
+      // Anthropic's API only accepts temperature in [0, 1], unlike the 0-2 range
+      // this app's shared temperature field allows for local/OpenAI/Gemini models.
+      const claudeTemperature = Math.min(temperature, 1);
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: modelName,
+          max_tokens: 1024,
+          temperature: claudeTemperature,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Claude API error (${response.status}): ${errorBody}`);
+      }
+
+      const data = await response.json();
+      return data.content?.[0]?.text || "";
+    }
+
+    async function callCloudModel(cloudModelProvider, apiKey, modelName, prompt, temperature) {
+      if (cloudModelProvider === "openai-gpt") {
+        return callOpenAiChat(apiKey, modelName, prompt, temperature);
+      }
+
+      if (cloudModelProvider === "google-gemini") {
+        return callGeminiChat(apiKey, modelName, prompt, temperature);
+      }
+
+      if (cloudModelProvider === "anthropic-claude") {
+        return callClaudeChat(apiKey, modelName, prompt, temperature);
+      }
+
+      throw new Error("Unsupported cloud provider.");
+    }
+
+    function parseCloudAnswers(rawText, questionNumbers) {
+      const answers = {};
+      const invalidQuestions = [];
+
+      for (const q of questionNumbers) {
+        const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`)?.value) || 0;
+        const pattern = new RegExp(`Q${q}\\s*=\\s*(-?\\d+)`, "i");
+        const match = rawText.match(pattern);
+
+        if (match) {
+          const value = parseInt(match[1]);
+          answers[`Q${q}`] = value;
+
+          if (!(value >= 1 && value <= scaleCount)) {
+            invalidQuestions.push(`Q${q}`);
+          }
+        } else {
+          answers[`Q${q}`] = "";
+          invalidQuestions.push(`Q${q}`);
+        }
+      }
+
+      const validation = invalidQuestions.length === 0 ? "valid" : "invalid";
+      return { answers, validation, invalidQuestions };
+    }
+
+    async function getValidCloudResponse(cloudModelProvider, apiKey, modelName, prompt, temperature, questionNumbers, maxRetries = 5) {
+      let last = { answers: {}, validation: "invalid", invalidQuestions: [], rawResponse: "" };
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const rawResponse = await callCloudModel(cloudModelProvider, apiKey, modelName, prompt, temperature);
+        const { answers, validation, invalidQuestions } = parseCloudAnswers(rawResponse, questionNumbers);
+
+        if (validation === "valid") {
+          return { answers, validation, invalidQuestions, retryCount: attempt, rawResponse };
+        }
+
+        last = { answers, validation, invalidQuestions, rawResponse };
+      }
+
+      return { ...last, retryCount: maxRetries };
+    }
+
+    async function processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers) {
+      const startTime = Date.now();
+
+      try {
+        const result = await getValidCloudResponse(cloudModelProvider, apiKey, modelName, row.prompt, temperature, questionNumbers);
+
+        row.validation = result.validation;
+        row.invalid_questions = result.invalidQuestions.join(",");
+        row.retry_count = String(result.retryCount);
+        row.raw_response = String(result.rawResponse).replace(/\n/g, " | ");
+
+        for (const q of questionNumbers) {
+          row[`Q${q}`] = result.answers[`Q${q}`] ?? "";
+        }
+      } catch (error) {
+        row.validation = "error";
+        row.invalid_questions = questionNumbers.map((q) => `Q${q}`).join(",");
+        row.raw_response = String(error.message || error);
+      } finally {
+        row.seconds_taken = ((Date.now() - startTime) / 1000).toFixed(3);
+      }
+    }
+
+    async function runCloudGenerationBatches(rows, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, concurrency, onProgress) {
+      let completed = 0;
+
+      for (let start = 0; start < rows.length; start += concurrency) {
+        const batch = rows.slice(start, start + concurrency);
+
+        await Promise.all(batch.map(async (row) => {
+          await processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers);
+          completed++;
+          onProgress(completed, rows.length);
+        }));
+      }
+    }
+
+    function updateCloudGenerationProgress(completed, total) {
+      const percent = Math.round((completed / total) * 100);
+      const progressBar = document.getElementById("generationProgressBar");
+      const progressText = document.getElementById("generationProgressText");
+
+      if (progressBar) {
+        progressBar.style.width = `${percent}%`;
+      }
+
+      if (progressText) {
+        progressText.innerHTML = `${completed} / ${total} samples completed.`;
+      }
+    }
+
+    function downloadCloudGenerationResults() {
+      if (!window.XLSX || cloudGenerationRows.length === 0) {
+        alert("No generated responses are available to download.");
+        return;
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(cloudGenerationRows, { header: cloudGenerationColumns });
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Generated Responses");
+      XLSX.writeFile(workbook, `OLSEDG_cloud_generated_${cloudGenerationRows.length}_samples.xlsx`);
+    }
+
+    async function generateCloudResponses() {
+      const questionNumbers = getExistingQuestionNumbers();
+      const studyName = document.getElementById("studyName").value.trim();
+      const conditionCount = parseInt(document.getElementById("conditionCount").value);
+      const sampleCount = parseInt(document.getElementById("sampleCount").value);
+      const temperature = parseFloat(document.getElementById("temperature").value) || 0;
+
+      if (!studyName || !conditionCount || conditionCount < 1 || !sampleCount || sampleCount < 1 || questionNumbers.length < 1) {
+        alert("Please complete study name, conditions, samples, and at least one question.");
+        return;
+      }
+
+      const cloudModelProvider = document.getElementById("cloudModelProvider")?.value || "";
+
+      if (!cloudModelProvider) {
+        alert("Please select a cloud LLM provider.");
+        return;
+      }
+
+      const modelName = getSelectedModelName();
+
+      if (!modelName) {
+        alert("Please select a model for the chosen cloud provider.");
+        return;
+      }
+
+      const apiKeyFieldId = CLOUD_API_KEY_FIELD_BY_PROVIDER[cloudModelProvider];
+      const apiKey = document.getElementById(apiKeyFieldId)?.value.trim() || "";
+
+      if (!apiKey) {
+        alert("Please enter the API key for the selected cloud provider.");
+        return;
+      }
+
+      updateTotalSamples();
+
+      try {
+        await showPreview();
+      } catch (error) {
+        alert(error.message || "Could not build the preview table for generation.");
+        return;
+      }
+
+      if (!previews.length) {
+        return;
+      }
+
+      let respondentOffset = 0;
+      const rows = previews.flatMap((preview) => {
+        const previewRows = buildPreviewOutputRows(preview, respondentOffset);
+        respondentOffset += previewRows.length;
+        return previewRows;
+      });
+
+      const totalSamples = rows.length;
+      const concurrency = CLOUD_PROVIDER_CONCURRENCY[cloudModelProvider] || 5;
+      const previewArea = document.getElementById("previewArea");
+
+      previewArea.innerHTML = `
+        <div class="preview-box">
+          <div class="preview-title">Generating Synthetic Responses...</div>
+          <p>
+            Each prompt is sent to ${escapeHTML(modelName)} as an independent conversation,
+            up to ${concurrency} at a time.
+          </p>
+
+          <div class="progress-container">
+            <div id="generationProgressBar" class="progress-bar"></div>
+          </div>
+
+          <div id="generationProgressText" class="progress-text">
+            0 / ${totalSamples} samples completed.
+          </div>
+        </div>
+      `;
+
+      await runCloudGenerationBatches(
+        rows,
+        cloudModelProvider,
+        apiKey,
+        modelName,
+        temperature,
+        questionNumbers,
+        concurrency,
+        updateCloudGenerationProgress
+      );
+
+      cloudGenerationRows = rows;
+      cloudGenerationColumns = getPreviewOutputColumns(questionNumbers);
+
+      await incrementSiteMetricBy("synthetic_responses_generated", totalSamples);
+      await loadSiteMetrics();
+
+      previewArea.innerHTML = `
+        <div class="preview-box">
+          <div class="preview-title">Generation Complete</div>
+          <p><strong>Total responses generated:</strong> ${totalSamples}</p>
+          <button type="button" onclick="downloadCloudGenerationResults()">Download CSV Responses</button>
+        </div>
+      `;
+    }
+
     function escapeHTML(text) {
       return String(text)
         .replace(/&/g, "&amp;")
