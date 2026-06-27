@@ -1170,23 +1170,62 @@ Important rules:
         }));
       }
 
-      const response = await fetch(`http://localhost:8000/preview-personas/${requestedCount}`);
-
-      if (!response.ok) {
-        throw new Error("Could not load default Toubia et al. personas for preview. Please make sure the OLSEDG helper is running.");
-      }
-
-      const data = await response.json();
-
-      if (!data.success || !Array.isArray(data.personas) || data.personas.length === 0) {
-        throw new Error(data.message || "No default personas were returned for preview.");
-      }
-
-      return data.personas.map((persona) => ({
-        pid: String(persona.pid ?? ""),
-        persona: String(persona.persona ?? ""),
+      const personas = await fetchDefaultPreviewPersonas(requestedCount);
+      return personas.map((persona) => ({
+        pid: persona.pid,
+        persona: persona.persona,
         includePersona: true
       }));
+    }
+
+    async function fetchDefaultPreviewPersonas(requestedCount) {
+      const dataset = "LLM-Digital-Twin/Twin-2K-500";
+      const config = "full_persona";
+      const split = "train";
+      const pageSize = 100;
+      const personas = [];
+      let offset = 0;
+
+      while (personas.length < requestedCount) {
+        const length = Math.min(pageSize, requestedCount - personas.length);
+        const url = new URL("https://datasets-server.huggingface.co/rows");
+        url.searchParams.set("dataset", dataset);
+        url.searchParams.set("config", config);
+        url.searchParams.set("split", split);
+        url.searchParams.set("offset", String(offset));
+        url.searchParams.set("length", String(length));
+
+        const response = await fetch(url.toString());
+
+        if (!response.ok) {
+          throw new Error("Could not load default Toubia et al. personas from Hugging Face for preview.");
+        }
+
+        const data = await response.json();
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+
+        if (rows.length === 0) {
+          break;
+        }
+
+        rows.forEach((item) => {
+          const row = item.row || {};
+          const pid = String(row.pid ?? "").trim();
+          const persona = String(row.persona_summary ?? "").trim();
+
+          if (pid && persona) {
+            personas.push({ pid, persona });
+          }
+        });
+
+        offset += rows.length;
+      }
+
+      if (personas.length === 0) {
+        throw new Error("No default Toubia et al. personas were returned for preview.");
+      }
+
+      return Array.from({ length: requestedCount }, (_, index) => personas[index % personas.length]);
     }
 
     function getPreviewOutputColumns(questionNumbers) {
