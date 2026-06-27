@@ -1259,60 +1259,98 @@ Important rules:
         }));
       }
 
-      const personas = await fetchDefaultPreviewPersonas();
-      return samplePreviewPersonas(personas, requestedCount).map((persona) => ({
+      const personas = await fetchDefaultPreviewPersonas(requestedCount);
+      return personas.map((persona) => ({
         pid: persona.pid,
         persona: persona.persona,
         includePersona: true
       }));
     }
 
-    async function fetchDefaultPreviewPersonas() {
-      const dataset = "LLM-Digital-Twin/Twin-2K-500";
-      const config = "full_persona";
-      const split = "data";
-      const pageSize = 100;
-      const maxRows = 3000;
-      const personas = [];
-      let offset = 0;
+    const DEFAULT_PERSONA_DATASET = "LLM-Digital-Twin/Twin-2K-500";
+    const DEFAULT_PERSONA_CONFIG = "full_persona";
+    const DEFAULT_PERSONA_SPLIT = "data";
+    const defaultPersonaCacheByOffset = new Map();
+    let defaultPersonaTotalRowsPromise = null;
 
-      while (offset < maxRows) {
-        const url = new URL("https://datasets-server.huggingface.co/rows");
-        url.searchParams.set("dataset", dataset);
-        url.searchParams.set("config", config);
-        url.searchParams.set("split", split);
-        url.searchParams.set("offset", String(offset));
-        url.searchParams.set("length", String(pageSize));
+    async function getDefaultPersonaTotalRows() {
+      if (!defaultPersonaTotalRowsPromise) {
+        defaultPersonaTotalRowsPromise = (async () => {
+          const url = `https://datasets-server.huggingface.co/size?dataset=${encodeURIComponent(DEFAULT_PERSONA_DATASET)}&config=${encodeURIComponent(DEFAULT_PERSONA_CONFIG)}&split=${encodeURIComponent(DEFAULT_PERSONA_SPLIT)}`;
+          const response = await fetch(url);
+          const data = response.ok ? await response.json() : null;
+          const totalRows = data?.size?.splits?.[0]?.num_rows;
 
-        const response = await fetch(url.toString());
-
-        if (!response.ok) {
-          throw new Error("Could not load default Toubia et al. personas from Hugging Face for preview.");
-        }
-
-        const data = await response.json();
-        const rows = Array.isArray(data.rows) ? data.rows : [];
-
-        if (rows.length === 0) {
-          break;
-        }
-
-        rows.forEach((item) => {
-          const row = item.row || {};
-          const pid = String(row.pid ?? "").trim();
-          const persona = String(row.persona_summary ?? "").trim();
-
-          if (pid && persona) {
-            personas.push({ pid, persona });
+          if (!totalRows) {
+            throw new Error("Could not determine the size of the default Toubia et al. persona dataset.");
           }
+
+          return totalRows;
+        })();
+
+        defaultPersonaTotalRowsPromise.catch(() => {
+          defaultPersonaTotalRowsPromise = null;
         });
-
-        offset += rows.length;
-
-        if (rows.length < pageSize) {
-          break;
-        }
       }
+
+      return defaultPersonaTotalRowsPromise;
+    }
+
+    function pickRandomPersonaOffsets(totalRows, requestedCount) {
+      if (requestedCount >= totalRows) {
+        const offsets = Array.from({ length: totalRows }, (_, index) => index);
+
+        while (offsets.length < requestedCount) {
+          offsets.push(Math.floor(Math.random() * totalRows));
+        }
+
+        return shufflePreviewPersonas(offsets);
+      }
+
+      const offsets = new Set();
+
+      while (offsets.size < requestedCount) {
+        offsets.add(Math.floor(Math.random() * totalRows));
+      }
+
+      return [...offsets];
+    }
+
+    async function fetchDefaultPersonaAtOffset(offset) {
+      if (defaultPersonaCacheByOffset.has(offset)) {
+        return defaultPersonaCacheByOffset.get(offset);
+      }
+
+      const url = new URL("https://datasets-server.huggingface.co/rows");
+      url.searchParams.set("dataset", DEFAULT_PERSONA_DATASET);
+      url.searchParams.set("config", DEFAULT_PERSONA_CONFIG);
+      url.searchParams.set("split", DEFAULT_PERSONA_SPLIT);
+      url.searchParams.set("offset", String(offset));
+      url.searchParams.set("length", "1");
+
+      const response = await fetch(url.toString());
+
+      if (!response.ok) {
+        throw new Error("Could not load default Toubia et al. personas from Hugging Face for preview.");
+      }
+
+      const data = await response.json();
+      const row = data?.rows?.[0]?.row || {};
+      const pid = String(row.pid ?? "").trim();
+      const persona = String(row.persona_summary ?? "").trim();
+      const result = pid && persona ? { pid, persona } : null;
+
+      if (result) {
+        defaultPersonaCacheByOffset.set(offset, result);
+      }
+
+      return result;
+    }
+
+    async function fetchDefaultPreviewPersonas(requestedCount) {
+      const totalRows = await getDefaultPersonaTotalRows();
+      const offsets = pickRandomPersonaOffsets(totalRows, requestedCount);
+      const personas = (await Promise.all(offsets.map(fetchDefaultPersonaAtOffset))).filter(Boolean);
 
       if (personas.length === 0) {
         throw new Error("No default Toubia et al. personas were returned for preview.");
