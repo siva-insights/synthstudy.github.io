@@ -487,7 +487,8 @@ Important rules:
     </div> 
     
     <div class="action-buttons">
-      <button onclick="showPreview()">Preview</button>
+      <button onclick="showPreview()">View Preview</button>
+      <button onclick="downloadPreviewExcel()">Download Preview</button>
       <button onclick="generateResponses()">Generate</button>
     </div>
 
@@ -1366,24 +1367,32 @@ Important rules:
       return row;
     }
 
+    function getPreviewSampleCount(preview) {
+      return Math.max(1, parseInt(preview.sampleCount) || 1);
+    }
+
+    function getPreviewTotalSamples() {
+      return previews.reduce((total, preview) => total + getPreviewSampleCount(preview), 0);
+    }
+
+    function buildPreviewOutputRows(preview, respondentOffset = 0) {
+      const sampleCount = getPreviewSampleCount(preview);
+      return Array.from({ length: sampleCount }, (_, index) =>
+        buildPreviewOutputRow(preview, respondentOffset + index + 1)
+      );
+    }
+
     function buildPreviewOutputTable(preview) {
       const columns = getPreviewOutputColumns(preview.questionNumbers);
-      const respondentOffset = ((preview.conditionIndex || 0) * preview.personas.length);
-      const rows = preview.personas.map((persona, index) => buildPreviewOutputRow({
-        ...preview,
-        pid: persona.pid,
-        persona: persona.persona,
-        prompt: buildPreviewPrompt(
-          persona.persona,
-          preview.embeddedStimuli,
-          preview.questionNumbers,
-          persona.includePersona
-        )
-      }, respondentOffset + index + 1));
+      const respondentOffset = previews
+        .slice(0, currentPreviewIndex)
+        .reduce((total, item) => total + getPreviewSampleCount(item), 0);
+      const rows = buildPreviewOutputRows(preview, respondentOffset);
+      const totalSamples = getPreviewTotalSamples();
 
       return `
         <div class="preview-output-wrap">
-          <div class="preview-title">Output File Preview (${rows.length} Sample ${rows.length === 1 ? "Row" : "Rows"})</div>
+          <div class="preview-title">Input file for LLM response generation (Total Samples: ${totalSamples})</div>
           <table class="preview-output-table">
             <thead>
               <tr>${columns.map((column) => `<th>${escapeHTML(column)}</th>`).join("")}</tr>
@@ -1396,30 +1405,29 @@ Important rules:
       `;
     }
 
-    function downloadPreviewExcel() {
+    async function downloadPreviewExcel() {
       if (!window.XLSX) {
         alert("Excel export is not available. Please check your internet connection and try again.");
         return;
       }
 
+      if (!previews.length) {
+        await showPreview();
+      }
+
       if (!previews.length) return;
 
       const columns = getPreviewOutputColumns(previews[0].questionNumbers);
-      const rows = previews.flatMap((preview) => preview.personas.map((persona, index) => buildPreviewOutputRow({
-        ...preview,
-        pid: persona.pid,
-        persona: persona.persona,
-        prompt: buildPreviewPrompt(
-          persona.persona,
-          preview.embeddedStimuli,
-          preview.questionNumbers,
-          persona.includePersona
-        )
-      }, ((preview.conditionIndex || 0) * preview.personas.length) + index + 1)));
+      let respondentOffset = 0;
+      const rows = previews.flatMap((preview) => {
+        const previewRows = buildPreviewOutputRows(preview, respondentOffset);
+        respondentOffset += previewRows.length;
+        return previewRows;
+      });
       const worksheet = XLSX.utils.json_to_sheet(rows, { header: columns });
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Preview Output");
-      XLSX.writeFile(workbook, "OLSEDG_preview_output.xlsx");
+      XLSX.writeFile(workbook, `OLSEDG_preview_output_${rows.length}_samples.xlsx`);
     }
 
     function buildQuestionPreview(questionNumber) {
@@ -1455,8 +1463,6 @@ Important rules:
         alert("Please enter the required number of samples per condition first.");
         return;
       }
-
-      updateTotalSamples();
 
       const questionNumbers = getExistingQuestionNumbers();
       let previewPersonas;
@@ -1508,7 +1514,6 @@ Important rules:
 
       currentPreviewIndex = 0;
       renderPreview();
-      downloadPreviewExcel();
     }
 
     function renderPreview() {
@@ -1518,15 +1523,15 @@ Important rules:
       previewArea.innerHTML = `
         <div class="preview-box">
           <div class="preview-title">Preview: Condition ${preview.condition}</div>
-          <p><strong>Required Samples per Condition:</strong> ${escapeHTML(preview.sampleCount || "Not entered")}</p>
-          <div class="preview-stimuli">${preview.html}</div>
-          ${buildPreviewOutputTable(preview)}
+          <p><strong>Total Samples:</strong> ${escapeHTML(String(getPreviewTotalSamples()))}</p>
 
           <div class="preview-nav">
             <button onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
             <span class="preview-counter">Condition ${currentPreviewIndex + 1} of ${previews.length}</span>
             <button onclick="nextPreview()" ${currentPreviewIndex === previews.length - 1 ? "disabled" : ""}>Next</button>
           </div>
+
+          ${buildPreviewOutputTable(preview)}
         </div>
       `;
     }
