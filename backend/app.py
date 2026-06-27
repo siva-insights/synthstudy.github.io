@@ -83,6 +83,7 @@ def update_job(job_id, **kwargs):
 
 class Condition(BaseModel):
     condition_number: int
+    condition_name: Optional[str] = None
     stimuli: str
 
 
@@ -451,6 +452,10 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         random.shuffle(condition_numbers)
 
         condition_lookup = {c.condition_number: c.stimuli for c in data.conditions}
+        condition_name_lookup = {
+            c.condition_number: c.condition_name or f"Condition {c.condition_number}"
+            for c in data.conditions
+        }
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_model_name = data.model_name.replace(":", "-").replace("/", "-")
@@ -470,6 +475,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             "pid",
             "persona_summary",
             "condition",
+            "condition_name",
             "condition_stimuli",
             "model_name",
             "temperature",
@@ -543,6 +549,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 "pid": pid,
                 "persona_summary": persona,
                 "condition": condition_number,
+                "condition_name": condition_name_lookup[condition_number],
                 "condition_stimuli": stimuli,
                 "model_name": data.model_name,
                 "temperature": data.temperature,
