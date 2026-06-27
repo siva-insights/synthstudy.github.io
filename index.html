@@ -1060,30 +1060,20 @@ Important rules:
     async function updateInputEstimate() {
       const selectedModelName = getSelectedModelName();
       const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
+      const questionNumbers = getExistingQuestionNumbers();
+      const personaSelection = document.getElementById("personaSelection")?.value || "default";
+      const includePersona = personaSelection !== "none";
+      const personaMaxWords = await getPersonaMaxWords();
+      const personaPlaceholder = includePersona ? Array(personaMaxWords).fill("x").join(" ") : "";
 
-      let maxStimuliWords = 0;
+      let estimatedTotalWords = 0;
 
       for (let c = 1; c <= conditionCount; c++) {
         const stimuliText = document.getElementById(`condition${c}Stimuli`)?.value || "";
-        maxStimuliWords = Math.max(maxStimuliWords, countWords(stimuliText));
+        const embeddedStimuli = buildEmbeddedStimuliText(stimuliText, questionNumbers);
+        const prompt = buildPreviewPrompt(personaPlaceholder, embeddedStimuli, questionNumbers, includePersona);
+        estimatedTotalWords = Math.max(estimatedTotalWords, countWords(prompt));
       }
-
-      let questionWords = 0;
-
-      const questionNumbers = getExistingQuestionNumbers();
-
-      for (const q of questionNumbers) {
-        questionWords += countWords(document.getElementById(`question${q}`)?.value || "");
-
-        const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`)?.value) || 0;
-
-        for (let s = 1; s <= scaleCount; s++) {
-          questionWords += countWords(document.getElementById(`question${q}Scale${s}`)?.value || "");
-        }
-      }
-
-      const personaMaxWords = await getPersonaMaxWords();
-      const estimatedTotalWords = personaMaxWords + maxStimuliWords + questionWords;
 
       let message = `
         Estimated prompt length per synthetic respondent: ${estimatedTotalWords.toLocaleString()} words
