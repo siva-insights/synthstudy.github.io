@@ -1239,6 +1239,10 @@ Important rules:
       return `[Q${questionNumber}]\nQuestion: ${question}\nAllowed response codes: 1 to ${scaleCount}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
     }
 
+    function getEmbeddedQuestionNumbers(stimuli, questionNumbers) {
+      return questionNumbers.filter((q) => stimuli.includes(`{Q${q}}`));
+    }
+
     function buildEmbeddedStimuliText(stimuli, questionNumbers) {
       let embeddedStimuli = stimuli;
 
@@ -1457,10 +1461,11 @@ Important rules:
     }
 
     function buildPreviewOutputRow(preview, persona, respondentId = 1) {
+      const embeddedQuestionNumbers = getEmbeddedQuestionNumbers(preview.stimuli, preview.questionNumbers);
       const prompt = buildPreviewPrompt(
         persona.persona,
         preview.embeddedStimuli,
-        preview.questionNumbers,
+        embeddedQuestionNumbers,
         persona.includePersona
       );
 
@@ -2154,9 +2159,10 @@ Important rules:
 
     async function processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers) {
       const startTime = Date.now();
+      const embeddedQuestionNumbers = getEmbeddedQuestionNumbers(row.condition_stimuli, questionNumbers);
 
       try {
-        const result = await getValidCloudResponse(cloudModelProvider, apiKey, modelName, row.prompt, temperature, questionNumbers);
+        const result = await getValidCloudResponse(cloudModelProvider, apiKey, modelName, row.prompt, temperature, embeddedQuestionNumbers);
 
         row.validation = result.validation;
         row.invalid_questions = result.invalidQuestions.join(",");
@@ -2168,7 +2174,7 @@ Important rules:
         }
       } catch (error) {
         row.validation = "error";
-        row.invalid_questions = questionNumbers.map((q) => `Q${q}`).join(",");
+        row.invalid_questions = embeddedQuestionNumbers.map((q) => `Q${q}`).join(",");
         row.raw_response = String(error.message || error);
       } finally {
         row.seconds_taken = ((Date.now() - startTime) / 1000).toFixed(3);
