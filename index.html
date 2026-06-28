@@ -8,7 +8,7 @@
     h1 { text-align: center; color: #1e3a8a; margin-bottom: 12px; }
     .cite-button-wrap { text-align: center; margin-bottom: 30px; }
     label { font-weight: bold; display: block; margin-top: 18px; margin-bottom: 6px; }
-    input[type="text"], input[type="number"], textarea, select {
+    input[type="text"], input[type="number"], input[type="password"], textarea, select {
       width: 100%;
       padding: 10px;
       border: 1px solid #cbd5e1;
@@ -244,12 +244,19 @@
       <h2>Select LLM Model Provider</h2>
       <label>
         <input type="radio" name="llmProviderType" value="local" onchange="toggleLlmProviderSections(); updateInputEstimate();">
-        Open LLM using Local Machine
+        Open LLM (Local Machine)
       </label>
+      <div class="note">
+        Download an open-source model to your computer and generate responses entirely offline. No API key or usage fees required.
+      </div>
+
       <label>
         <input type="radio" name="llmProviderType" value="cloud" onchange="toggleLlmProviderSections(); updateInputEstimate();">
-        Proprietary LLM using Cloud
+        Proprietary LLM (Cloud)
       </label>
+      <div class="note">
+        Connect to commercial models (e.g., GPT-5.5, Opus 4.5, Gemini 2.5 Pro). Requires an API key, and you will be billed by the model provider for usage.
+      </div>
     </div>
 
     <div id="localModelSection" class="section" hidden>
@@ -1574,7 +1581,7 @@ Important rules:
       const personaSelection = document.getElementById("personaSelection")?.value || "default";
 
       const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
-      const providerLabel = selectedProvider?.value === "cloud" ? "Proprietary LLM using Cloud" : "Open LLM using Local Machine";
+      const providerLabel = selectedProvider?.value === "cloud" ? "Proprietary LLM (Cloud)" : "Open LLM (Local Machine)";
       const modelName = getSelectedModelName() || "Not selected";
 
       let personaLabel = "Default persona (Toubia et al.)";
