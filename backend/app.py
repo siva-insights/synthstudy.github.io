@@ -508,13 +508,19 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             condition_number = condition_numbers[i]
             stimuli = condition_lookup[condition_number]
 
+            # Only the questions actually embedded ({Qn} present) in this condition's
+            # stimuli are shown to the model, so only those should be expected back.
+            embedded_questions = [
+                q for q in data.questions if f"{{Q{q.question_number}}}" in stimuli
+            ]
+
             pid = df_personas.loc[i, "pid"]
             persona = df_personas.loc[i, "persona_summary"]
 
             prompt = build_prompt(
                 persona,
                 stimuli,
-                data.questions,
+                embedded_questions,
                 data.generic_instruction,
                 include_persona=use_personas
             )
@@ -525,7 +531,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 data.model_name,
                 prompt,
                 data.temperature,
-                data.questions,
+                embedded_questions,
                 max_retries=5
             )
 
