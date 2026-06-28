@@ -245,18 +245,22 @@
       <label>
         <input type="radio" name="llmProviderType" value="local" onchange="toggleLlmProviderSections(); updateInputEstimate();">
         Open LLM (Local Machine)
+        <span class="tooltip">?
+          <span class="tooltip-text">
+            Download an open-source model to your computer and generate responses entirely offline. No API key or usage fees required.
+          </span>
+        </span>
       </label>
-      <div class="note">
-        Download an open-source model to your computer and generate responses entirely offline. No API key or usage fees required.
-      </div>
 
       <label>
         <input type="radio" name="llmProviderType" value="cloud" onchange="toggleLlmProviderSections(); updateInputEstimate();">
         Proprietary LLM (Cloud)
+        <span class="tooltip">?
+          <span class="tooltip-text">
+            Connect to commercial models (e.g., GPT-5.5, Opus 4.5, Gemini 2.5 Pro). Requires an API key, and you will be billed by the model provider for usage.
+          </span>
+        </span>
       </label>
-      <div class="note">
-        Connect to commercial models (e.g., GPT-5.5, Opus 4.5, Gemini 2.5 Pro). Requires an API key, and you will be billed by the model provider for usage.
-      </div>
     </div>
 
     <div id="localModelSection" class="section" hidden>
@@ -1511,6 +1515,19 @@ Important rules:
       return previews.reduce((total, preview) => total + getPreviewSampleCount(preview), 0);
     }
 
+    function getPreviewTotalApproxTokens() {
+      let respondentOffset = 0;
+      let totalPromptWords = 0;
+
+      for (const preview of previews) {
+        const rows = buildPreviewOutputRows(preview, respondentOffset);
+        respondentOffset += rows.length;
+        totalPromptWords += rows.reduce((sum, row) => sum + (parseInt(row.prompt_words) || 0), 0);
+      }
+
+      return Math.round(totalPromptWords * 1.34);
+    }
+
     function buildPreviewOutputRows(preview, respondentOffset = 0) {
       return preview.personas.map((persona, index) =>
         buildPreviewOutputRow(preview, persona, respondentOffset + index + 1)
@@ -1733,6 +1750,7 @@ Important rules:
         <div class="preview-box">
           <div class="preview-title">Preview: Condition ${preview.condition}</div>
           <p><strong>Total Samples:</strong> ${escapeHTML(String(getPreviewTotalSamples()))}</p>
+          <p><strong>Approximate Total Number of Tokens used in this study:</strong> ${escapeHTML(String(getPreviewTotalApproxTokens()))}</p>
 
           <div class="preview-nav">
             <button type="button" onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
