@@ -362,6 +362,7 @@
         <option value="openai-gpt">OpenAI GPT</option>
         <option value="google-gemini">Google Gemini</option>
         <option value="anthropic-claude">Anthropic Claude</option>
+        <option value="openrouter">OpenRouter</option>
       </select>
 
       <div id="openAiSettings" hidden>
@@ -413,6 +414,62 @@
         <input type="text" id="claudeModelChoiceOther" name="claudeModelChoiceOther" placeholder="Enter model name" oninput="updateInputEstimate()" hidden>
       </div>
 
+      <div id="openRouterSettings" hidden>
+        <label for="openRouterApiKey">Enter OpenRouter API key:</label>
+        <input type="password" id="openRouterApiKey" name="openRouterApiKey" placeholder="Enter OpenRouter API key">
+
+        <label for="openRouterModelChoice">Select OpenRouter model:</label>
+        <select id="openRouterModelChoice" name="openRouterModelChoice" onchange="toggleOtherModelInput('openRouterModelChoice'); updateInputEstimate();">
+          <option value="">Select a model</option>
+          <optgroup label="— Free Models —">
+            <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 8B (Free)</option>
+            <option value="meta-llama/llama-3.2-3b-instruct:free">Llama 3.2 3B (Free)</option>
+            <option value="google/gemma-3-12b-it:free">Gemma 3 12B (Free)</option>
+            <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
+            <option value="deepseek/deepseek-r1:free">DeepSeek R1 (Free)</option>
+            <option value="qwen/qwen-2.5-7b-instruct:free">Qwen 2.5 7B (Free)</option>
+          </optgroup>
+          <optgroup label="— OpenAI —">
+            <option value="openai/gpt-4.1">OpenAI GPT-4.1</option>
+            <option value="openai/gpt-4o">OpenAI GPT-4o</option>
+            <option value="openai/gpt-4o-mini">OpenAI GPT-4o mini</option>
+          </optgroup>
+          <optgroup label="— Anthropic —">
+            <option value="anthropic/claude-opus-4-5">Claude Opus 4.5</option>
+            <option value="anthropic/claude-sonnet-4-5">Claude Sonnet 4.5</option>
+            <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+            <option value="anthropic/claude-3-haiku">Claude 3 Haiku</option>
+          </optgroup>
+          <optgroup label="— Google —">
+            <option value="google/gemini-2.5-pro">Gemini 2.5 Pro</option>
+            <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
+            <option value="google/gemini-2.0-flash-001">Gemini 2.0 Flash</option>
+          </optgroup>
+          <optgroup label="— Meta Llama —">
+            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+            <option value="meta-llama/llama-3.1-70b-instruct">Llama 3.1 70B</option>
+            <option value="meta-llama/llama-3.1-405b-instruct">Llama 3.1 405B</option>
+          </optgroup>
+          <optgroup label="— Mistral —">
+            <option value="mistralai/mistral-large">Mistral Large</option>
+            <option value="mistralai/mixtral-8x7b-instruct">Mixtral 8x7B</option>
+          </optgroup>
+          <optgroup label="— DeepSeek —">
+            <option value="deepseek/deepseek-v3">DeepSeek V3</option>
+            <option value="deepseek/deepseek-r1">DeepSeek R1</option>
+          </optgroup>
+          <optgroup label="— Other Providers —">
+            <option value="qwen/qwen-2.5-72b-instruct">Qwen 2.5 72B</option>
+            <option value="cohere/command-r-plus">Cohere Command R+</option>
+            <option value="microsoft/phi-4">Microsoft Phi-4</option>
+            <option value="x-ai/grok-3">xAI Grok 3</option>
+            <option value="x-ai/grok-3-mini">xAI Grok 3 Mini</option>
+          </optgroup>
+          <option value="other">Other Model</option>
+        </select>
+        <input type="text" id="openRouterModelChoiceOther" name="openRouterModelChoiceOther" placeholder="Enter model name (e.g. provider/model-name)" oninput="updateInputEstimate()" hidden>
+      </div>
+
       <!-- <div class="note">Cloud LLM provider support is a placeholder for now. API integration is not yet available.</div> -->
     </div>
 
@@ -434,7 +491,7 @@
         </tr>
 
         <tr>
-          <td><label for="sampleCount">Enter Required Number of Samples per Condition:</label></td>
+          <td><label for="sampleCount">Enter Number of Samples per Condition:</label></td>
           <td><input type="number" id="sampleCount" min="1" required placeholder="Enter samples per condition" oninput="updateTotalSamples(); updateInputEstimate();"></td>
         </tr>
 
@@ -455,7 +512,30 @@
           </label></td>
           <td><input type="number" id="temperature" min="0" max="2" step="0.1" value="0"></td>
         </tr>
+
+        <tr>
+          <td><label for="personaSelection">Choose persona source:
+            <span class="tooltip">?
+              <span class="tooltip-text">
+                Default persona uses 2,058 unique human personas adapted from Toubia et al. (2025).
+              </span>
+            </span>
+          </label></td>
+          <td>
+            <select id="personaSelection" name="personaSelection" onchange="togglePersonaUpload(); updateInputEstimate();">
+              <option value="default">Default persona</option>
+              <option value="custom">Input persona</option>
+              <option value="none">No persona</option>
+            </select>
+          </td>
+        </tr>
       </table>
+
+      <div id="personaUploadSection" hidden>
+        <label for="personaSheet">Upload persona Excel sheet:</label>
+        <input type="file" id="personaSheet" name="personaSheet" accept=".xlsx,.xls" onchange="updateInputEstimate()">
+        <div class="note">Upload an Excel sheet with exactly two columns: <b>pid</b> and <b>persona</b>.</div>
+      </div>
     </div>
 
     <div id="conditionFields"></div>
@@ -580,12 +660,14 @@ Important rules:
       const openAiSettings = document.getElementById("openAiSettings");
       const geminiSettings = document.getElementById("geminiSettings");
       const claudeSettings = document.getElementById("claudeSettings");
+      const openRouterSettings = document.getElementById("openRouterSettings");
 
-      if (!cloudModelProvider || !openAiSettings || !geminiSettings || !claudeSettings) return;
+      if (!cloudModelProvider || !openAiSettings || !geminiSettings || !claudeSettings || !openRouterSettings) return;
 
       openAiSettings.hidden = cloudModelProvider.value !== "openai-gpt";
       geminiSettings.hidden = cloudModelProvider.value !== "google-gemini";
       claudeSettings.hidden = cloudModelProvider.value !== "anthropic-claude";
+      openRouterSettings.hidden = cloudModelProvider.value !== "openrouter";
     }
 
     function toggleOtherModelInput(selectId) {
@@ -607,7 +689,8 @@ Important rules:
       const cloudModelFieldByProvider = {
         "openai-gpt": "openAiModelChoice",
         "google-gemini": "geminiModelChoice",
-        "anthropic-claude": "claudeModelChoice"
+        "anthropic-claude": "claudeModelChoice",
+        "openrouter": "openRouterModelChoice"
       };
 
       const cloudModelProvider = document.getElementById("cloudModelProvider")?.value || "";
@@ -625,6 +708,7 @@ Important rules:
     }
 
     let questionCount = 0;
+    let _showPreviewCallId = 0;
 
     const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsaGh0Zm1iamRicnJ0Zmlwa2h3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMjM2MzcsImV4cCI6MjA5Nzc5OTYzN30.Qfw7pjfGFYgnwO1J-P-jePmk8pFMrchIAZ_mfE-VB14";
@@ -1175,29 +1259,6 @@ Important rules:
 
       let html = `
         <div class="section">
-          <h2>Persona Selection</h2>
-
-          <label for="personaSelection">Choose persona source:
-            <span class="tooltip">?
-              <span class="tooltip-text">
-                Default persona uses 2,058 unique human personas adapted from Toubia et al. (2025).
-              </span>
-            </span>
-          </label>
-          <select id="personaSelection" name="personaSelection" onchange="togglePersonaUpload(); updateInputEstimate();">
-            <option value="default">Default persona</option>
-            <option value="custom">Input persona</option>
-            <option value="none">No persona</option>
-          </select>
-
-          <div id="personaUploadSection" hidden>
-            <label for="personaSheet">Upload persona Excel sheet:</label>
-            <input type="file" id="personaSheet" name="personaSheet" accept=".xlsx,.xls" onchange="updateInputEstimate()">
-            <div class="note">Upload an Excel sheet with exactly two columns: <b>pid</b> and <b>persona</b>.</div>
-          </div>
-        </div>
-
-        <div class="section">
           <h2>Stimuli</h2>
 
           <div class="note">
@@ -1705,9 +1766,12 @@ Important rules:
     }
 
     async function showPreview(downloadAfterPreview = false) {
+      const myCallId = ++_showPreviewCallId;
+      previews = [];
+      document.getElementById("previewArea").innerHTML = "";
+
       const conditionCount = parseInt(document.getElementById("conditionCount").value);
       const sampleCount = document.getElementById("sampleCount").value || "";
-      previews = [];
 
       if (!conditionCount || conditionCount < 1) {
         alert("Please enter the number of conditions first.");
@@ -1731,6 +1795,8 @@ Important rules:
         alert(error.message || "Could not prepare personas for preview.");
         return;
       }
+
+      if (myCallId !== _showPreviewCallId) return;
 
       for (let c = 1; c <= conditionCount; c++) {
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
@@ -2063,13 +2129,15 @@ Important rules:
     const CLOUD_PROVIDER_CONCURRENCY = {
       "openai-gpt": 5,
       "google-gemini": 5,
-      "anthropic-claude": 5
+      "anthropic-claude": 5,
+      "openrouter": 5
     };
 
     const CLOUD_API_KEY_FIELD_BY_PROVIDER = {
       "openai-gpt": "openAiApiKey",
       "google-gemini": "geminiApiKey",
-      "anthropic-claude": "claudeApiKey"
+      "anthropic-claude": "claudeApiKey",
+      "openrouter": "openRouterApiKey"
     };
 
     async function callOpenAiChat(apiKey, modelName, prompt, temperature) {
@@ -2146,6 +2214,31 @@ Important rules:
       return data.content?.[0]?.text || "";
     }
 
+    async function callOpenRouterChat(apiKey, modelName, prompt, temperature) {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://synthstudy.github.io",
+          "X-Title": "SEDG"
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [{ role: "user", content: prompt }],
+          temperature: temperature
+        })
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`OpenRouter API error (${response.status}): ${errorBody}`);
+      }
+
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content || "";
+    }
+
     async function callCloudModel(cloudModelProvider, apiKey, modelName, prompt, temperature) {
       if (cloudModelProvider === "openai-gpt") {
         return callOpenAiChat(apiKey, modelName, prompt, temperature);
@@ -2157,6 +2250,10 @@ Important rules:
 
       if (cloudModelProvider === "anthropic-claude") {
         return callClaudeChat(apiKey, modelName, prompt, temperature);
+      }
+
+      if (cloudModelProvider === "openrouter") {
+        return callOpenRouterChat(apiKey, modelName, prompt, temperature);
       }
 
       throw new Error("Unsupported cloud provider.");
