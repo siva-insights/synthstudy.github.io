@@ -225,6 +225,8 @@
       overflow-x: auto;
     }
 
+    .scale-type-row { display: flex; align-items: center; gap: 20px; margin-top: 12px; flex-wrap: wrap; }
+    .scale-type-option { font-weight: normal; display: inline-flex; align-items: center; gap: 6px; margin-top: 0; cursor: pointer; }
     .scale-setup-row { display: flex; gap: 16px; margin-top: 12px; align-items: flex-start; }
     .scale-setup-row > div { flex: 1; }
     .scale-setup-row label { margin-top: 0; }
@@ -256,7 +258,7 @@
         Open LLM (Local Machine)
         <span class="tooltip">?
           <span class="tooltip-text">
-            Download an open-source model to your computer and generate responses entirely offline. No API key or usage fees required.
+            Download an open large language model of your choice to your computer and generate synthetic responses entirely offline. No API key or usage fees required.
           </span>
         </span>
       </label>
@@ -510,20 +512,7 @@
         </tr>
 
         <tr>
-          <td><label for="temperature">Response Randomness / Temperature:
-            <span class="tooltip">?
-              <span class="tooltip-text">
-                The Twin-2K-500 dataset contains 2,058 unique personas. If your requested sample size exceeds the number of unique personas, some personas may be reused. Setting temperature above 0 can help produce less repetitive responses from repeated personas.
-                <br><br>
-                For OpenAI reasoning models, such as GPT-5.5, GPT-5.4, and GPT-5.4 mini, the API only accepts temperature = 1. Other models offered here (GPT-4.1, GPT-4.1 mini, GPT-4o mini, Gemini 2.5 Pro/Flash/Flash-Lite, and the Claude Opus/Sonnet/Haiku 4 models) do not have this restriction and support the full temperature range below.
-              </span>
-            </span>
-          </label></td>
-          <td><input type="number" id="temperature" min="0" max="2" step="0.1" value="0"></td>
-        </tr>
-
-        <tr>
-          <td><label for="personaSelection">Choose persona source:
+          <td><label for="personaSelection">Choose Persona Source:
             <span class="tooltip">?
               <span class="tooltip-text">
                 <strong>Default persona:</strong> Uses 2,058 unique human personas from Toubia et al. (2025).<br><br>
@@ -540,12 +529,25 @@
             </select>
           </td>
         </tr>
+
+        <tr>
+          <td><label for="temperature">Response Randomness / Temperature:
+            <span class="tooltip">?
+              <span class="tooltip-text">
+                Note: If the total sample size is larger than the number of input personas, personas will be selected with replacement until the required sample size is reached. Setting temperature above 0 can help reduce repeated responses.
+                <br><br>
+                For Open LLMs, most local models support a temperature range of 0.0–2.0; however, 0.0–1.0 is recommended for behavioral simulations. For OpenAI reasoning models, such as GPT-5.5, GPT-5.4, and GPT-5.4 mini, temperature must be set to 1. Other models listed here support the full temperature range below.
+              </span>
+            </span>
+          </label></td>
+          <td><input type="number" id="temperature" min="0" max="2" step="0.1" value="0"></td>
+        </tr>
       </table>
 
       <div id="personaUploadSection" hidden>
         <label for="personaSheet">Upload persona Excel sheet:</label>
         <input type="file" id="personaSheet" name="personaSheet" accept=".xlsx,.xls" onchange="updateInputEstimate()">
-        <div class="note">Upload an Excel sheet with exactly two columns: <b>pid</b> and <b>persona</b>.</div>
+        <div class="note">Upload an Excel file with exactly two columns: <b>pid</b> (participant ID) and <b>persona</b> (participant description).</div>
       </div>
     </div>
 
@@ -926,6 +928,20 @@ Important rules:
             oninput="updateInputEstimate()"
             placeholder="Enter question ${questionCount}">
     
+          <div class="scale-type-row">
+            <label style="margin-top:0;font-weight:bold;">Scale Type:</label>
+            <label class="scale-type-option">
+              <input type="radio" name="question${questionCount}ScaleType" value="point"
+                     onchange="showScaleOptions(${questionCount})" checked>
+              Point scale
+            </label>
+            <label class="scale-type-option">
+              <input type="radio" name="question${questionCount}ScaleType" value="continuous"
+                     onchange="showScaleOptions(${questionCount})">
+              Continuous scale
+            </label>
+          </div>
+
           <div class="scale-setup-row">
             <div>
               <label style="margin-top:0;">Number of scale points:</label>
@@ -955,6 +971,11 @@ Important rules:
       if (prefill) {
         document.getElementById(`question${questionCount}`).value = prefill.questionText || "";
 
+        if (prefill.scaleType) {
+          const radio = document.querySelector(`input[name="question${questionCount}ScaleType"][value="${prefill.scaleType}"]`);
+          if (radio) radio.checked = true;
+        }
+
         if (prefill.scaleStart !== undefined && prefill.scaleStart !== null) {
           const startInput = document.getElementById(`question${questionCount}ScaleStart`);
           if (startInput) startInput.value = String(prefill.scaleStart);
@@ -977,10 +998,16 @@ Important rules:
       updateInputEstimate();
     }
 
+    function getQuestionScaleType(questionNumber) {
+      const radio = document.querySelector(`input[name="question${questionNumber}ScaleType"]:checked`);
+      return radio?.value || "point";
+    }
+
     function getQuestionCardData(questionNumber) {
       const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value) || 0;
       const scaleStartParsed = parseInt(document.getElementById(`question${questionNumber}ScaleStart`)?.value);
       const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
+      const scaleType = getQuestionScaleType(questionNumber);
       const scaleLabels = [];
 
       for (let s = 1; s <= scaleCount; s++) {
@@ -991,6 +1018,7 @@ Important rules:
         questionText: document.getElementById(`question${questionNumber}`)?.value || "",
         scaleCount: scaleCount,
         scaleStart: scaleStart,
+        scaleType: scaleType,
         scaleLabels: scaleLabels
       };
     }
@@ -1050,6 +1078,8 @@ Important rules:
       const scaleStartParsed = parseInt(document.getElementById(`question${sourceQuestionNumber}ScaleStart`)?.value);
       const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
 
+      const scaleType = getQuestionScaleType(sourceQuestionNumber);
+
       const scaleLabels = [];
 
       for (let s = 1; s <= scaleCount; s++) {
@@ -1061,6 +1091,7 @@ Important rules:
         questionText: questionText,
         scaleCount: scaleCount,
         scaleStart: scaleStart,
+        scaleType: scaleType,
         scaleLabels: scaleLabels
       });
     }
@@ -1324,30 +1355,58 @@ Important rules:
       const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value);
       const scaleStartParsed = parseInt(document.getElementById(`question${questionNumber}ScaleStart`)?.value);
       const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
+      const scaleType = getQuestionScaleType(questionNumber);
       const container = document.getElementById(`question${questionNumber}ScaleOptions`);
       container.innerHTML = "";
 
       if (!scaleCount || scaleCount < 2) return;
 
-      let html = '<div class="scale-horizontal">';
-      for (let s = 1; s <= scaleCount; s++) {
-        const code = scaleStart + (s - 1);
-        const isEndpoint = (s === 1 || s === scaleCount);
+      const scaleEnd = scaleStart + scaleCount - 1;
+
+      if (scaleType === "continuous") {
+        let html = '<div class="scale-horizontal">';
         html += `
           <div class="scale-col">
-            <div class="scale-code">${code}</div>
-            <input type="text"
-              class="scale-label-input"
-              ${isEndpoint ? 'required' : ''}
-              id="question${questionNumber}Scale${s}"
+            <div class="scale-code">${scaleStart}</div>
+            <input type="text" required class="scale-label-input"
+              id="question${questionNumber}Scale1"
               oninput="updateInputEstimate()"
-              placeholder="${isEndpoint ? 'Required' : 'Optional'}">
+              placeholder="Required">
+          </div>
+          <div class="scale-col" style="justify-content:center;color:#94a3b8;font-size:20px;padding-top:18px;">···</div>
+          <div class="scale-col">
+            <div class="scale-code">${scaleEnd}</div>
+            <input type="text" required class="scale-label-input"
+              id="question${questionNumber}Scale${scaleCount}"
+              oninput="updateInputEstimate()"
+              placeholder="Required">
           </div>
         `;
+        html += '</div>';
+        html += '<div class="scale-hint">Labels for both endpoints are required.</div>';
+        container.innerHTML = html;
+      } else {
+        let html = '<div class="scale-horizontal">';
+        for (let s = 1; s <= scaleCount; s++) {
+          const code = scaleStart + (s - 1);
+          const isEndpoint = (s === 1 || s === scaleCount);
+          html += `
+            <div class="scale-col">
+              <div class="scale-code">${code}</div>
+              <input type="text"
+                class="scale-label-input"
+                ${isEndpoint ? 'required' : ''}
+                id="question${questionNumber}Scale${s}"
+                oninput="updateInputEstimate()"
+                placeholder="${isEndpoint ? 'Required' : 'Optional'}">
+            </div>
+          `;
+        }
+        html += '</div>';
+        html += '<div class="scale-hint">First and last labels are required &middot; Middle labels are optional</div>';
+        container.innerHTML = html;
       }
-      html += '</div>';
-      html += '<div class="scale-hint">First and last labels are required &middot; Middle labels are optional</div>';
-      container.innerHTML = html;
+
       updateInputEstimate();
     }
 
@@ -1374,12 +1433,17 @@ Important rules:
       const scaleStartParsed = parseInt(document.getElementById(`question${questionNumber}ScaleStart`)?.value);
       const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
       const scaleEnd = scaleStart + scaleCount - 1;
+      const scaleType = getQuestionScaleType(questionNumber);
       const scaleLabels = getScaleLabels(questionNumber);
       const scaleText = scaleLabels
         .map((label) => label.replace(/^(-?\d+)-/, "$1 = "))
         .join("\n");
 
-      return `[Q${questionNumber}]\nQuestion: ${question}\nAllowed response codes: ${scaleStart} to ${scaleEnd}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
+      const rangeInstruction = scaleType === "continuous"
+        ? `Allowed response range: ${scaleStart} to ${scaleEnd}\nPlease select a number in the range.`
+        : `Allowed response codes: ${scaleStart} to ${scaleEnd}\nPlease select an integer in the range.`;
+
+      return `[Q${questionNumber}]\nQuestion: ${question}\n${rangeInstruction}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
     }
 
     function getEmbeddedQuestionNumbers(stimuli, questionNumbers) {
@@ -1998,7 +2062,8 @@ Important rules:
           question_number: q,
           question_text: questionText,
           scale_points: scalePoints,
-          scale_start: scaleStart
+          scale_start: scaleStart,
+          scale_type: getQuestionScaleType(q)
         });
       }
     
@@ -2319,11 +2384,12 @@ Important rules:
         const scaleStartParsed = parseInt(document.getElementById(`question${q}ScaleStart`)?.value);
         const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
         const scaleEnd = scaleStart + scaleCount - 1;
-        const pattern = new RegExp(`Q${q}\\s*=\\s*(-?\\d+)`, "i");
+        const isContinuous = getQuestionScaleType(q) === "continuous";
+        const pattern = new RegExp(`Q${q}\\s*=\\s*(-?\\d+\\.?\\d*)`, "i");
         const match = rawText.match(pattern);
 
         if (match) {
-          const value = parseInt(match[1]);
+          const value = isContinuous ? parseFloat(match[1]) : parseInt(match[1]);
           answers[`Q${q}`] = value;
 
           if (!(value >= scaleStart && value <= scaleEnd)) {

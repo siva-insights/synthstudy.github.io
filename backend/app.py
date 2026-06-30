@@ -92,6 +92,7 @@ class Question(BaseModel):
     question_text: str
     scale_points: list[str]
     scale_start: int = 1
+    scale_type: str = "point"
 
 
 class PersonaRecord(BaseModel):
@@ -233,10 +234,21 @@ def build_prompt(
             [f"{q.scale_start + i} = {label}" for i, label in enumerate(q.scale_points)]
         )
 
+        if q.scale_type == "continuous":
+            range_instruction = (
+                f"Allowed response range: {min_code} to {max_code}\n"
+                f"Please select a number in the range."
+            )
+        else:
+            range_instruction = (
+                f"Allowed response codes: {min_code} to {max_code}\n"
+                f"Please select an integer in the range."
+            )
+
         embedded_question = f"""
 [Q{q.question_number}]
 Question: {q.question_text}
-Allowed response codes: {min_code} to {max_code}
+{range_instruction}
 Response scale:
 {scale_text}
 [/Q{q.question_number}]
@@ -362,12 +374,13 @@ def parse_answers(raw_text, questions):
         q_num = q.question_number
         min_code = q.scale_start
         max_code = q.scale_start + len(q.scale_points) - 1
+        is_continuous = q.scale_type == "continuous"
 
-        pattern = rf"Q{q_num}\s*=\s*(-?\d+)"
+        pattern = rf"Q{q_num}\s*=\s*(-?\d+\.?\d*)"
         match = re.search(pattern, raw_text, re.IGNORECASE)
 
         if match:
-            value = int(match.group(1))
+            value = float(match.group(1)) if is_continuous else int(match.group(1))
             answers[f"Q{q_num}"] = value
 
             if not (min_code <= value <= max_code):
