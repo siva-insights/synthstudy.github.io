@@ -91,6 +91,7 @@ class Question(BaseModel):
     question_number: int
     question_text: str
     scale_points: list[str]
+    scale_start: int = 1
 
 
 class PersonaRecord(BaseModel):
@@ -225,11 +226,11 @@ def build_prompt(
     question_lookup = {}
 
     for q in questions:
-        min_code = 1
-        max_code = len(q.scale_points)
+        min_code = q.scale_start
+        max_code = q.scale_start + len(q.scale_points) - 1
 
         scale_text = "\n".join(
-            [f"{i + 1} = {label}" for i, label in enumerate(q.scale_points)]
+            [f"{q.scale_start + i} = {label}" for i, label in enumerate(q.scale_points)]
         )
 
         embedded_question = f"""
@@ -359,23 +360,19 @@ def parse_answers(raw_text, questions):
 
     for q in questions:
         q_num = q.question_number
-        max_code = len(q.scale_points)
+        min_code = q.scale_start
+        max_code = q.scale_start + len(q.scale_points) - 1
 
-        # Allows normal numbers and negative numbers, so invalid values are still captured
         pattern = rf"Q{q_num}\s*=\s*(-?\d+)"
         match = re.search(pattern, raw_text, re.IGNORECASE)
 
         if match:
             value = int(match.group(1))
-
-            # Store the value even if invalid
             answers[f"Q{q_num}"] = value
 
-            # But mark it invalid if outside the allowed range
-            if not (1 <= value <= max_code):
+            if not (min_code <= value <= max_code):
                 invalid_questions.append(f"Q{q_num}")
         else:
-            # No answer found
             answers[f"Q{q_num}"] = ""
             invalid_questions.append(f"Q{q_num}")
 
@@ -423,7 +420,7 @@ def create_docx(data, filepath):
     doc.add_heading("Questions and Response Scales", level=2)
     for q in data.questions:
         doc.add_heading(f"Q{q.question_number}: {q.question_text}", level=3)
-        for i, label in enumerate(q.scale_points, start=1):
+        for i, label in enumerate(q.scale_points, start=q.scale_start):
             doc.add_paragraph(f"{i} = {label}")
 
     doc.save(filepath)

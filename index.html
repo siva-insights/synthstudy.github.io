@@ -224,6 +224,15 @@
       font-size: 13px;
       overflow-x: auto;
     }
+
+    .scale-setup-row { display: flex; gap: 16px; margin-top: 12px; align-items: flex-start; }
+    .scale-setup-row > div { flex: 1; }
+    .scale-setup-row label { margin-top: 0; }
+    .scale-horizontal { display: flex; gap: 8px; overflow-x: auto; margin-top: 10px; padding-bottom: 6px; }
+    .scale-col { display: flex; flex-direction: column; align-items: center; min-width: 72px; }
+    .scale-code { font-weight: bold; color: #1e3a8a; margin-bottom: 4px; font-size: 14px; }
+    .scale-label-input { width: 72px; padding: 6px 4px; font-size: 12px; text-align: center; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+    .scale-hint { font-size: 12px; color: #64748b; margin-top: 6px; }
   </style>
 </head>
 
@@ -241,7 +250,7 @@
     -->
 
     <div class="section">
-      <h2>Select LLM Model Provider</h2>
+      <h2>Select LLM Provider</h2>
       <label>
         <input type="radio" name="llmProviderType" value="local" onchange="toggleLlmProviderSections(); updateInputEstimate();">
         Open LLM (Local Machine)
@@ -264,7 +273,7 @@
     </div>
 
     <div id="localModelSection" class="section" hidden>
-      <h2>
+      <h2 style="text-align: center;">
         OPEN LLM SYNTHETIC EXPERIMENTAL DATA GENERATOR (OLSEDG)
       </h2>
 
@@ -517,7 +526,9 @@
           <td><label for="personaSelection">Choose persona source:
             <span class="tooltip">?
               <span class="tooltip-text">
-                Default persona uses 2,058 unique human personas adapted from Toubia et al. (2025).
+                <strong>Default persona:</strong> Uses 2,058 unique human personas from Toubia et al. (2025).<br><br>
+                <strong>Input persona:</strong> Uses personas provided by the user.<br><br>
+                <strong>No persona:</strong> The model answers the survey directly without mimicking a persona.
               </span>
             </span>
           </label></td>
@@ -915,12 +926,26 @@ Important rules:
             oninput="updateInputEstimate()"
             placeholder="Enter question ${questionCount}">
     
-          <label>What response scale would you like to use for this question?</label>
-          <input type="number" min="2" max="20"
-            id="question${questionCount}ScaleCount"
-            placeholder="Enter number of response scale points"
-            oninput="showScaleOptions(${questionCount}, this.value)">
-    
+          <div class="scale-setup-row">
+            <div>
+              <label style="margin-top:0;">Number of scale points:</label>
+              <input type="number" min="2" max="20"
+                id="question${questionCount}ScaleCount"
+                placeholder="e.g. 5"
+                oninput="showScaleOptions(${questionCount})">
+            </div>
+            <div>
+              <label style="margin-top:0;">Starting code:
+                <span class="tooltip">?<span class="tooltip-text">The first numeric code on the scale. Default is 1. Set to -3 to create a scale that runs from -3 to 3.</span></span>
+              </label>
+              <input type="number"
+                id="question${questionCount}ScaleStart"
+                value="1"
+                placeholder="e.g. 1"
+                oninput="showScaleOptions(${questionCount})">
+            </div>
+          </div>
+
           <div id="question${questionCount}ScaleOptions"></div>
         </div>
       `;
@@ -929,12 +954,17 @@ Important rules:
     
       if (prefill) {
         document.getElementById(`question${questionCount}`).value = prefill.questionText || "";
-    
+
+        if (prefill.scaleStart !== undefined && prefill.scaleStart !== null) {
+          const startInput = document.getElementById(`question${questionCount}ScaleStart`);
+          if (startInput) startInput.value = String(prefill.scaleStart);
+        }
+
         if (prefill.scaleCount && prefill.scaleCount >= 2) {
           document.getElementById(`question${questionCount}ScaleCount`).value = prefill.scaleCount;
-    
-          showScaleOptions(questionCount, prefill.scaleCount);
-    
+
+          showScaleOptions(questionCount);
+
           for (let s = 1; s <= prefill.scaleCount; s++) {
             const scaleInput = document.getElementById(`question${questionCount}Scale${s}`);
             if (scaleInput) {
@@ -949,6 +979,8 @@ Important rules:
 
     function getQuestionCardData(questionNumber) {
       const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value) || 0;
+      const scaleStartParsed = parseInt(document.getElementById(`question${questionNumber}ScaleStart`)?.value);
+      const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
       const scaleLabels = [];
 
       for (let s = 1; s <= scaleCount; s++) {
@@ -958,6 +990,7 @@ Important rules:
       return {
         questionText: document.getElementById(`question${questionNumber}`)?.value || "",
         scaleCount: scaleCount,
+        scaleStart: scaleStart,
         scaleLabels: scaleLabels
       };
     }
@@ -1009,21 +1042,25 @@ Important rules:
 
     function duplicateQuestion(sourceQuestionNumber) {
       const questionText = document.getElementById(`question${sourceQuestionNumber}`)?.value || "";
-    
+
       const scaleCount = parseInt(
         document.getElementById(`question${sourceQuestionNumber}ScaleCount`)?.value
       ) || 0;
-    
+
+      const scaleStartParsed = parseInt(document.getElementById(`question${sourceQuestionNumber}ScaleStart`)?.value);
+      const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
+
       const scaleLabels = [];
-    
+
       for (let s = 1; s <= scaleCount; s++) {
         const label = document.getElementById(`question${sourceQuestionNumber}Scale${s}`)?.value || "";
         scaleLabels.push(label);
       }
-    
+
       addQuestion({
         questionText: questionText,
         scaleCount: scaleCount,
+        scaleStart: scaleStart,
         scaleLabels: scaleLabels
       });
     }
@@ -1074,8 +1111,7 @@ Important rules:
     
       } catch (error) {
         statusBox.innerHTML = `
-          ❌ OLSEDG Helper is not running.<br>
-          Please download and open OLSEDG Helper, then click <b>Check Setup</b> again.
+          ❌ OLSEDG Helper is not running. Please download and open OLSEDG Helper, then click <b>Check Setup</b> again. If you have already downloaded it, open the app first and then validate.
         `;
       }
     }
@@ -1284,40 +1320,49 @@ Important rules:
       document.getElementById("previewArea").innerHTML = "";
     }
 
-    function showScaleOptions(questionNumber, scaleCountValue) {
-      const scaleCount = parseInt(scaleCountValue);
+    function showScaleOptions(questionNumber) {
+      const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value);
+      const scaleStartParsed = parseInt(document.getElementById(`question${questionNumber}ScaleStart`)?.value);
+      const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
       const container = document.getElementById(`question${questionNumber}ScaleOptions`);
       container.innerHTML = "";
 
       if (!scaleCount || scaleCount < 2) return;
 
+      let html = '<div class="scale-horizontal">';
       for (let s = 1; s <= scaleCount; s++) {
-        const requiredText = (s === 1 || s === scaleCount) ? "required" : "optional";
-        const requiredAttribute = (s === 1 || s === scaleCount) ? "required" : "";
-
-        container.innerHTML += `
-          <div class="scale-option-row">
-            <label>Scale Point ${s} (${requiredText}):</label>
-            <input type="text" ${requiredAttribute}
+        const code = scaleStart + (s - 1);
+        const isEndpoint = (s === 1 || s === scaleCount);
+        html += `
+          <div class="scale-col">
+            <div class="scale-code">${code}</div>
+            <input type="text"
+              class="scale-label-input"
+              ${isEndpoint ? 'required' : ''}
               id="question${questionNumber}Scale${s}"
               oninput="updateInputEstimate()"
-              placeholder="Enter label for scale point ${s}">
+              placeholder="${isEndpoint ? 'Required' : 'Optional'}">
           </div>
         `;
       }
-
+      html += '</div>';
+      html += '<div class="scale-hint">First and last labels are required &middot; Middle labels are optional</div>';
+      container.innerHTML = html;
       updateInputEstimate();
     }
 
     function getScaleLabels(questionNumber) {
       const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value);
+      const scaleStartParsed = parseInt(document.getElementById(`question${questionNumber}ScaleStart`)?.value);
+      const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
       const scaleLabels = [];
 
       if (!scaleCount || scaleCount < 2) return scaleLabels;
 
       for (let s = 1; s <= scaleCount; s++) {
+        const code = scaleStart + (s - 1);
         const label = document.getElementById(`question${questionNumber}Scale${s}`)?.value.trim();
-        if (label) scaleLabels.push(`${s}-${label}`);
+        if (label) scaleLabels.push(`${code}-${label}`);
       }
 
       return scaleLabels;
@@ -1326,12 +1371,15 @@ Important rules:
     function buildEmbeddedQuestionText(questionNumber) {
       const question = document.getElementById(`question${questionNumber}`)?.value.trim() || "";
       const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value) || 0;
+      const scaleStartParsed = parseInt(document.getElementById(`question${questionNumber}ScaleStart`)?.value);
+      const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
+      const scaleEnd = scaleStart + scaleCount - 1;
       const scaleLabels = getScaleLabels(questionNumber);
       const scaleText = scaleLabels
-        .map((label) => label.replace(/^([0-9]+)-/, "$1 = "))
+        .map((label) => label.replace(/^(-?\d+)-/, "$1 = "))
         .join("\n");
 
-      return `[Q${questionNumber}]\nQuestion: ${question}\nAllowed response codes: 1 to ${scaleCount}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
+      return `[Q${questionNumber}]\nQuestion: ${question}\nAllowed response codes: ${scaleStart} to ${scaleEnd}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
     }
 
     function getEmbeddedQuestionNumbers(stimuli, questionNumbers) {
@@ -1730,7 +1778,7 @@ Important rules:
         children.push(new Paragraph({ text: `Q${q}: ${questionText}`, heading: HeadingLevel.HEADING_3 }));
 
         scaleLabels.forEach((label) => {
-          children.push(new Paragraph({ text: label.replace(/^([0-9]+)-/, "$1 = ") }));
+          children.push(new Paragraph({ text: label.replace(/^(-?\d+)-/, "$1 = ") }));
         });
       }
 
@@ -1757,7 +1805,7 @@ Important rules:
       scaleLabels.forEach((label) => {
         html += `<label class="scale-radio">
           <input type="radio" name="previewQ${questionNumber}">
-          ${escapeHTML(label)}
+          ${escapeHTML(label.replace(/^(-?\d+)-/, "$1 = "))}
         </label>`;
       });
 
@@ -1936,18 +1984,21 @@ Important rules:
       for (const q of questionNumbers) {
         const questionText = document.getElementById(`question${q}`).value.trim();
         const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`).value);
-    
+        const scaleStartParsed = parseInt(document.getElementById(`question${q}ScaleStart`)?.value);
+        const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
+
         const scalePoints = [];
-    
+
         for (let s = 1; s <= scaleCount; s++) {
           const label = document.getElementById(`question${q}Scale${s}`).value.trim();
           scalePoints.push(label);
         }
-    
+
         questions.push({
           question_number: q,
           question_text: questionText,
-          scale_points: scalePoints
+          scale_points: scalePoints,
+          scale_start: scaleStart
         });
       }
     
@@ -2265,6 +2316,9 @@ Important rules:
 
       for (const q of questionNumbers) {
         const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`)?.value) || 0;
+        const scaleStartParsed = parseInt(document.getElementById(`question${q}ScaleStart`)?.value);
+        const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
+        const scaleEnd = scaleStart + scaleCount - 1;
         const pattern = new RegExp(`Q${q}\\s*=\\s*(-?\\d+)`, "i");
         const match = rawText.match(pattern);
 
@@ -2272,7 +2326,7 @@ Important rules:
           const value = parseInt(match[1]);
           answers[`Q${q}`] = value;
 
-          if (!(value >= 1 && value <= scaleCount)) {
+          if (!(value >= scaleStart && value <= scaleEnd)) {
             invalidQuestions.push(`Q${q}`);
           }
         } else {
