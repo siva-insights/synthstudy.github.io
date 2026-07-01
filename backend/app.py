@@ -203,6 +203,7 @@ def check_model(model_name: str):
 
 
 def _sort_by_pid(df: pd.DataFrame) -> pd.DataFrame:
+    # Numeric sort first: string sort on IDs like "1","10","2" gives wrong order ("1","10","2")
     try:
         numeric = pd.to_numeric(df["pid"], errors="raise")
         return df.iloc[numeric.argsort().values].reset_index(drop=True)
@@ -212,9 +213,11 @@ def _sort_by_pid(df: pd.DataFrame) -> pd.DataFrame:
 
 def sample_personas(df_small: pd.DataFrame, total_needed: int, sequential: bool = False):
     if sequential:
-        # Repeat the list cyclically until total_needed rows are available, then take first N
+        # Tile the sorted list enough times so we can slice exactly total_needed rows;
+        # cyclic wrap handles the case where more respondents are needed than personas available
         reps = (total_needed // len(df_small)) + 1
         return pd.concat([df_small] * reps, ignore_index=True).iloc[:total_needed].reset_index(drop=True)
+    # Random sampling: sample with replacement only when the pool is smaller than what's needed
     replace = total_needed > len(df_small)
     return df_small.sample(
         n=total_needed,
@@ -273,6 +276,8 @@ def build_prompt(
     generic_instruction: Optional[str] = None,
     include_persona: bool = True
 ):
+    # Two default templates: one with persona framing, one without (persona_source="none").
+    # A user-supplied generic_instruction replaces both defaults entirely.
     question_lookup = {}
 
     for q in questions:
@@ -468,6 +473,8 @@ def parse_answers(raw_text, questions):
     return answers, validation, invalid_questions
     
 def get_valid_response_with_retries(model_name, prompt, temperature, questions, max_retries=5):
+    # Retry up to max_retries times; if the response is still invalid after all attempts,
+    # save the last attempt as-is so no respondent row is silently dropped from the output.
     last_raw_response = ""
     last_answers = {}
     last_validation = "invalid"
