@@ -25,9 +25,13 @@ from typing import Literal, Optional
 # Constants
 OLLAMA_URL = "http://localhost:11434"
 
-OUTPUT_DIR = Path.home() / "Downloads" / "SEDG_outputs"
+OUTPUT_DIR = Path.home() / "Desktop" / "SEDG_outputs"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-HISTORY_FILE = OUTPUT_DIR / "generation_history.json"
+
+# History stored in a hidden app folder so it doesn't appear in SEDG_outputs
+_HISTORY_DIR = Path.home() / ".sedg_helper"
+_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+HISTORY_FILE = _HISTORY_DIR / "generation_history.json"
 
 # FastAPI app setup + CORS
 app = FastAPI(title="OLSEDG Helper")
@@ -509,11 +513,8 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         num_conditions = len(data.conditions)
         samples_per_condition = data.sample_count_per_condition
 
-        csv_filename = f"OLSEDG_{total_needed}samples_{timestamp}.csv"
-        docx_filename = f"OLSEDG_INPUTS_{safe_model_name}_{num_conditions}cond_{samples_per_condition}ppc_{timestamp}.docx"
-
+        csv_filename = f"SEDG_{total_needed}samples_{timestamp}.csv"
         csv_path = OUTPUT_DIR / csv_filename
-        docx_path = OUTPUT_DIR / docx_filename
 
         question_columns = [f"Q{q.question_number}" for q in data.questions]
         columns = [
@@ -544,8 +545,6 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             completed=0,
             total=total_needed,
             percent=0,
-            csv_url=f"http://localhost:8000/outputs/{csv_filename}",
-            docx_url=None
         )
 
         job_start_time = time.time()
@@ -662,8 +661,6 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 message=f"{completed}/{total_needed} respondents completed. {pending} remaining."
             )
 
-        create_docx(data, docx_path)
-
         update_job(
             job_id,
             status="complete",
@@ -673,8 +670,6 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             pending=0,
             percent=100,
             estimated_remaining_seconds=0,
-            csv_url=f"http://localhost:8000/outputs/{csv_filename}",
-            docx_url=f"http://localhost:8000/outputs/{docx_filename}"
         )
 
     except Exception as e:
@@ -714,8 +709,6 @@ def generate(data: GenerateRequest):
         "message": "Generation started",
         "completed": 0,
         "total": total_needed,
-        "csv_url": None,
-        "docx_url": None
     }
 
     thread = Thread(target=run_generation_job, args=(job_id, data), daemon=True)
