@@ -908,7 +908,11 @@ if __name__ == "__main__":
     t1_lnk.bind("<Button-1>", lambda e: webbrowser.open("https://ollama.ai"))
 
     tk.Frame(p1, bg=C["card"], height=6).pack()
-    t1_btn = _btn(p1, "Check Again", lambda: Thread(target=do_check, daemon=True).start())
+    t1_btn = tk.Button(p1, text="Check Again",
+                       command=lambda: Thread(target=do_check, daemon=True).start(),
+                       bg=C["red_bg"], fg=C["red"], activebackground="#fecaca",
+                       relief="flat", bd=0, padx=14, pady=7,
+                       font=("Helvetica", 10, "bold"), cursor="hand2")
     t1_btn.pack(anchor="w")
 
     def do_check():
@@ -981,7 +985,10 @@ if __name__ == "__main__":
     t2_lnk.bind("<Button-1>", lambda e: webbrowser.open("https://synthstudy.vercel.app"))
 
     tk.Frame(p2, bg=C["card"], height=4).pack()
-    t2_btn = _btn(p2, "Install Model", lambda: None)
+    t2_btn = tk.Button(p2, text="Install Model", command=lambda: None,
+                       bg=C["red_bg"], fg=C["red"], activebackground="#fecaca",
+                       relief="flat", bd=0, padx=14, pady=7,
+                       font=("Helvetica", 10, "bold"), cursor="hand2")
     t2_btn.pack(anchor="w")
 
     def _check_installed_async(model_name, callback):
