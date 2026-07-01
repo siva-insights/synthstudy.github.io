@@ -1349,24 +1349,25 @@ Important rules:
       for (let i = 1; i <= count; i++) {
         html += `
           <div class="condition-card">
-            <label>Condition ${i} name:</label>
-            <input type="text" id="condition${i}Name" placeholder="Example: Control, Treatment A (defaults to Condition ${i})">
-
             <div class="question-inputs-row">
+              <div style="flex:2;">
+                <label>Condition ${i} name:</label>
+                <input type="text" id="condition${i}Name" placeholder="Example: Control, Treatment A (defaults to Condition ${i})">
+              </div>
               <div style="flex:0 0 auto;">
                 <label>Condition code:</label>
                 <input type="number" style="width:80px;" id="condition${i}Code" value="${i}">
               </div>
-              <div style="flex:1;">
+              <div style="flex:0 0 auto;">
                 <label>No. of Images:</label>
                 <input type="number" min="0" style="width:80px;" id="condition${i}ImageCount" value="0" placeholder="0" oninput="showConditionImages(${i})">
               </div>
             </div>
 
-            <div id="condition${i}Images"></div>
-
             <label>Enter stimuli for Condition ${i}:</label>
             <textarea id="condition${i}Stimuli" oninput="updateInputEstimate()" placeholder="Example: Intro text {Q1} follow-up text {Q2}"></textarea>
+
+            <div id="condition${i}Images"></div>
           </div>
         `;
       }
@@ -1382,10 +1383,10 @@ Important rules:
       container.innerHTML = "";
       for (let i = 1; i <= count; i++) {
         container.innerHTML += `
-          <div style="margin-top:10px;">
-            <label style="font-weight:bold;">Upload Image ${i}:</label>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:10px;">
+            <label style="font-weight:bold;white-space:nowrap;margin:0;">Upload Image ${i}:</label>
             <input type="file" accept="image/*" id="condition${conditionNumber}Image${i}"
-              style="display:block;margin-top:4px;font-size:14px;">
+              style="margin:0;font-size:14px;">
           </div>
         `;
       }
