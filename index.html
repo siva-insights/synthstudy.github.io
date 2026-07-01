@@ -338,11 +338,11 @@
         Select the language model for response generation:
         <span class="tooltip">?
           <span class="tooltip-text">
-            If your study includes images in the stimuli, select a model that supports image input.
+            If you manually enter a model name, make sure it is spelled exactly as required by the provider. For example, GPT40 is incorrect; GPT-4o is correct. If your study includes images in the stimuli, select a model that supports image input.
           </span>
         </span>
       </label>
-      <select id="modelChoice" name="modelChoice" onchange="updateInputEstimate(); updateModelCapabilityDisplay('modelChoice');">
+      <select id="modelChoice" name="modelChoice" onchange="updateInputEstimate(); updateModelCapabilityDisplay('modelChoice'); toggleOtherModelInput('modelChoice');">
         <option value="">Select a model</option>
         <option value="deepseek-r1:14b">deepseek-r1:14b</option>
         <option value="gemma3:4b">gemma3:4b</option>
@@ -355,7 +355,9 @@
         <option value="qwen2.5:7b-instruct">qwen2.5:7b-instruct</option>
         <option value="qwen2.5:14b">qwen2.5:14b</option>
         <option value="qwen3:14b">qwen3:14b</option>
+        <option value="other">Other Model</option>
       </select>
+      <input type="text" id="modelChoiceOther" name="modelChoiceOther" placeholder="Enter model name (e.g. llama3.2:1b)" oninput="updateInputEstimate()" hidden>
       <div id="modelChoiceCapability" class="model-capability-info"></div>
       <div class="helper-buttons">
         <button onclick="checkSetup()">Validate Setup</button>
@@ -380,7 +382,7 @@
         <label for="openAiApiKey">Enter OpenAI API key:</label>
         <input type="password" id="openAiApiKey" name="openAiApiKey" placeholder="Enter OpenAI API key">
 
-        <label for="openAiModelChoice">Select OpenAI model: <span class="tooltip">?<span class="tooltip-text">If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
+        <label for="openAiModelChoice">Select OpenAI model: <span class="tooltip">?<span class="tooltip-text">If you manually enter a model name, make sure it is spelled exactly as required by the provider. For example, GPT40 is incorrect; GPT-4o is correct. If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
         <select id="openAiModelChoice" name="openAiModelChoice" onchange="toggleOtherModelInput('openAiModelChoice'); updateInputEstimate(); updateModelCapabilityDisplay('openAiModelChoice');">
           <option value="">Select a model</option>
           <option value="gpt-5.5">GPT-5.5</option>
@@ -399,7 +401,7 @@
         <label for="geminiApiKey">Enter Google Gemini API key:</label>
         <input type="password" id="geminiApiKey" name="geminiApiKey" placeholder="Enter Google Gemini API key">
 
-        <label for="geminiModelChoice">Select Google Gemini model: <span class="tooltip">?<span class="tooltip-text">If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
+        <label for="geminiModelChoice">Select Google Gemini model: <span class="tooltip">?<span class="tooltip-text">If you manually enter a model name, make sure it is spelled exactly as required by the provider. For example, GPT40 is incorrect; GPT-4o is correct. If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
         <select id="geminiModelChoice" name="geminiModelChoice" onchange="toggleOtherModelInput('geminiModelChoice'); updateInputEstimate(); updateModelCapabilityDisplay('geminiModelChoice');">
           <option value="">Select a model</option>
           <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
@@ -415,7 +417,7 @@
         <label for="claudeApiKey">Enter Anthropic Claude API key:</label>
         <input type="password" id="claudeApiKey" name="claudeApiKey" placeholder="Enter Anthropic Claude API key">
 
-        <label for="claudeModelChoice">Select Anthropic Claude model: <span class="tooltip">?<span class="tooltip-text">If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
+        <label for="claudeModelChoice">Select Anthropic Claude model: <span class="tooltip">?<span class="tooltip-text">If you manually enter a model name, make sure it is spelled exactly as required by the provider. For example, GPT40 is incorrect; GPT-4o is correct. If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
         <select id="claudeModelChoice" name="claudeModelChoice" onchange="toggleOtherModelInput('claudeModelChoice'); updateInputEstimate(); updateModelCapabilityDisplay('claudeModelChoice');">
           <option value="">Select a model</option>
           <option value="claude-opus-4-5">Claude Opus 4.5</option>
@@ -432,7 +434,7 @@
         <label for="openRouterApiKey">Enter OpenRouter API key:</label>
         <input type="password" id="openRouterApiKey" name="openRouterApiKey" placeholder="Enter OpenRouter API key">
 
-        <label for="openRouterModelChoice">Select OpenRouter model: <span class="tooltip">?<span class="tooltip-text">If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
+        <label for="openRouterModelChoice">Select OpenRouter model: <span class="tooltip">?<span class="tooltip-text">If you manually enter a model name, make sure it is spelled exactly as required by the provider. For example, GPT40 is incorrect; GPT-4o is correct. If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
         <select id="openRouterModelChoice" name="openRouterModelChoice" onchange="toggleOtherModelInput('openRouterModelChoice'); updateInputEstimate(); updateModelCapabilityDisplay('openRouterModelChoice');">
           <option value="">Select a model</option>
           <optgroup label="— Free Models —">
@@ -710,7 +712,11 @@ Important rules:
       const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
 
       if (!selectedProvider || selectedProvider.value === "local") {
-        return document.getElementById("modelChoice")?.value || "";
+        const localVal = document.getElementById("modelChoice")?.value || "";
+        if (localVal === "other") {
+          return document.getElementById("modelChoiceOther")?.value.trim() || "";
+        }
+        return localVal;
       }
 
       const cloudModelFieldByProvider = {
