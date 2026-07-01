@@ -126,6 +126,8 @@ class GenerateRequest(BaseModel):
     questions: list[Question]
     generic_instruction: Optional[str] = None
     persona_source: Literal["default", "custom", "none"] = "default"
+    persona_order: Literal["random", "sequential"] = "random"
+    stimuli_assignment: Literal["random", "sequential"] = "random"
     custom_personas: Optional[list[PersonaRecord]] = None
 
 class SaveFileRequest(BaseModel):
@@ -200,7 +202,11 @@ def check_model(model_name: str):
         }
 
 
-def sample_personas(df_small: pd.DataFrame, total_needed: int):
+def sample_personas(df_small: pd.DataFrame, total_needed: int, sequential: bool = False):
+    if sequential:
+        # Repeat the list cyclically until total_needed rows are available, then take first N
+        reps = (total_needed // len(df_small)) + 1
+        return pd.concat([df_small] * reps, ignore_index=True).iloc[:total_needed].reset_index(drop=True)
     replace = total_needed > len(df_small)
     return df_small.sample(
         n=total_needed,
@@ -212,7 +218,8 @@ def sample_personas(df_small: pd.DataFrame, total_needed: int):
 def load_personas(
     total_needed: int,
     custom_personas: Optional[list[PersonaRecord]] = None,
-    use_personas: bool = True
+    use_personas: bool = True,
+    sequential: bool = False
 ):
     if not use_personas:
         return pd.DataFrame([
@@ -232,7 +239,7 @@ def load_personas(
         if df_small.empty:
             raise ValueError("Custom persona file must include at least one non-empty persona.")
 
-        return sample_personas(df_small, total_needed)
+        return sample_personas(df_small, total_needed, sequential=sequential)
 
     ds = load_dataset("LLM-Digital-Twin/Twin-2K-500", "full_persona")
 
@@ -243,7 +250,7 @@ def load_personas(
         df = ds.to_pandas()
 
     df_small = df[["pid", "persona_summary"]].dropna().copy()
-    return sample_personas(df_small, total_needed)
+    return sample_personas(df_small, total_needed, sequential=sequential)
 
 
 def build_prompt(
@@ -508,13 +515,16 @@ def run_generation_job(job_id: str, data: GenerateRequest):
 
         use_personas = data.persona_source != "none"
         custom_personas = data.custom_personas if data.persona_source == "custom" else None
-        df_personas = load_personas(total_needed, custom_personas, use_personas)
+        sequential_personas = getattr(data, "persona_order", "random") == "sequential"
+        df_personas = load_personas(total_needed, custom_personas, use_personas, sequential=sequential_personas)
 
         condition_numbers = []
         for c in data.conditions:
             condition_numbers.extend([c.condition_number] * data.sample_count_per_condition)
 
-        random.shuffle(condition_numbers)
+        if getattr(data, "stimuli_assignment", "random") == "random":
+            random.shuffle(condition_numbers)
+        # sequential: already in order (C1 × N, C2 × N, …) — no shuffle needed
 
         condition_lookup = {c.condition_number: c.stimuli for c in data.conditions}
         condition_name_lookup = {
