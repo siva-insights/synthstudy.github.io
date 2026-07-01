@@ -1310,32 +1310,27 @@ Important rules:
         estimatedTotalWords = Math.max(estimatedTotalWords, countWords(prompt));
       }
 
-      let message = `
-        Estimated prompt length per synthetic respondent: ${estimatedTotalWords.toLocaleString()} words
-        <span class="tooltip">?
-          <span class="tooltip-text">
-            This estimate includes the longest condition stimulus, all survey questions, all response scale labels, and the maximum persona-summary length for your selected persona source.
-          </span>
-        </span>
-      `;
+      const sampleCount = parseInt(document.getElementById("sampleCount")?.value) || 1;
+      const conditionCountForTokens = parseInt(document.getElementById("conditionCount")?.value) || 1;
+      const totalRespondents = sampleCount * conditionCountForTokens;
+      const approxTokens = Math.round(estimatedTotalWords * 1.33 * totalRespondents);
+
+      let message = `Approx. total tokens for this study: <strong>${approxTokens.toLocaleString()}</strong>
+        <span style="color:#64748b; font-size:12px;">(estimated as prompt words × 1.33 × total respondents; image tokens not included)</span>`;
 
       if (selectedModelName) {
         const limits = getModelWordLimit(selectedModelName);
-
         if (limits) {
-          message += `<br>Selected model (${escapeHTML(selectedModelName)}) approximate max input: ${limits.inputWords.toLocaleString()} words`;
-          message += `<br>Selected model (${escapeHTML(selectedModelName)}) approximate max output: ${limits.outputWords.toLocaleString()} words`;
-
           if (estimatedTotalWords > limits.inputWords) {
-            message += `<br><span style="color:#dc2626;">Warning: Estimated input may exceed the selected model's approximate input word limit.</span>`;
+            message += `<br><span style="color:#dc2626;">⚠ Estimated prompt length may exceed the selected model's input limit.</span>`;
           } else {
-            message += `<br><span style="color:#16a34a;">Estimated input is within the selected model's approximate input word limit.</span>`;
+            message += `<br><span style="color:#16a34a;">✓ Estimated prompt length is within the selected model's input limit.</span>`;
           }
         } else {
-          message += `<br><span style="color:#64748b;">No approximate word-limit data available yet for ${escapeHTML(selectedModelName)}.</span>`;
+          message += `<br><span style="color:#64748b;">Input limit not known for ${escapeHTML(selectedModelName)}.</span>`;
         }
       } else {
-        message += `<br><span style="color:#64748b;">Select a model to compare this estimate against the model's approximate input limit.</span>`;
+        message += `<br><span style="color:#64748b;">Select a model to check against its input limit.</span>`;
       }
 
       document.getElementById("inputEstimateBox").innerHTML = message;
@@ -2163,8 +2158,7 @@ Important rules:
       previewArea.innerHTML = `
         <div class="preview-box">
           <div class="preview-title">Preview: Condition ${preview.condition}</div>
-          <p><strong>Total Samples:</strong> ${escapeHTML(String(getPreviewTotalSamples()))}</p>
-          <p><strong>Approximate Total Number of Tokens used in this study:</strong> ${escapeHTML(String(getPreviewTotalApproxTokens()))}</p>
+          <p><strong>Total Samples:</strong> ${escapeHTML(String(getPreviewTotalSamples()))} &nbsp;|&nbsp; <strong>Approx. total tokens:</strong> ${escapeHTML(String(getPreviewTotalApproxTokens()).replace(/\B(?=(\d{3})+(?!\d))/g, ","))} <span style="color:#64748b; font-size:12px;">(image tokens not included)</span></p>
 
           <div class="preview-nav">
             <button type="button" onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
@@ -2316,15 +2310,12 @@ Important rules:
     
       const previewArea = document.getElementById("previewArea");
     
-      const estimateHtml = await showEstimatedGenerationTime();
-
       previewArea.innerHTML = `
         <div class="preview-box">
-          <div class="preview-title">Generating Synthetic Responses...</div>
-          <p>This may take several minutes because OLSEDG generates one respondent at a time.</p>
-          ${estimateHtml}
-          <p style="color:#64748b;">
-            Responses are being generated one respondent at a time. When complete (or if you stop early), the response file will automatically download to your <strong>Downloads</strong> folder.
+          <div class="preview-title">Response Generation In Progress</div>
+          <p style="color:#dc2626; font-weight:600; font-size:15px;">
+            ⚠ Do not close this tab. Closing the browser will stop generation early.
+            If you close by mistake, whatever has been generated will still be saved and downloaded.
           </p>
 
           <div class="progress-container">
@@ -2379,6 +2370,13 @@ Important rules:
     }
 
     let _activeJobId = null;
+
+    // When the tab is closed mid-generation, signal the backend to stop and save
+    window.addEventListener("beforeunload", () => {
+      if (_activeJobId) {
+        navigator.sendBeacon(`http://localhost:8000/stop/${_activeJobId}`);
+      }
+    });
 
     async function stopGeneration() {
       if (!_activeJobId) return;
