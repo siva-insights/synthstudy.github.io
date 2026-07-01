@@ -529,10 +529,27 @@
             </span>
           </label></td>
           <td>
-            <select id="personaSelection" name="personaSelection" onchange="togglePersonaUpload(); updateInputEstimate();">
+            <select id="personaSelection" name="personaSelection" onchange="togglePersonaUpload(); togglePersonaOrder(); updateInputEstimate();">
               <option value="default">Default persona</option>
               <option value="custom">Input persona</option>
               <option value="none">No persona</option>
+            </select>
+          </td>
+        </tr>
+
+        <tr id="personaOrderRow">
+          <td><label for="personaOrder">Choose Persona Selection:
+            <span class="tooltip">?
+              <span class="tooltip-text">
+                <strong>Randomly:</strong> Personas are drawn at random from the pool. If more respondents than personas are needed, personas are resampled with replacement.<br><br>
+                <strong>Non-randomly:</strong> Personas are taken in the order they appear. If more respondents are needed than personas available, the list wraps from the beginning.
+              </span>
+            </span>
+          </label></td>
+          <td>
+            <select id="personaOrder" name="personaOrder">
+              <option value="random">Randomly</option>
+              <option value="sequential">Non-randomly (in order)</option>
             </select>
           </td>
         </tr>
@@ -1346,6 +1363,13 @@ Important rules:
       updateGenericInstructionNote();
     }
 
+    function togglePersonaOrder() {
+      const personaSelection = document.getElementById("personaSelection");
+      const personaOrderRow  = document.getElementById("personaOrderRow");
+      if (!personaSelection || !personaOrderRow) return;
+      personaOrderRow.hidden = personaSelection.value === "none";
+    }
+
     function updateGenericInstructionNote() {
       const note = document.getElementById("genericInstructionNote");
       const textarea = document.getElementById("genericInstruction");
@@ -1390,6 +1414,21 @@ Important rules:
             <b>{Q1}</b>, <b>{Q2}</b>, etc., wherever you want survey questions to appear. Similarly, use
             <b>{Image1}</b>, <b>{Image2}</b>, etc., wherever you want images to appear.
             This version supports text and images only. Please note maximum input length depends on the selected LLM.
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label for="stimuliAssignment"><strong>Choose Stimuli Assignment:</strong>
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  <strong>Randomly:</strong> Respondents are assigned to conditions at random (current default).<br><br>
+                  <strong>Non-randomly (in order):</strong> The first N respondents go to Condition 1, the next N to Condition 2, and so on, where N is the number of samples per condition.
+                </span>
+              </span>
+            </label>
+            <select id="stimuliAssignment" name="stimuliAssignment" style="margin-left:8px;">
+              <option value="random">Randomly</option>
+              <option value="sequential">Non-randomly (in order)</option>
+            </select>
           </div>
       `;
 
@@ -2305,6 +2344,8 @@ Important rules:
         questions: questions,
         generic_instruction: document.getElementById("genericInstruction")?.value || "",
         persona_source: personaSelection,
+        persona_order: document.getElementById("personaOrder")?.value || "random",
+        stimuli_assignment: document.getElementById("stimuliAssignment")?.value || "random",
         custom_personas: customPersonas
       };
     
