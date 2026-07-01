@@ -561,10 +561,10 @@
 
     <div class="section">
       <h2>Generic Instruction for LLM Input</h2>
-      <div class="note">
+      <div class="note" id="genericInstructionNote">
         This default instruction is used to guide the LLM response format. Update it only if needed, and keep
         <b>{persona}</b>, <b>{embedded_stimuli}</b>, and <b>{answer_template}</b> unchanged.
-        <b>{embedded_stimuli}</b> represents the study stimuli with survey questions inserted in the intended places.
+        <b>{embedded_stimuli}</b> represents the study stimuli with survey questions and images inserted in the intended places.
       </div>
       <textarea id="genericInstruction" name="genericInstruction" rows="20">You are simulating one synthetic survey respondent.
 
@@ -1321,6 +1321,22 @@ Important rules:
       if (!personaSelection || !personaUploadSection) return;
 
       personaUploadSection.hidden = personaSelection.value !== "custom";
+      updateGenericInstructionNote();
+    }
+
+    function updateGenericInstructionNote() {
+      const note = document.getElementById("genericInstructionNote");
+      if (!note) return;
+      const noPersona = document.getElementById("personaSelection")?.value === "none";
+      if (noPersona) {
+        note.innerHTML = `This default instruction is used to guide the LLM response format. Update it only if needed, and keep
+        <b>{embedded_stimuli}</b>, and <b>{answer_template}</b> unchanged.
+        <b>{embedded_stimuli}</b> represents the study stimuli with survey questions and images inserted in the intended places.`;
+      } else {
+        note.innerHTML = `This default instruction is used to guide the LLM response format. Update it only if needed, and keep
+        <b>{persona}</b>, <b>{embedded_stimuli}</b>, and <b>{answer_template}</b> unchanged.
+        <b>{embedded_stimuli}</b> represents the study stimuli with survey questions and images inserted in the intended places.`;
+      }
     }
 
     function getConditionName(conditionNumber) {
@@ -1517,7 +1533,44 @@ Important rules:
       return questionNumbers.filter((q) => stimuli.includes(`{Q${q}}`));
     }
 
-    function buildEmbeddedStimuliText(stimuli, questionNumbers) {
+    function readFileAsBase64(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target.result;
+          resolve({ base64: dataUrl.split(",")[1], mimeType: file.type, dataUrl });
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function getSharedImagesData() {
+      const count = parseInt(document.getElementById("sharedImageCount")?.value) || 0;
+      const images = {};
+      for (let i = 1; i <= count; i++) {
+        const file = document.getElementById(`sharedImage${i}`)?.files?.[0];
+        if (file) images[i] = await readFileAsBase64(file);
+      }
+      return images;
+    }
+
+    function buildContentParts(text, imagesData) {
+      if (!imagesData || Object.keys(imagesData).length === 0) return [{ type: "text", text }];
+      const parts = [];
+      let lastIndex = 0;
+      const re = /<<<IMAGE_(\d+)>>>/g;
+      let match;
+      while ((match = re.exec(text)) !== null) {
+        if (match.index > lastIndex) parts.push({ type: "text", text: text.slice(lastIndex, match.index) });
+        const img = imagesData[parseInt(match[1])];
+        if (img) parts.push({ type: "image", base64: img.base64, mimeType: img.mimeType });
+        lastIndex = match.index + match[0].length;
+      }
+      if (lastIndex < text.length) parts.push({ type: "text", text: text.slice(lastIndex) });
+      return parts.length > 0 ? parts : [{ type: "text", text }];
+    }
+
+    function buildEmbeddedStimuliText(stimuli, questionNumbers, imagesData = {}) {
       let embeddedStimuli = stimuli;
 
       for (const q of questionNumbers) {
@@ -1527,6 +1580,10 @@ Important rules:
         if (stimuli.includes(placeholder)) {
           embeddedStimuli = embeddedStimuli.split(placeholder).join(embeddedQuestion);
         }
+      }
+
+      for (const idx of Object.keys(imagesData)) {
+        embeddedStimuli = embeddedStimuli.split(`{Image${idx}}`).join(`<<<IMAGE_${idx}>>>`);
       }
 
       return embeddedStimuli;
@@ -1981,6 +2038,8 @@ Important rules:
 
       if (myCallId !== _showPreviewCallId) return;
 
+      const imagesData = await getSharedImagesData();
+
       for (let c = 1; c <= conditionCount; c++) {
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
         let htmlStimuli = escapeHTML(stimuli);
@@ -1991,7 +2050,13 @@ Important rules:
           htmlStimuli = htmlStimuli.replace(placeholder, questionHtml);
         }
 
-        const embeddedStimuli = buildEmbeddedStimuliText(stimuli, questionNumbers);
+        for (const [idx, img] of Object.entries(imagesData)) {
+          htmlStimuli = htmlStimuli.split(escapeHTML(`{Image${idx}}`)).join(
+            `<img src="${img.dataUrl}" style="max-width:100%;max-height:300px;display:block;margin:8px 0;" alt="Image ${idx}">`
+          );
+        }
+
+        const embeddedStimuli = buildEmbeddedStimuliText(stimuli, questionNumbers, imagesData);
         const conditionPersonas = previewPersonas.slice((c - 1) * samplesPerCondition, c * samplesPerCondition);
 
         previews.push({
@@ -2328,7 +2393,14 @@ Important rules:
       "openrouter": "openRouterApiKey"
     };
 
-    async function callOpenAiChat(apiKey, modelName, prompt, temperature) {
+    async function callOpenAiChat(apiKey, modelName, contentParts, temperature) {
+      const hasImages = contentParts.some(p => p.type === "image");
+      const content = hasImages
+        ? contentParts.map(p => p.type === "text"
+            ? { type: "text", text: p.text }
+            : { type: "image_url", image_url: { url: `data:${p.mimeType};base64,${p.base64}` } })
+        : contentParts.map(p => p.text || "").join("");
+
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -2337,7 +2409,7 @@ Important rules:
         },
         body: JSON.stringify({
           model: modelName,
-          messages: [{ role: "user", content: prompt }],
+          messages: [{ role: "user", content }],
           temperature: temperature
         })
       });
@@ -2351,14 +2423,18 @@ Important rules:
       return data.choices?.[0]?.message?.content || "";
     }
 
-    async function callGeminiChat(apiKey, modelName, prompt, temperature) {
+    async function callGeminiChat(apiKey, modelName, contentParts, temperature) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      const parts = contentParts.map(p => p.type === "text"
+        ? { text: p.text }
+        : { inlineData: { mimeType: p.mimeType, data: p.base64 } });
 
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          contents: [{ role: "user", parts }],
           generationConfig: { temperature: temperature }
         })
       });
@@ -2372,10 +2448,14 @@ Important rules:
       return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
-    async function callClaudeChat(apiKey, modelName, prompt, temperature) {
+    async function callClaudeChat(apiKey, modelName, contentParts, temperature) {
       // Anthropic's API only accepts temperature in [0, 1], unlike the 0-2 range
       // this app's shared temperature field allows for local/OpenAI/Gemini models.
       const claudeTemperature = Math.min(temperature, 1);
+
+      const content = contentParts.map(p => p.type === "text"
+        ? { type: "text", text: p.text }
+        : { type: "image", source: { type: "base64", media_type: p.mimeType, data: p.base64 } });
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -2389,7 +2469,7 @@ Important rules:
           model: modelName,
           max_tokens: 1024,
           temperature: claudeTemperature,
-          messages: [{ role: "user", content: prompt }]
+          messages: [{ role: "user", content }]
         })
       });
 
@@ -2402,7 +2482,14 @@ Important rules:
       return data.content?.[0]?.text || "";
     }
 
-    async function callOpenRouterChat(apiKey, modelName, prompt, temperature) {
+    async function callOpenRouterChat(apiKey, modelName, contentParts, temperature) {
+      const hasImages = contentParts.some(p => p.type === "image");
+      const content = hasImages
+        ? contentParts.map(p => p.type === "text"
+            ? { type: "text", text: p.text }
+            : { type: "image_url", image_url: { url: `data:${p.mimeType};base64,${p.base64}` } })
+        : contentParts.map(p => p.text || "").join("");
+
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -2413,7 +2500,7 @@ Important rules:
         },
         body: JSON.stringify({
           model: modelName,
-          messages: [{ role: "user", content: prompt }],
+          messages: [{ role: "user", content }],
           temperature: temperature
         })
       });
@@ -2427,21 +2514,23 @@ Important rules:
       return data.choices?.[0]?.message?.content || "";
     }
 
-    async function callCloudModel(cloudModelProvider, apiKey, modelName, prompt, temperature) {
+    async function callCloudModel(cloudModelProvider, apiKey, modelName, prompt, temperature, imagesData = {}) {
+      const contentParts = buildContentParts(prompt, imagesData);
+
       if (cloudModelProvider === "openai-gpt") {
-        return callOpenAiChat(apiKey, modelName, prompt, temperature);
+        return callOpenAiChat(apiKey, modelName, contentParts, temperature);
       }
 
       if (cloudModelProvider === "google-gemini") {
-        return callGeminiChat(apiKey, modelName, prompt, temperature);
+        return callGeminiChat(apiKey, modelName, contentParts, temperature);
       }
 
       if (cloudModelProvider === "anthropic-claude") {
-        return callClaudeChat(apiKey, modelName, prompt, temperature);
+        return callClaudeChat(apiKey, modelName, contentParts, temperature);
       }
 
       if (cloudModelProvider === "openrouter") {
-        return callOpenRouterChat(apiKey, modelName, prompt, temperature);
+        return callOpenRouterChat(apiKey, modelName, contentParts, temperature);
       }
 
       throw new Error("Unsupported cloud provider.");
@@ -2490,11 +2579,11 @@ Important rules:
       return { answers, validation, invalidQuestions };
     }
 
-    async function getValidCloudResponse(cloudModelProvider, apiKey, modelName, prompt, temperature, questionNumbers, maxRetries = 5) {
+    async function getValidCloudResponse(cloudModelProvider, apiKey, modelName, prompt, temperature, questionNumbers, imagesData = {}, maxRetries = 5) {
       let last = { answers: {}, validation: "invalid", invalidQuestions: [], rawResponse: "" };
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        const rawResponse = await callCloudModel(cloudModelProvider, apiKey, modelName, prompt, temperature);
+        const rawResponse = await callCloudModel(cloudModelProvider, apiKey, modelName, prompt, temperature, imagesData);
         const { answers, validation, invalidQuestions } = parseCloudAnswers(rawResponse, questionNumbers);
 
         if (validation === "valid") {
@@ -2507,12 +2596,12 @@ Important rules:
       return { ...last, retryCount: maxRetries };
     }
 
-    async function processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers) {
+    async function processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, imagesData = {}) {
       const startTime = Date.now();
       const embeddedQuestionNumbers = getEmbeddedQuestionNumbers(row.condition_stimuli, questionNumbers);
 
       try {
-        const result = await getValidCloudResponse(cloudModelProvider, apiKey, modelName, row.prompt, temperature, embeddedQuestionNumbers);
+        const result = await getValidCloudResponse(cloudModelProvider, apiKey, modelName, row.prompt, temperature, embeddedQuestionNumbers, imagesData);
 
         row.validation = result.validation;
         row.invalid_questions = result.invalidQuestions.join(",");
@@ -2531,14 +2620,14 @@ Important rules:
       }
     }
 
-    async function runCloudGenerationBatches(rows, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, concurrency, onProgress) {
+    async function runCloudGenerationBatches(rows, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, concurrency, onProgress, imagesData = {}) {
       let completed = 0;
 
       for (let start = 0; start < rows.length; start += concurrency) {
         const batch = rows.slice(start, start + concurrency);
 
         await Promise.all(batch.map(async (row) => {
-          await processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers);
+          await processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, imagesData);
           completed++;
           onProgress(completed, rows.length);
         }));
@@ -2670,6 +2759,8 @@ Important rules:
         </div>
       `;
 
+      const imagesData = await getSharedImagesData();
+
       await runCloudGenerationBatches(
         rows,
         cloudModelProvider,
@@ -2678,7 +2769,8 @@ Important rules:
         temperature,
         questionNumbers,
         concurrency,
-        updateCloudGenerationProgress
+        updateCloudGenerationProgress,
+        imagesData
       );
 
       cloudGenerationRows = rows;
