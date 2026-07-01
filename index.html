@@ -225,7 +225,6 @@
       overflow-x: auto;
     }
 
-    .scale-type-option { font-weight: normal; display: inline-flex; align-items: center; gap: 6px; margin-top: 0; cursor: pointer; }
     .scale-setup-row { display: flex; gap: 16px; margin-top: 12px; align-items: flex-start; }
     .scale-setup-row > div { flex: 1; }
     .scale-setup-row label { margin-top: 0; }
@@ -584,7 +583,7 @@ Study materials with embedded questions:
 
 Important rules:
 - Choose only allowed option codes for each question.
-- Each answer must be selected based on the question's scale type: use an integer for discrete scales and a float/number for continuous scales, within the allowed response-code range.
+- Each answer must match the question's response type: use an integer for discrete scales, a float/number for continuous scales, or text within the allowed word count for text response questions.
 - Do not choose values below the minimum code or above the maximum code.
 - Return only the final answer values.
 - Do not include explanations.
@@ -927,7 +926,16 @@ Important rules:
             oninput="updateInputEstimate()"
             placeholder="Enter question ${questionCount}">
     
-          <div class="scale-setup-row">
+          <div style="margin-top:12px;">
+            <label style="margin-top:0;">Response Type:</label>
+            <select id="question${questionCount}ScaleType" onchange="showScaleOptions(${questionCount})">
+              <option value="discrete">Discrete Scale</option>
+              <option value="continuous">Continuous Scale</option>
+              <option value="text">Text Response</option>
+            </select>
+          </div>
+
+          <div class="scale-setup-row" id="question${questionCount}ScaleSetup">
             <div>
               <label style="margin-top:0;">Number of scale points:</label>
               <input type="number" min="2" max="20"
@@ -945,21 +953,14 @@ Important rules:
                 placeholder="e.g. 1"
                 oninput="showScaleOptions(${questionCount})">
             </div>
-            <div>
-              <label style="margin-top:0;">Scale Type:</label>
-              <div style="display:flex;gap:14px;margin-top:6px;">
-                <label class="scale-type-option">
-                  <input type="radio" name="question${questionCount}ScaleType" value="discrete"
-                         onchange="showScaleOptions(${questionCount})" checked>
-                  Discrete
-                </label>
-                <label class="scale-type-option">
-                  <input type="radio" name="question${questionCount}ScaleType" value="continuous"
-                         onchange="showScaleOptions(${questionCount})">
-                  Continuous
-                </label>
-              </div>
-            </div>
+          </div>
+
+          <div id="question${questionCount}MaxWordsRow" style="display:none;margin-top:12px;">
+            <label style="margin-top:0;">Max No. of Words:</label>
+            <input type="number" min="1"
+              id="question${questionCount}MaxWords"
+              placeholder="e.g. 100"
+              oninput="updateInputEstimate()">
           </div>
 
           <div id="question${questionCount}ScaleOptions"></div>
@@ -972,8 +973,13 @@ Important rules:
         document.getElementById(`question${questionCount}`).value = prefill.questionText || "";
 
         if (prefill.scaleType) {
-          const radio = document.querySelector(`input[name="question${questionCount}ScaleType"][value="${prefill.scaleType}"]`);
-          if (radio) radio.checked = true;
+          const sel = document.getElementById(`question${questionCount}ScaleType`);
+          if (sel) sel.value = prefill.scaleType;
+        }
+
+        if (prefill.maxWords) {
+          const mw = document.getElementById(`question${questionCount}MaxWords`);
+          if (mw) mw.value = prefill.maxWords;
         }
 
         if (prefill.scaleStart !== undefined && prefill.scaleStart !== null) {
@@ -999,8 +1005,7 @@ Important rules:
     }
 
     function getQuestionScaleType(questionNumber) {
-      const radio = document.querySelector(`input[name="question${questionNumber}ScaleType"]:checked`);
-      return radio?.value || "discrete";
+      return document.getElementById(`question${questionNumber}ScaleType`)?.value || "discrete";
     }
 
     function getQuestionCardData(questionNumber) {
@@ -1014,12 +1019,15 @@ Important rules:
         scaleLabels.push(document.getElementById(`question${questionNumber}Scale${s}`)?.value || "");
       }
 
+      const maxWords = parseInt(document.getElementById(`question${questionNumber}MaxWords`)?.value) || 0;
+
       return {
         questionText: document.getElementById(`question${questionNumber}`)?.value || "",
         scaleCount: scaleCount,
         scaleStart: scaleStart,
         scaleType: scaleType,
-        scaleLabels: scaleLabels
+        scaleLabels: scaleLabels,
+        maxWords: maxWords
       };
     }
 
@@ -1079,6 +1087,7 @@ Important rules:
       const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
 
       const scaleType = getQuestionScaleType(sourceQuestionNumber);
+      const maxWords = parseInt(document.getElementById(`question${sourceQuestionNumber}MaxWords`)?.value) || 0;
 
       const scaleLabels = [];
 
@@ -1092,7 +1101,8 @@ Important rules:
         scaleCount: scaleCount,
         scaleStart: scaleStart,
         scaleType: scaleType,
-        scaleLabels: scaleLabels
+        scaleLabels: scaleLabels,
+        maxWords: maxWords
       });
     }
 
@@ -1352,11 +1362,25 @@ Important rules:
     }
 
     function showScaleOptions(questionNumber) {
+      const scaleType = getQuestionScaleType(questionNumber);
+      const setupRow = document.getElementById(`question${questionNumber}ScaleSetup`);
+      const maxWordsRow = document.getElementById(`question${questionNumber}MaxWordsRow`);
+      const container = document.getElementById(`question${questionNumber}ScaleOptions`);
+
+      if (scaleType === "text") {
+        if (setupRow) setupRow.style.display = "none";
+        if (maxWordsRow) maxWordsRow.style.display = "block";
+        container.innerHTML = "";
+        updateInputEstimate();
+        return;
+      }
+
+      if (setupRow) setupRow.style.display = "flex";
+      if (maxWordsRow) maxWordsRow.style.display = "none";
+
       const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value);
       const scaleStartParsed = parseInt(document.getElementById(`question${questionNumber}ScaleStart`)?.value);
       const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
-      const scaleType = getQuestionScaleType(questionNumber);
-      const container = document.getElementById(`question${questionNumber}ScaleOptions`);
       container.innerHTML = "";
 
       if (!scaleCount || scaleCount < 2) return;
@@ -1429,11 +1453,18 @@ Important rules:
 
     function buildEmbeddedQuestionText(questionNumber) {
       const question = document.getElementById(`question${questionNumber}`)?.value.trim() || "";
+      const scaleType = getQuestionScaleType(questionNumber);
+
+      if (scaleType === "text") {
+        const maxWords = parseInt(document.getElementById(`question${questionNumber}MaxWords`)?.value) || 0;
+        const maxWordsStr = maxWords > 0 ? `${maxWords} words` : "unlimited";
+        return `[Q${questionNumber}]\nQuestion: ${question}\nResponse type: Text\nMax words: ${maxWordsStr}\nPlease provide a text response within the allowed word count.\n[/Q${questionNumber}]`;
+      }
+
       const scaleCount = parseInt(document.getElementById(`question${questionNumber}ScaleCount`)?.value) || 0;
       const scaleStartParsed = parseInt(document.getElementById(`question${questionNumber}ScaleStart`)?.value);
       const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
       const scaleEnd = scaleStart + scaleCount - 1;
-      const scaleType = getQuestionScaleType(questionNumber);
       const scaleLabels = getScaleLabels(questionNumber);
       const scaleText = scaleLabels
         .map((label) => label.replace(/^(-?\d+)-/, "$1 = "))
@@ -2068,7 +2099,8 @@ Important rules:
           question_text: questionText,
           scale_points: scalePoints,
           scale_start: scaleStart,
-          scale_type: getQuestionScaleType(q)
+          scale_type: getQuestionScaleType(q),
+          max_words: parseInt(document.getElementById(`question${q}MaxWords`)?.value) || 0
         });
       }
     
@@ -2385,24 +2417,36 @@ Important rules:
       const invalidQuestions = [];
 
       for (const q of questionNumbers) {
-        const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`)?.value) || 0;
-        const scaleStartParsed = parseInt(document.getElementById(`question${q}ScaleStart`)?.value);
-        const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
-        const scaleEnd = scaleStart + scaleCount - 1;
-        const isContinuous = getQuestionScaleType(q) === "continuous";
-        const pattern = new RegExp(`Q${q}\\s*=\\s*(-?\\d+\\.?\\d*)`, "i");
-        const match = rawText.match(pattern);
+        const scaleType = getQuestionScaleType(q);
 
-        if (match) {
-          const value = isContinuous ? parseFloat(match[1]) : parseInt(match[1]);
-          answers[`Q${q}`] = value;
-
-          if (!(value >= scaleStart && value <= scaleEnd)) {
+        if (scaleType === "text") {
+          const pattern = new RegExp(`Q${q}\\s*=\\s*(.+)`, "i");
+          const match = rawText.match(pattern);
+          if (match) {
+            answers[`Q${q}`] = match[1].trim();
+          } else {
+            answers[`Q${q}`] = "";
             invalidQuestions.push(`Q${q}`);
           }
         } else {
-          answers[`Q${q}`] = "";
-          invalidQuestions.push(`Q${q}`);
+          const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`)?.value) || 0;
+          const scaleStartParsed = parseInt(document.getElementById(`question${q}ScaleStart`)?.value);
+          const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
+          const scaleEnd = scaleStart + scaleCount - 1;
+          const isContinuous = scaleType === "continuous";
+          const pattern = new RegExp(`Q${q}\\s*=\\s*(-?\\d+\\.?\\d*)`, "i");
+          const match = rawText.match(pattern);
+
+          if (match) {
+            const value = isContinuous ? parseFloat(match[1]) : parseInt(match[1]);
+            answers[`Q${q}`] = value;
+            if (!(value >= scaleStart && value <= scaleEnd)) {
+              invalidQuestions.push(`Q${q}`);
+            }
+          } else {
+            answers[`Q${q}`] = "";
+            invalidQuestions.push(`Q${q}`);
+          }
         }
       }
 
