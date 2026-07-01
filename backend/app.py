@@ -239,6 +239,9 @@ def load_personas(
         if df_small.empty:
             raise ValueError("Custom persona file must include at least one non-empty persona.")
 
+        if sequential:
+            df_small = df_small.sort_values("pid").reset_index(drop=True)
+
         return sample_personas(df_small, total_needed, sequential=sequential)
 
     ds = load_dataset("LLM-Digital-Twin/Twin-2K-500", "full_persona")
@@ -250,6 +253,8 @@ def load_personas(
         df = ds.to_pandas()
 
     df_small = df[["pid", "persona_summary"]].dropna().copy()
+    if sequential:
+        df_small = df_small.sort_values("pid").reset_index(drop=True)
     return sample_personas(df_small, total_needed, sequential=sequential)
 
 
