@@ -1,3 +1,4 @@
+# Imports
 import os
 import re
 import sys
@@ -21,12 +22,14 @@ import json
 import time
 from typing import Literal, Optional
 
+# Constants
 OLLAMA_URL = "http://localhost:11434"
 
 OUTPUT_DIR = Path.home() / "OLSEDG_outputs"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 HISTORY_FILE = OUTPUT_DIR / "generation_history.json"
 
+# FastAPI app setup + CORS
 app = FastAPI(title="OLSEDG Helper")
 
 app.add_middleware(
@@ -39,9 +42,11 @@ app.add_middleware(
 
 app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR), name="outputs")
 
+# Job state: in-memory dict keyed by job_id and a thread lock for safe updates
 JOBS = {}
 JOBS_LOCK = Lock()
 
+# Utility functions: context-window estimation, history persistence, timing averages
 def estimate_num_ctx(prompt: str) -> int:
     prompt_words = len(str(prompt).split())
     num_ctx = (prompt_words + 500 + 3061) * 2
@@ -84,6 +89,7 @@ def update_job(job_id, **kwargs):
         JOBS[job_id].update(kwargs)
 
 
+# Data models: Pydantic request/response schemas
 class Condition(BaseModel):
     condition_number: int
     condition_name: Optional[str] = None
@@ -117,6 +123,7 @@ class GenerateRequest(BaseModel):
     custom_personas: Optional[list[PersonaRecord]] = None
 
 
+# API endpoints
 @app.get("/health")
 def health():
     return {"helper_running": True, "message": "OLSEDG Helper is running"}
@@ -468,6 +475,7 @@ def create_docx(data, filepath):
     doc.save(filepath)
 
 
+# Generation job worker: runs in a background thread, generates one respondent per iteration
 def run_generation_job(job_id: str, data: GenerateRequest):
     try:
         total_needed = data.sample_count_per_condition * len(data.conditions)
@@ -728,6 +736,7 @@ def get_progress(job_id: str):
         **JOBS[job_id]
     }
 
+# tkinter GUI entry point
 if __name__ == "__main__":
     import tkinter as tk
     from tkinter import ttk, messagebox
@@ -736,7 +745,7 @@ if __name__ == "__main__":
     PORT = 8000
     OLLAMA_BASE = "http://localhost:11434"
 
-    # Colours matching synthstudy.vercel.app
+    # Color palette
     C = {
         "bg":      "#f1f5f9",   # page background
         "card":    "#ffffff",   # card / tab content
@@ -753,6 +762,7 @@ if __name__ == "__main__":
         "row":     "#f8fafc",   # alternate row bg
     }
 
+    # Model list / sizes
     MODEL_SIZES = {
         "deepseek-r1:14b": "~9.0 GB", "gemma3:4b": "~3.3 GB",  "gemma3:12b": "~8.1 GB",
         "llama3.1:8b":     "~4.7 GB", "llama3.2:3b": "~2.0 GB", "mistral:7b-instruct": "~4.1 GB",
@@ -761,7 +771,7 @@ if __name__ == "__main__":
     }
     MODEL_LIST = list(MODEL_SIZES.keys()) + ["Other (enter below)"]
 
-    # ── Ollama helpers ───────────────────────────────────────────────────
+    # Ollama helpers: detect, start, stop, and list installed models
     def _ollama_ok():
         try:
             return requests.get(f"{OLLAMA_BASE}/api/tags", timeout=3).status_code == 200
@@ -812,12 +822,12 @@ if __name__ == "__main__":
         except Exception:
             return []
 
-    # ── FastAPI server (background) ──────────────────────────────────────
+    # FastAPI background server thread: starts uvicorn on localhost:8000
     config = uvicorn.Config(app, host="127.0.0.1", port=PORT, log_level="error")
     server = uvicorn.Server(config)
     Thread(target=server.run, daemon=True).start()
 
-    # ── Window ───────────────────────────────────────────────────────────
+    # Window + header setup: root window, header bar, notebook widget and shared button helpers
     root = tk.Tk()
     root.title("OLSEDG Helper")
     root.geometry("500x460")
@@ -866,7 +876,7 @@ if __name__ == "__main__":
         """White card frame with a subtle border feel."""
         return tk.Frame(parent, bg=C["card"], padx=20, pady=18)
 
-    # ── TAB 1 : Ollama Setup ─────────────────────────────────────────────
+    # Tab 1 (Ollama Setup): validate Ollama installation and auto-start if needed
     tab1 = ttk.Frame(nb); nb.add(tab1, text="1. Ollama Setup")
     p1 = _card(tab1); p1.pack(fill="both", expand=True)
 
@@ -938,7 +948,7 @@ if __name__ == "__main__":
                 t1_lnk.config(text="↗  ollama.ai — download Ollama")
         root.after(0, u)
 
-    # ── TAB 2 : Install Model ────────────────────────────────────────────
+    # Tab 2 (Install Model): model picker, download progress bar, and ollama pull integration
     tab2 = ttk.Frame(nb); nb.add(tab2, text="2. Install Model")
     p2 = _card(tab2); p2.pack(fill="both", expand=True)
 
@@ -1096,7 +1106,7 @@ if __name__ == "__main__":
 
     t2_btn.config(command=do_install)
 
-    # ── TAB 3 : Manage Models ────────────────────────────────────────────
+    # Tab 3 (Manage Models): scrollable list of installed models with per-model uninstall
     tab3 = ttk.Frame(nb); nb.add(tab3, text="3. Manage Models")
     p3 = _card(tab3); p3.pack(fill="both", expand=True)
 
@@ -1192,7 +1202,7 @@ if __name__ == "__main__":
 
     t3_ref.config(command=refresh_t3)
 
-    # ── Footer ───────────────────────────────────────────────────────────
+    # Footer: copyright label at the bottom of the window
     ftr = tk.Frame(root, bg=C["bg"])
     ftr.pack(fill="x", side="bottom")
     tk.Frame(ftr, bg=C["border"], height=1).pack(fill="x")
@@ -1200,7 +1210,7 @@ if __name__ == "__main__":
              text="© 2026 Siva Shanmugam Mariappan and Ashwin Malshe. Licensed under the MIT License.",
              font=("Helvetica", 9), fg=C["muted"], bg=C["bg"]).pack(pady=6)
 
-    # ── Startup ──────────────────────────────────────────────────────────
+    # Startup + window close handler: trigger initial Ollama check and wire WM_DELETE_WINDOW
     Thread(target=do_check, daemon=True).start()
     root.after(800, refresh_t3)
 

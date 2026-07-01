@@ -3,7 +3,10 @@
 <head>
   <title>Synthetic Experimental Data Generator</title>
   <style>
+    /* CSS variables and base styles */
     body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; color: #1f2937; }
+
+    /* Layout / card / section styles */
     .container { max-width: 850px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
     h1 { text-align: center; color: #1e3a8a; margin-bottom: 12px; }
     .cite-button-wrap { text-align: center; margin-bottom: 30px; }
@@ -23,6 +26,7 @@
     .section { margin-top: 25px; padding: 20px; background: #eef4ff; border-left: 5px solid #2563eb; border-radius: 8px; }
     .condition-card, .question-card { margin-top: 16px; padding: 15px; background: white; border: 1px solid #dbeafe; border-radius: 8px; }
     .note { margin-top: 8px; font-size: 14px; color: #475569; background: #f8fafc; padding: 10px; border-radius: 8px; }
+    /* Model capability indicator styles */
     .model-capability-info { margin-top: 5px; font-size: 13px; min-height: 18px; }
     .model-capability-info.text-only { color: #64748b; }
     .model-capability-info.multimodal { color: #16a34a; }
@@ -61,6 +65,7 @@
     .citation-row { display: grid; grid-template-columns: 90px 1fr; gap: 15px; margin: 18px 0; line-height: 1.4; }
     .citation-style { font-weight: bold; color: #555; }
 
+    /* Tooltip styles */
     .tooltip {
       display: inline-block;
       margin-left: 6px;
@@ -96,6 +101,7 @@
       visibility: visible;
     }
     
+    /* Button and control styles */
     .model-limit {
       font-size: 13px;
       color: #64748b;
@@ -239,6 +245,7 @@
 </head>
 
 <body>
+  <!-- Site-wide metrics badge (top-right, populated from Supabase on load) -->
   <div id="siteMetrics" class="site-metrics">
     Page views: -- · Synthetic responses generated: --
   </div>
@@ -251,6 +258,7 @@
     </div>
     -->
 
+    <!-- Model Selection: top-level radio to choose Local vs Cloud provider -->
     <div class="section">
       <h2>Select LLM Provider</h2>
       <label>
@@ -274,6 +282,7 @@
       </label>
     </div>
 
+    <!-- Model Selection — Local: OLSEDG Helper download, model dropdown, and setup validation -->
     <div id="localModelSection" class="section" hidden>
       <h2 style="text-align: center;">
         OPEN LLM SYNTHETIC EXPERIMENTAL DATA GENERATOR (OLSEDG)
@@ -355,6 +364,7 @@
       <div id="helperStatus" class="note"></div>
     </div>
 
+    <!-- Model Selection — Cloud: provider sub-sections for OpenAI, Gemini, Claude, OpenRouter -->
     <div id="cloudModelSection" class="section" hidden>
       <h2>Proprietary LLM using Cloud</h2>
       <label for="cloudModelProvider">Select a cloud LLM provider:</label>
@@ -478,6 +488,7 @@
       <!-- <div class="note">Cloud LLM provider support is a placeholder for now. API integration is not yet available.</div> -->
     </div>
 
+    <!-- Study Setup: study name, condition count, samples per condition, persona source, temperature -->
     <div class="section">
       <h2>Study Setup</h2>
       <table class="input-table">
@@ -545,8 +556,10 @@
       </div>
     </div>
 
+    <!-- Conditions & Stimuli: injected by showConditionInputs() when conditionCount changes -->
     <div id="conditionFields"></div>
 
+    <!-- Questions & Response Scale: dynamically added question cards -->
     <div class="section">
       <h2>Questions</h2>
       <div id="questionFields"></div>
@@ -556,6 +569,7 @@
       </div>
     </div>
 
+    <!-- Generic Instruction: editable prompt template with {persona}, {embedded_stimuli}, {answer_template} placeholders -->
     <div class="section">
       <h2>Generic Instruction for LLM Input</h2>
       <div class="note" id="genericInstructionNote">
@@ -588,10 +602,12 @@ Important rules:
 * Return answers only in this format: {answer_template}</textarea>
     </div>
 
+    <!-- Input size estimate box: word count and model limit comparison -->
     <div id="inputEstimateBox" class="input-estimate-box">
       Approximate input size: Not calculated yet
-    </div> 
-    
+    </div>
+
+    <!-- Generate section: action buttons for preview, study info download, and response generation -->
     <div class="action-buttons">
       <button type="button" onclick="showPreview(false)">View Preview</button>
       <button type="button" onclick="showPreview(true)">Download Preview</button>
@@ -599,8 +615,10 @@ Important rules:
       <button type="button" onclick="generateResponses()">Generate Responses</button>
     </div>
 
+    <!-- Preview: populated dynamically by showPreview() / renderPreview() -->
     <div id="previewArea"></div>
 
+    <!-- Download / Comments section -->
     <div class="section">
       <h2>Comments</h2>
     
@@ -632,6 +650,7 @@ Important rules:
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.iife.js"></script>
   <script>
+    // Constants / config: module-level state, Supabase credentials, and top-level variables
     let previews = [];
     let currentPreviewIndex = 0;
     let _withPersonaInstruction = null;
@@ -639,6 +658,7 @@ Important rules:
     let cloudGenerationColumns = [];
     let cloudGenerationTimestamp = "";
 
+    // Utility functions: timestamp formatting, provider toggling, model name resolution
     function formatTimestampForFilename(date = new Date()) {
       const pad = (n) => String(n).padStart(2, "0");
       return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
@@ -717,11 +737,13 @@ Important rules:
     let questionCount = 0;
     let _showPreviewCallId = 0;
 
+    // Constants / config: Supabase project credentials and client
     const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsaGh0Zm1iamRicnJ0Zmlwa2h3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMjM2MzcsImV4cCI6MjA5Nzc5OTYzN30.Qfw7pjfGFYgnwO1J-P-jePmk8pFMrchIAZ_mfE-VB14";
     
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // Utility functions: site metrics formatting and Supabase read/write helpers
     function formatMetricNumber(value) {
       const num = Number(value) || 0;
     
@@ -885,6 +907,7 @@ Important rules:
     window.addEventListener("load", loadComments);
     window.addEventListener("load", recordPageView);
     
+    // Utility functions: question card helpers, word count, condition/persona toggles
     function getExistingQuestionNumbers() {
       return Array.from(document.querySelectorAll(".question-card"))
         .map(card => parseInt(card.id.replace("questionCard", "")))
@@ -1540,6 +1563,7 @@ Important rules:
       return questionNumbers.filter((q) => stimuli.includes(`{Q${q}}`));
     }
 
+    // Image helpers: file-to-base64 conversion and {ImageN} placeholder substitution
     function readFileAsBase64(file) {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -1596,6 +1620,7 @@ Important rules:
       return embeddedStimuli;
     }
 
+    // Utility functions: prompt template sanitization and preview prompt assembly
     function sanitizeNoPersonaInstruction(promptTemplate) {
       return promptTemplate
         .replace(/\n?Respondent persona:\s*\n\{persona\}\s*\n/, "\n")
@@ -1622,6 +1647,7 @@ Important rules:
         .replaceAll("{answer_template}", answerTemplate);
     }
 
+    // Preview logic: persona shuffling, sampling, HuggingFace dataset fetching, and table rendering
     function shufflePreviewPersonas(personas) {
       const shuffled = [...personas];
 
@@ -2148,6 +2174,7 @@ Important rules:
       return personas;
     }
 
+    // Generation orchestration: dispatcher that routes to local or cloud generation path
     async function generateResponses() {
       const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
 
@@ -2158,6 +2185,7 @@ Important rules:
       return generateLocalResponses();
     }
 
+    // API call functions — Local: POST to OLSEDG Helper, poll progress endpoint
     async function generateLocalResponses() {
       const selectedModel = document.getElementById("modelChoice");
       const questionNumbers = getExistingQuestionNumbers();
@@ -2386,6 +2414,7 @@ Important rules:
       }, 1000);
     }
 
+    // Constants / config: per-model multimodal capability map (text vs multimodal)
     // Conservative default number of independent conversations to run at once per
     const MODEL_CAPABILITIES = {
       // OpenAI
@@ -2444,6 +2473,7 @@ Important rules:
       }
     }
 
+    // Constants / config: per-provider concurrency limits and API key field IDs
     // cloud provider. Real rate limits depend on the user's account/tier, so this
     // is intentionally cautious rather than a verified provider limit.
     const CLOUD_PROVIDER_CONCURRENCY = {
@@ -2460,6 +2490,7 @@ Important rules:
       "openrouter": "openRouterApiKey"
     };
 
+    // API call functions — OpenAI: chat completions with optional image support
     async function callOpenAiChat(apiKey, modelName, contentParts, temperature) {
       const hasImages = contentParts.some(p => p.type === "image");
       const content = hasImages
@@ -2490,6 +2521,7 @@ Important rules:
       return data.choices?.[0]?.message?.content || "";
     }
 
+    // API call functions — Gemini: generateContent endpoint with inline image data
     async function callGeminiChat(apiKey, modelName, contentParts, temperature) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
@@ -2515,6 +2547,7 @@ Important rules:
       return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
+    // API call functions — Anthropic Claude: messages endpoint with base64 image blocks
     async function callClaudeChat(apiKey, modelName, contentParts, temperature) {
       // Anthropic's API only accepts temperature in [0, 1], unlike the 0-2 range
       // this app's shared temperature field allows for local/OpenAI/Gemini models.
@@ -2549,6 +2582,7 @@ Important rules:
       return data.content?.[0]?.text || "";
     }
 
+    // API call functions — OpenRouter: unified chat completions proxy with site attribution headers
     async function callOpenRouterChat(apiKey, modelName, contentParts, temperature) {
       const hasImages = contentParts.some(p => p.type === "image");
       const content = hasImages
@@ -2581,6 +2615,7 @@ Important rules:
       return data.choices?.[0]?.message?.content || "";
     }
 
+    // Generation orchestration — Cloud: provider dispatch, answer parsing, retry logic, batch runner
     async function callCloudModel(cloudModelProvider, apiKey, modelName, prompt, temperature, imagesData = {}) {
       const contentParts = buildContentParts(prompt, imagesData);
 
@@ -2740,6 +2775,7 @@ Important rules:
       }
     }
 
+    // Generation orchestration — Cloud: top-level cloud generation entry point
     async function generateCloudResponses() {
       const previewArea = document.getElementById("previewArea");
 
@@ -2856,6 +2892,7 @@ Important rules:
       `;
     }
 
+    // Initialization / event wiring: escapeHTML, citation modal, helper health check, legacy model check
     function escapeHTML(text) {
       return String(text)
         .replace(/&/g, "&amp;")
