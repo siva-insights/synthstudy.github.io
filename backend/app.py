@@ -769,7 +769,7 @@ if __name__ == "__main__":
         "mistral-small3.2:24b": "~14 GB", "qwen2.5:7b": "~4.4 GB",
         "qwen2.5:7b-instruct":  "~4.4 GB", "qwen2.5:14b": "~9.0 GB", "qwen3:14b": "~9.3 GB",
     }
-    MODEL_LIST = list(MODEL_SIZES.keys()) + ["Other (enter below)"]
+    MODEL_LIST = list(MODEL_SIZES.keys()) + ["Other Model"]
 
     # Ollama helpers: detect, start, stop, and list installed models
     def _ollama_ok():
@@ -969,7 +969,7 @@ if __name__ == "__main__":
     tk.Entry(t2_of, textvariable=t2_ov, font=("Helvetica", 11), width=34,
              bg=C["row"], fg=C["text"], insertbackground=C["text"],
              relief="flat", bd=1).pack(anchor="w", pady=(6, 0))
-    tk.Label(t2_of, text="Enter model name from ollama.com/library  (e.g. llama3.2:1b)",
+    tk.Label(t2_of, text="Enter model name (e.g. llama3.2:1b from ollama.com/library)",
              font=("Helvetica", 9), fg=C["muted"], bg=C["card"]).pack(anchor="w", pady=(3, 0))
 
     # Info badge (size + installed status)
@@ -1010,7 +1010,7 @@ if __name__ == "__main__":
         t2_pf.pack_forget()
         t2_stat.config(text=""); t2_lnk.config(text="")
         t2_badge_lbl.config(text="", bg=C["card"]); t2_badge.config(bg=C["card"])
-        if val == "Other (enter below)":
+        if val == "Other Model":
             t2_of.pack(anchor="w", pady=(6, 0), before=t2_badge)
             return
         t2_of.pack_forget()
@@ -1046,7 +1046,7 @@ if __name__ == "__main__":
 
     def do_install():
         val   = t2_var.get()
-        model = (t2_ov.get().strip() if val == "Other (enter below)"
+        model = (t2_ov.get().strip() if val == "Other Model"
                  else (None if val in ("Select a model", "") else val))
         if not model:
             t2_stat.config(text="Please select or enter a model name.", fg=C["red"]); return
