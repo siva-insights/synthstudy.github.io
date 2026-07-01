@@ -3,6 +3,8 @@ import re
 import sys
 import uuid
 import random
+import shutil
+import subprocess
 import requests
 import pandas as pd
 from datasets import load_dataset
@@ -748,6 +750,21 @@ if __name__ == "__main__":
         except Exception:
             return False
 
+    def _ollama_installed():
+        if os.path.exists("/Applications/Ollama.app"):
+            return True
+        return shutil.which("ollama") is not None
+
+    def _start_ollama():
+        if os.path.exists("/Applications/Ollama.app"):
+            subprocess.Popen(["open", "-a", "Ollama"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            cli = shutil.which("ollama")
+            if cli:
+                subprocess.Popen([cli, "serve"],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     def _installed_models():
         try:
             r = requests.get(f"{OLLAMA_BASE}/api/tags", timeout=3)
@@ -821,13 +838,29 @@ if __name__ == "__main__":
     def do_check():
         root.after(0, lambda: t1_stat.config(text="Checking…", fg=MUTED))
         ok = _ollama_ok()
+        if not ok and _ollama_installed():
+            root.after(0, lambda: (
+                t1_stat.config(text="Ollama found — starting…", fg=MUTED),
+                t1_det.config(text=""),
+                t1_lnk.config(text=""),
+            ))
+            _start_ollama()
+            for _ in range(10):
+                time.sleep(1)
+                if _ollama_ok():
+                    ok = True
+                    break
         def u():
             if ok:
-                t1_stat.config(text="✓  Ollama is installed and running.", fg=GREEN)
+                t1_stat.config(text="✓  Ollama is running.", fg=GREEN)
                 t1_det.config(text="Proceed to Install Model to set up your LLM.")
                 t1_lnk.config(text="")
+            elif _ollama_installed():
+                t1_stat.config(text="✗  Could not start Ollama.", fg=RED)
+                t1_det.config(text="Try opening Ollama manually, then click Check Again.")
+                t1_lnk.config(text="")
             else:
-                t1_stat.config(text="✗  Ollama not found or not running.", fg=RED)
+                t1_stat.config(text="✗  Ollama not installed.", fg=RED)
                 t1_det.config(text="Download and install Ollama, then click Check Again.")
                 t1_lnk.config(text="→  Download Ollama at ollama.ai")
         root.after(0, u)
