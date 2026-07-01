@@ -225,7 +225,6 @@
       overflow-x: auto;
     }
 
-    .scale-type-row { display: flex; align-items: center; gap: 20px; margin-top: 12px; flex-wrap: wrap; }
     .scale-type-option { font-weight: normal; display: inline-flex; align-items: center; gap: 6px; margin-top: 0; cursor: pointer; }
     .scale-setup-row { display: flex; gap: 16px; margin-top: 12px; align-items: flex-start; }
     .scale-setup-row > div { flex: 1; }
@@ -575,7 +574,7 @@ Your task:
 1. Read the respondent persona.
 2. Read the study materials exactly as a survey participant would see them.
 3. Answer each embedded survey question from this respondent's perspective.
-4. Use the respondent persona, the study materials, and the response scale for each question when choosing answers.
+4. Use the respondent persona, the study materials, response scale, and scale type for each question when choosing answers.
 
 Respondent persona:
 {persona}
@@ -585,7 +584,7 @@ Study materials with embedded questions:
 
 Important rules:
 - Choose only allowed option codes for each question.
-- Each answer must be an integer within the allowed response-code range for that question.
+- Each answer must be selected based on the question's scale type: use an integer for discrete scales and a float/number for continuous scales, within the allowed response-code range.
 - Do not choose values below the minimum code or above the maximum code.
 - Return only the final answer values.
 - Do not include explanations.
@@ -928,20 +927,6 @@ Important rules:
             oninput="updateInputEstimate()"
             placeholder="Enter question ${questionCount}">
     
-          <div class="scale-type-row">
-            <label style="margin-top:0;font-weight:bold;">Scale Type:</label>
-            <label class="scale-type-option">
-              <input type="radio" name="question${questionCount}ScaleType" value="point"
-                     onchange="showScaleOptions(${questionCount})" checked>
-              Point scale
-            </label>
-            <label class="scale-type-option">
-              <input type="radio" name="question${questionCount}ScaleType" value="continuous"
-                     onchange="showScaleOptions(${questionCount})">
-              Continuous scale
-            </label>
-          </div>
-
           <div class="scale-setup-row">
             <div>
               <label style="margin-top:0;">Number of scale points:</label>
@@ -959,6 +944,21 @@ Important rules:
                 value="1"
                 placeholder="e.g. 1"
                 oninput="showScaleOptions(${questionCount})">
+            </div>
+            <div>
+              <label style="margin-top:0;">Scale Type:</label>
+              <div style="display:flex;gap:14px;margin-top:6px;">
+                <label class="scale-type-option">
+                  <input type="radio" name="question${questionCount}ScaleType" value="discrete"
+                         onchange="showScaleOptions(${questionCount})" checked>
+                  Discrete
+                </label>
+                <label class="scale-type-option">
+                  <input type="radio" name="question${questionCount}ScaleType" value="continuous"
+                         onchange="showScaleOptions(${questionCount})">
+                  Continuous
+                </label>
+              </div>
             </div>
           </div>
 
@@ -1000,7 +1000,7 @@ Important rules:
 
     function getQuestionScaleType(questionNumber) {
       const radio = document.querySelector(`input[name="question${questionNumber}ScaleType"]:checked`);
-      return radio?.value || "point";
+      return radio?.value || "discrete";
     }
 
     function getQuestionCardData(questionNumber) {
@@ -1443,7 +1443,8 @@ Important rules:
         ? `Allowed response range: ${scaleStart} to ${scaleEnd}\nPlease select a number in the range.`
         : `Allowed response codes: ${scaleStart} to ${scaleEnd}\nPlease select an integer in the range.`;
 
-      return `[Q${questionNumber}]\nQuestion: ${question}\n${rangeInstruction}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
+      const responseTypeLabel = scaleType === "continuous" ? "Continuous" : "Discrete";
+      return `[Q${questionNumber}]\nQuestion: ${question}\nResponse type: ${responseTypeLabel}\n${rangeInstruction}\nResponse scale:\n${scaleText}\n[/Q${questionNumber}]`;
     }
 
     function getEmbeddedQuestionNumbers(stimuli, questionNumbers) {
@@ -1468,7 +1469,11 @@ Important rules:
     function sanitizeNoPersonaInstruction(promptTemplate) {
       return promptTemplate
         .replace(/\n?Respondent persona:\s*\n\{persona\}\s*\n/, "\n")
-        .replace(/\n?\d+\.\s*Read the respondent persona\.\s*/, "\n")
+        .replace(/\n?\d+\.\s*Read the respondent persona\.\s*\n?/, "\n")
+        .replace(/\n2\. /g, "\n1. ")
+        .replace(/\n3\. /g, "\n2. ")
+        .replace(/\n4\. /g, "\n3. ")
+        .replaceAll("this respondent's perspective", "the participant's perspective")
         .replaceAll("the respondent persona, ", "")
         .replaceAll("the respondent persona,", "");
     }
