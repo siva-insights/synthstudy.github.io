@@ -92,7 +92,7 @@ class Question(BaseModel):
     question_text: str
     scale_points: list[str]
     scale_start: int = 1
-    scale_type: str = "point"
+    scale_type: str = "discrete"
 
 
 class PersonaRecord(BaseModel):
@@ -245,9 +245,11 @@ def build_prompt(
                 f"Please select an integer in the range."
             )
 
+        response_type_label = "Continuous" if q.scale_type == "continuous" else "Discrete"
         embedded_question = f"""
 [Q{q.question_number}]
 Question: {q.question_text}
+Response type: {response_type_label}
 {range_instruction}
 Response scale:
 {scale_text}
@@ -276,7 +278,7 @@ Your task:
 1. Read the respondent persona.
 2. Read the study materials exactly as a survey participant would see them.
 3. Answer each embedded survey question from this respondent's perspective.
-4. Use the respondent persona, the study materials, and the response scale for each question when choosing answers.
+4. Use the respondent persona, the study materials, response scale, and scale type for each question when choosing answers.
 
 Respondent persona:
 {persona}
@@ -286,7 +288,7 @@ Study materials with embedded questions:
 
 Important rules:
 - Choose only allowed option codes for each question.
-- Each answer must be an integer within the allowed response-code range for that question.
+- Each answer must be selected based on the question's scale type: use an integer for discrete scales and a float/number for continuous scales, within the allowed response-code range.
 - Do not choose values below the minimum code or above the maximum code.
 - Return only the final answer values.
 - Do not include explanations.
@@ -301,15 +303,15 @@ You are simulating one synthetic survey respondent.
 
 Your task:
 1. Read the study materials exactly as a survey participant would see them.
-2. Answer each embedded survey question from this respondent's perspective.
-3. Use the study materials and the response scale for each question when choosing answers.
+2. Answer each embedded survey question from the participant's perspective.
+3. Use the study materials, response scale, and scale type for each question when choosing answers.
 
 Study materials with embedded questions:
 {embedded_stimuli}
 
 Important rules:
 - Choose only allowed option codes for each question.
-- Each answer must be an integer within the allowed response-code range for that question.
+- Each answer must be selected based on the question's scale type: use an integer for discrete scales and a float/number for continuous scales, within the allowed response-code range.
 - Do not choose values below the minimum code or above the maximum code.
 - Return only the final answer values.
 - Do not include explanations.
@@ -331,10 +333,14 @@ Important rules:
             prompt_template
         )
         prompt_template = re.sub(
-            r"\n?\d+\.\s*Read the respondent persona\.\s*",
+            r"\n?\d+\.\s*Read the respondent persona\.\s*\n?",
             "\n",
             prompt_template
         )
+        prompt_template = re.sub(r"\n2\. ", "\n1. ", prompt_template)
+        prompt_template = re.sub(r"\n3\. ", "\n2. ", prompt_template)
+        prompt_template = re.sub(r"\n4\. ", "\n3. ", prompt_template)
+        prompt_template = prompt_template.replace("this respondent's perspective", "the participant's perspective")
         prompt_template = prompt_template.replace("the respondent persona, ", "")
         prompt_template = prompt_template.replace("the respondent persona,", "")
 
