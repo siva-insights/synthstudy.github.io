@@ -810,7 +810,7 @@ if __name__ == "__main__":
     root = tk.Tk()
     root.title("OLSEDG Helper")
     root.geometry("500x460")
-    root.resizable(False, False)
+    root.resizable(True, True)
     root.configure(bg=C["bg"])
 
     # Header bar
@@ -944,7 +944,8 @@ if __name__ == "__main__":
     t2_of = tk.Frame(p2, bg=C["card"])
     t2_ov = tk.StringVar()
     tk.Entry(t2_of, textvariable=t2_ov, font=("Helvetica", 11), width=34,
-             bg=C["row"], relief="flat", bd=1).pack(anchor="w", pady=(6, 0))
+             bg=C["row"], fg=C["text"], insertbackground=C["text"],
+             relief="flat", bd=1).pack(anchor="w", pady=(6, 0))
     tk.Label(t2_of, text="Enter model name from ollama.com/library  (e.g. llama3.2:1b)",
              font=("Helvetica", 9), fg=C["muted"], bg=C["card"]).pack(anchor="w", pady=(3, 0))
 
@@ -1085,8 +1086,30 @@ if __name__ == "__main__":
 
     tk.Frame(p3, bg=C["border"], height=1).pack(fill="x", pady=(10, 10))
 
-    t3_list = tk.Frame(p3, bg=C["card"])
-    t3_list.pack(fill="both", expand=True)
+    # Scrollable model list
+    t3_canvas_frame = tk.Frame(p3, bg=C["card"])
+    t3_canvas_frame.pack(fill="both", expand=True)
+    t3_canvas = tk.Canvas(t3_canvas_frame, bg=C["card"], highlightthickness=0)
+    t3_vsb = ttk.Scrollbar(t3_canvas_frame, orient="vertical", command=t3_canvas.yview)
+    t3_canvas.configure(yscrollcommand=t3_vsb.set)
+    t3_vsb.pack(side="right", fill="y")
+    t3_canvas.pack(side="left", fill="both", expand=True)
+    t3_list = tk.Frame(t3_canvas, bg=C["card"])
+    t3_list_id = t3_canvas.create_window((0, 0), window=t3_list, anchor="nw")
+
+    def _t3_on_resize(e):
+        t3_canvas.itemconfig(t3_list_id, width=e.width)
+    t3_canvas.bind("<Configure>", _t3_on_resize)
+
+    def _t3_on_frame_resize(e):
+        t3_canvas.configure(scrollregion=t3_canvas.bbox("all"))
+    t3_list.bind("<Configure>", _t3_on_frame_resize)
+
+    # Mouse wheel scroll
+    def _t3_scroll(e):
+        t3_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+    t3_canvas.bind_all("<MouseWheel>", _t3_scroll)
+
     t3_stat = tk.Label(p3, text="", font=("Helvetica", 10), bg=C["card"])
     t3_stat.pack(anchor="w", pady=(6, 0))
 
