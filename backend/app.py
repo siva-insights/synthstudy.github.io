@@ -315,8 +315,8 @@ You are simulating one synthetic survey respondent.
 
 Your task:
 1. Read the study materials exactly as a survey participant would see them.
-2. Answer each embedded survey question from the participant's perspective.
-3. Use the study materials, response scale, and scale type for each question when choosing answers.
+2. Answer each embedded survey question from a participant's perspective.
+3. Use the respondent persona, the study materials, response scale, and scale type for each question when choosing answers.
 
 Study materials with embedded questions:
 {embedded_stimuli}
@@ -351,9 +351,7 @@ Important rules:
         prompt_template = re.sub(r"\n2\. ", "\n1. ", prompt_template)
         prompt_template = re.sub(r"\n3\. ", "\n2. ", prompt_template)
         prompt_template = re.sub(r"\n4\. ", "\n3. ", prompt_template)
-        prompt_template = prompt_template.replace("this respondent's perspective", "the participant's perspective")
-        prompt_template = prompt_template.replace("the respondent persona, ", "")
-        prompt_template = prompt_template.replace("the respondent persona,", "")
+        prompt_template = prompt_template.replace("this respondent's perspective", "a participant's perspective")
 
     prompt = prompt_template.replace("{persona}", str(persona) if include_persona else "")
     prompt = prompt.replace("{embedded_stimuli}", str(embedded_stimuli))

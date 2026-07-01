@@ -1539,9 +1539,7 @@ Important rules:
         .replace(/\n2\. /g, "\n1. ")
         .replace(/\n3\. /g, "\n2. ")
         .replace(/\n4\. /g, "\n3. ")
-        .replaceAll("this respondent's perspective", "the participant's perspective")
-        .replaceAll("the respondent persona, ", "")
-        .replaceAll("the respondent persona,", "");
+        .replaceAll("this respondent's perspective", "a participant's perspective");
     }
 
     function buildPreviewPrompt(persona, embeddedStimuli, questionNumbers, includePersona) {
