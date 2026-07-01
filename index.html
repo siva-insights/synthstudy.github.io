@@ -51,10 +51,10 @@
     .preview-question { margin: 8px 0; padding: 10px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; }
     .scale-radio { display: inline-flex; align-items: center; gap: 4px; margin-right: 16px; margin-top: 8px; font-weight: normal; }
     .preview-nav { margin-top: 15px; display: flex; justify-content: space-between; align-items: center; }
-    .preview-output-wrap { margin-top: 16px; overflow-x: auto; }
+    .preview-output-wrap { margin-top: 16px; overflow-x: auto; overflow-y: auto; max-height: 420px; }
     .preview-output-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #ffffff; }
     .preview-output-table th, .preview-output-table td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; vertical-align: top; }
-    .preview-output-table th { background: #dbeafe; color: #1e3a8a; }
+    .preview-output-table th { background: #dbeafe; color: #1e3a8a; position: sticky; top: 0; z-index: 1; }
     .preview-output-table td { max-width: 320px; white-space: pre-wrap; }
     .preview-counter { font-weight: bold; color: #475569; }
 
@@ -2289,16 +2289,19 @@ Important rules:
           <p>This may take several minutes because OLSEDG generates one respondent at a time.</p>
           ${estimateHtml}
           <p style="color:#64748b;">
-            Generated responses are continuously saved to your local <strong>OLSEDG_outputs</strong> folder. Once processing is complete, both the final response dataset and study-input document can be downloaded directly from this page.
+            Responses are saved continuously to the <strong>SEDG_outputs</strong> folder in your <strong>Downloads</strong>. You can access your data there at any time.
           </p>
-    
+
           <div class="progress-container">
             <div id="generationProgressBar" class="progress-bar"></div>
           </div>
-    
+
           <div id="generationProgressText" class="progress-text">
             Starting generation...
           </div>
+
+          <button type="button" id="stopGenerationBtn" style="margin-top:14px; background:#dc2626; color:#fff; border:none; padding:8px 20px; border-radius:6px; font-size:14px; cursor:pointer;"
+            onclick="stopGeneration()">Stop Generation</button>
         </div>
       `;
     
@@ -2340,7 +2343,17 @@ Important rules:
       }
     }
 
+    let _activeJobId = null;
+
+    async function stopGeneration() {
+      if (!_activeJobId) return;
+      const btn = document.getElementById("stopGenerationBtn");
+      if (btn) { btn.disabled = true; btn.textContent = "Stopping…"; }
+      await fetch(`http://localhost:8000/stop/${_activeJobId}`, { method: "POST" }).catch(() => {});
+    }
+
     async function pollGenerationProgress(jobId) {
+      _activeJobId = jobId;
       const previewArea = document.getElementById("previewArea");
     
       const interval = setInterval(async () => {
@@ -2379,26 +2392,35 @@ Important rules:
           
           if (data.status === "complete") {
             clearInterval(interval);
-    
+
             previewArea.innerHTML = `
               <div class="preview-box">
                 <div class="preview-title">Generation Complete</div>
                 <p><strong>Total responses generated:</strong> ${data.total}</p>
-    
-                <a href="${data.csv_url}" download>
-                  <button type="button">Download CSV Responses</button>
-                </a>
-    
-                <a href="${data.docx_url}" download>
-                  <button type="button">Download Study Inputs Word Doc</button>
-                </a>
+                <p style="color:#16a34a; font-weight:600;">
+                  ✓ Your generated responses are saved in the <strong>SEDG_outputs</strong> folder inside your <strong>Downloads</strong>. Open that folder to access your data.
+                </p>
               </div>
             `;
           }
-    
+
+          if (data.status === "stopped") {
+            clearInterval(interval);
+
+            previewArea.innerHTML = `
+              <div class="preview-box">
+                <div class="preview-title">Generation Stopped</div>
+                <p>${data.message}</p>
+                <p style="color:#d97706; font-weight:600;">
+                  ✓ Responses generated so far are saved in the <strong>SEDG_outputs</strong> folder inside your <strong>Downloads</strong>. Open that folder to access your data.
+                </p>
+              </div>
+            `;
+          }
+
           if (data.status === "error") {
             clearInterval(interval);
-    
+
             previewArea.innerHTML = `
               <div class="preview-box">
                 <div class="preview-title">Generation Failed</div>
@@ -2409,7 +2431,8 @@ Important rules:
     
         } catch (error) {
           clearInterval(interval);
-    
+          _activeJobId = null;
+
           previewArea.innerHTML = `
             <div class="preview-box">
               <div class="preview-title">Generation Failed</div>

@@ -25,7 +25,7 @@ from typing import Literal, Optional
 # Constants
 OLLAMA_URL = "http://localhost:11434"
 
-OUTPUT_DIR = Path.home() / "OLSEDG_outputs"
+OUTPUT_DIR = Path.home() / "Downloads" / "SEDG_outputs"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 HISTORY_FILE = OUTPUT_DIR / "generation_history.json"
 
@@ -551,6 +551,11 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         job_start_time = time.time()
 
         for i in range(total_needed):
+            if JOBS.get(job_id, {}).get("stop_requested"):
+                update_job(job_id, status="stopped",
+                           message=f"Generation stopped after {i} respondents.")
+                return
+
             respondent_id = i + 1
             condition_number = condition_numbers[i]
             stimuli = condition_lookup[condition_number]
@@ -735,6 +740,14 @@ def get_progress(job_id: str):
         "success": True,
         **JOBS[job_id]
     }
+
+@app.post("/stop/{job_id}")
+def stop_job(job_id: str):
+    if job_id not in JOBS:
+        return {"success": False, "message": "Job not found"}
+    with JOBS_LOCK:
+        JOBS[job_id]["stop_requested"] = True
+    return {"success": True}
 
 # tkinter GUI entry point
 if __name__ == "__main__":
