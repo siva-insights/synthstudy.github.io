@@ -795,11 +795,14 @@ if __name__ == "__main__":
         return False
 
     def _quit_ollama():
-        # Gracefully quit the macOS app bundle (no-op if not running as app)
+        # Gracefully quit the macOS app bundle (menu bar icon)
         subprocess.run(["osascript", "-e", 'quit app "Ollama"'],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        # Kill any standalone CLI server process
-        subprocess.run(["pkill", "-x", "ollama"],
+        # Force-kill both the app bundle process (Ollama) and the background
+        # server process (ollama) — covers both .app and CLI installs
+        subprocess.run(["killall", "Ollama"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["killall", "ollama"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def _installed_models():
