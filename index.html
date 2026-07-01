@@ -637,6 +637,7 @@ Important rules:
   <script>
     let previews = [];
     let currentPreviewIndex = 0;
+    let _withPersonaInstruction = null;
     let cloudGenerationRows = [];
     let cloudGenerationColumns = [];
     let cloudGenerationTimestamp = "";
@@ -1326,16 +1327,25 @@ Important rules:
 
     function updateGenericInstructionNote() {
       const note = document.getElementById("genericInstructionNote");
+      const textarea = document.getElementById("genericInstruction");
       if (!note) return;
       const noPersona = document.getElementById("personaSelection")?.value === "none";
       if (noPersona) {
         note.innerHTML = `This default instruction is used to guide the LLM response format. Update it only if needed, and keep
         <b>{embedded_stimuli}</b>, and <b>{answer_template}</b> unchanged.
         <b>{embedded_stimuli}</b> represents the study stimuli with survey questions and images inserted in the intended places.`;
+        if (textarea && _withPersonaInstruction === null) {
+          _withPersonaInstruction = textarea.value;
+          textarea.value = sanitizeNoPersonaInstruction(_withPersonaInstruction);
+        }
       } else {
         note.innerHTML = `This default instruction is used to guide the LLM response format. Update it only if needed, and keep
         <b>{persona}</b>, <b>{embedded_stimuli}</b>, and <b>{answer_template}</b> unchanged.
         <b>{embedded_stimuli}</b> represents the study stimuli with survey questions and images inserted in the intended places.`;
+        if (textarea && _withPersonaInstruction !== null) {
+          textarea.value = _withPersonaInstruction;
+          _withPersonaInstruction = null;
+        }
       }
     }
 
@@ -1873,7 +1883,10 @@ Important rules:
               <tr>${columns.map((column) => `<th>${escapeHTML(column)}</th>`).join("")}</tr>
             </thead>
             <tbody>
-              ${rows.map((row) => `<tr>${columns.map((column) => `<td>${escapeHTML(String(row[column] ?? ""))}</td>`).join("")}</tr>`).join("")}
+              ${rows.map((row) => `<tr>${columns.map((column) => {
+                const cellText = String(row[column] ?? "").replace(/<<<IMAGE_(\d+)>>>/g, "[Image $1]");
+                return `<td>${escapeHTML(cellText)}</td>`;
+              }).join("")}</tr>`).join("")}
             </tbody>
           </table>
         </div>
