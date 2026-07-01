@@ -794,6 +794,14 @@ if __name__ == "__main__":
                 return True
         return False
 
+    def _quit_ollama():
+        # Gracefully quit the macOS app bundle (no-op if not running as app)
+        subprocess.run(["osascript", "-e", 'quit app "Ollama"'],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Kill any standalone CLI server process
+        subprocess.run(["pkill", "-x", "ollama"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     def _installed_models():
         try:
             r = requests.get(f"{OLLAMA_BASE}/api/tags", timeout=3)
@@ -1181,6 +1189,7 @@ if __name__ == "__main__":
     root.after(800, refresh_t3)
 
     def on_close():
+        _quit_ollama()
         server.should_exit = True
         root.destroy()
         sys.exit(0)
