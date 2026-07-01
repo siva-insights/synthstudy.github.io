@@ -1964,18 +1964,6 @@ Important rules:
       XLSX.utils.book_append_sheet(workbook, worksheet, "Preview Output");
 
       const filename = `SEDG_preview_${rows.length}_samples_${formatTimestampForFilename()}.xlsx`;
-      const wbout = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
-      const b64 = _arrayBufferToBase64(wbout);
-
-      try {
-        const saved = await _saveToSEDGOutputs(filename, b64);
-        if (saved) {
-          alert(`Saved to SEDG_outputs on your Desktop:\n${filename}`);
-          return;
-        }
-      } catch (_) {}
-
-      // Fallback: browser download when helper is not running
       XLSX.writeFile(workbook, filename);
     }
 
@@ -2039,29 +2027,32 @@ Important rules:
 
       for (const q of questionNumbers) {
         const questionText = document.getElementById(`question${q}`)?.value || "";
+        const scaleType = getQuestionScaleType(q);
         const scaleLabels = getScaleLabels(q);
+        const scaleStartRaw = parseInt(document.getElementById(`question${q}ScaleStart`)?.value);
+        const scaleStart = isNaN(scaleStartRaw) ? 1 : scaleStartRaw;
+        const scaleEnd = scaleStart + scaleLabels.length - 1;
+        const maxWords = parseInt(document.getElementById(`question${q}MaxWords`)?.value) || 0;
 
         children.push(new Paragraph({ text: `Q${q}: ${questionText}`, heading: HeadingLevel.HEADING_3 }));
 
-        scaleLabels.forEach((label) => {
-          children.push(new Paragraph({ text: label.replace(/^(-?\d+)-/, "$1 = ") }));
-        });
+        if (scaleType === "text") {
+          children.push(new Paragraph({ text: `Scale Type: Text (open-ended)` }));
+          children.push(new Paragraph({ text: `Max Words: ${maxWords > 0 ? maxWords : "Unlimited"}` }));
+        } else {
+          const typeLabel = scaleType === "continuous" ? "Continuous (decimal allowed)" : "Discrete (integer only)";
+          children.push(new Paragraph({ text: `Scale Type: ${typeLabel}` }));
+          children.push(new Paragraph({ text: `Range: ${scaleStart} to ${scaleEnd}` }));
+          children.push(new Paragraph({ text: `Scale Points:` }));
+          scaleLabels.forEach((label) => {
+            children.push(new Paragraph({ text: `    ${label.replace(/^(-?\d+)-/, "$1 = ")}` }));
+          });
+        }
       }
 
       const doc = new Document({ sections: [{ children }] });
       const blob = await Packer.toBlob(doc);
       const filename = `SEDG_study_info_${formatTimestampForFilename()}.docx`;
-
-      try {
-        const b64 = _arrayBufferToBase64(await blob.arrayBuffer());
-        const saved = await _saveToSEDGOutputs(filename, b64);
-        if (saved) {
-          alert(`Saved to SEDG_outputs on your Desktop:\n${filename}`);
-          return;
-        }
-      } catch (_) {}
-
-      // Fallback: browser download when helper is not running
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -2333,7 +2324,7 @@ Important rules:
           <p>This may take several minutes because OLSEDG generates one respondent at a time.</p>
           ${estimateHtml}
           <p style="color:#64748b;">
-            Responses are saved continuously to the <strong>SEDG_outputs</strong> folder on your <strong>Desktop</strong>. You can access your data there at any time.
+            Responses are being generated one respondent at a time. When complete (or if you stop early), the response file will automatically download to your <strong>Downloads</strong> folder.
           </p>
 
           <div class="progress-container">
@@ -2434,32 +2425,34 @@ Important rules:
             `;
           }
           
-          if (data.status === "complete") {
+          if (data.status === "complete" || data.status === "stopped") {
             clearInterval(interval);
+            _activeJobId = null;
+
+            const isComplete = data.status === "complete";
+            const title = isComplete ? "Generation Complete" : "Generation Stopped";
+            const color = isComplete ? "#16a34a" : "#d97706";
+            const msg = isComplete
+              ? `All ${data.total} responses generated.`
+              : data.message;
 
             previewArea.innerHTML = `
               <div class="preview-box">
-                <div class="preview-title">Generation Complete</div>
-                <p><strong>Total responses generated:</strong> ${data.total}</p>
-                <p style="color:#16a34a; font-weight:600;">
-                  ✓ Your generated responses are saved in the <strong>SEDG_outputs</strong> folder on your <strong>Desktop</strong>. Open that folder to access your data.
+                <div class="preview-title">${title}</div>
+                <p>${msg}</p>
+                <p style="color:${color}; font-weight:600;">
+                  ✓ Your response file is downloading now. Check your <strong>Downloads</strong> folder.
                 </p>
               </div>
             `;
-          }
 
-          if (data.status === "stopped") {
-            clearInterval(interval);
-
-            previewArea.innerHTML = `
-              <div class="preview-box">
-                <div class="preview-title">Generation Stopped</div>
-                <p>${data.message}</p>
-                <p style="color:#d97706; font-weight:600;">
-                  ✓ Responses generated so far are saved in the <strong>SEDG_outputs</strong> folder on your <strong>Desktop</strong>. Open that folder to access your data.
-                </p>
-              </div>
-            `;
+            // Trigger browser download from the helper
+            const dlLink = document.createElement("a");
+            dlLink.href = `http://localhost:8000/download-result/${jobId}`;
+            dlLink.download = "";
+            document.body.appendChild(dlLink);
+            dlLink.click();
+            document.body.removeChild(dlLink);
           }
 
           if (data.status === "error") {

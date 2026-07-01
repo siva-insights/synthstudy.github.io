@@ -26,13 +26,12 @@ from typing import Literal, Optional
 # Constants
 OLLAMA_URL = "http://localhost:11434"
 
-OUTPUT_DIR = Path.home() / "Desktop" / "SEDG_outputs"
+# Hidden working directory for temp files and history — not exposed to user
+_APP_DIR = Path.home() / ".sedg_helper"
+_APP_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR = _APP_DIR / "outputs"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-# History stored in a hidden app folder so it doesn't appear in SEDG_outputs
-_HISTORY_DIR = Path.home() / ".sedg_helper"
-_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-HISTORY_FILE = _HISTORY_DIR / "generation_history.json"
+HISTORY_FILE = _APP_DIR / "generation_history.json"
 
 # FastAPI app setup + CORS
 app = FastAPI(title="OLSEDG Helper")
@@ -565,11 +564,14 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         for i in range(total_needed):
             if JOBS.get(job_id, {}).get("stop_requested"):
                 if csv_path.exists():
-                    xlsx_path = OUTPUT_DIR / xlsx_filename
-                    pd.read_csv(csv_path).to_excel(xlsx_path, index=False, engine="openpyxl")
+                    _xp = OUTPUT_DIR / xlsx_filename
+                    pd.read_csv(csv_path).to_excel(_xp, index=False, engine="openpyxl")
                     csv_path.unlink(missing_ok=True)
-                update_job(job_id, status="stopped",
-                           message=f"Generation stopped after {i} respondents.")
+                    update_job(job_id, status="stopped", xlsx_path=str(_xp),
+                               message=f"Generation stopped after {i} respondents.")
+                else:
+                    update_job(job_id, status="stopped",
+                               message=f"Generation stopped after {i} respondents.")
                 return
 
             respondent_id = i + 1
@@ -692,6 +694,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             pending=0,
             percent=100,
             estimated_remaining_seconds=0,
+            xlsx_path=str(xlsx_path),
         )
 
     except Exception as e:
@@ -763,6 +766,18 @@ def stop_job(job_id: str):
     with JOBS_LOCK:
         JOBS[job_id]["stop_requested"] = True
     return {"success": True}
+
+@app.get("/download-result/{job_id}")
+def download_result(job_id: str):
+    from fastapi.responses import FileResponse
+    xlsx_path = JOBS.get(job_id, {}).get("xlsx_path")
+    if not xlsx_path or not Path(xlsx_path).exists():
+        return {"success": False, "message": "File not ready"}
+    return FileResponse(
+        path=xlsx_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=Path(xlsx_path).name
+    )
 
 # tkinter GUI entry point
 if __name__ == "__main__":
