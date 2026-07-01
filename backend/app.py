@@ -1000,12 +1000,18 @@ if __name__ == "__main__":
                     t2_badge_lbl.config(
                         text=f"✓  Already installed" + (f"  ·  {sz}" if sz else ""),
                         fg=C["green"], bg=C["green_bg"])
+                    t2_stat.config(
+                        text=f"{val} is ready. You can now generate synthetic responses on SEDG.",
+                        fg=C["green"])
+                    t2_lnk.config(text="↗  Open SEDG at synthstudy.vercel.app")
                     t2_btn.config(text="Reinstall")
                 else:
                     t2_badge.config(bg=C["card"])
                     t2_badge_lbl.config(
                         text=f"Download size: {sz}" if sz else "",
                         fg=C["muted"], bg=C["card"])
+                    t2_stat.config(text="")
+                    t2_lnk.config(text="")
                     t2_btn.config(text="Install Model")
             root.after(0, u)
         _check_installed_async(val, on_installed)
