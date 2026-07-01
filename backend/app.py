@@ -280,7 +280,8 @@ Response scale:
         )
 
     answer_template = "\n".join(
-        [f"Q{q.question_number}=?" for q in questions]
+        [f'Q{q.question_number}="?"' if q.scale_type == "text" else f"Q{q.question_number}=?"
+         for q in questions]
     )
 
     default_prompt_template = """
@@ -299,15 +300,14 @@ Study materials with embedded questions:
 {embedded_stimuli}
 
 Important rules:
-- Choose only allowed option codes for each question.
-- Each answer must match the question's response type: use an integer for discrete scales, a float/number for continuous scales, or text within the allowed word count for text response questions.
-- Do not choose values below the minimum code or above the maximum code.
-- Return only the final answer values.
-- Do not include explanations.
-- Do not include markdown.
-- Do not repeat the questions.
-- Return answers only in this format:
-{answer_template}
+* Use only the allowed response codes or response format for each question.
+* Match each answer to the question type:
+    * Discrete scale: use an integer.
+    * Continuous scale: use a number/float.
+    * Text response: write text within the allowed word limit.
+* Do not use values below the minimum code or above the maximum code.
+* Return only the final responses. Do not include explanations, markdown, or repeat questions.
+* Return answers only in this format: {answer_template}
 """.strip()
 
     no_persona_prompt_template = """
@@ -322,15 +322,14 @@ Study materials with embedded questions:
 {embedded_stimuli}
 
 Important rules:
-- Choose only allowed option codes for each question.
-- Each answer must match the question's response type: use an integer for discrete scales, a float/number for continuous scales, or text within the allowed word count for text response questions.
-- Do not choose values below the minimum code or above the maximum code.
-- Return only the final answer values.
-- Do not include explanations.
-- Do not include markdown.
-- Do not repeat the questions.
-- Return answers only in this format:
-{answer_template}
+* Use only the allowed response codes or response format for each question.
+* Match each answer to the question type:
+    * Discrete scale: use an integer.
+    * Continuous scale: use a number/float.
+    * Text response: write text within the allowed word limit.
+* Do not use values below the minimum code or above the maximum code.
+* Return only the final responses. Do not include explanations, markdown, or repeat questions.
+* Return answers only in this format: {answer_template}
 """.strip()
 
     prompt_template = (generic_instruction or "").strip()
@@ -392,8 +391,9 @@ def parse_answers(raw_text, questions):
         q_num = q.question_number
 
         if q.scale_type == "text":
-            pattern = rf"Q{q_num}\s*=\s*(.+)"
-            match = re.search(pattern, raw_text, re.IGNORECASE)
+            match = re.search(rf'Q{q_num}\s*=\s*"([^"]*)"', raw_text, re.IGNORECASE)
+            if not match:
+                match = re.search(rf"Q{q_num}\s*=\s*(.+)", raw_text, re.IGNORECASE)
             if match:
                 answers[f"Q{q_num}"] = match.group(1).strip()
             else:
