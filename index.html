@@ -225,7 +225,7 @@
       overflow-x: auto;
     }
 
-    .question-inputs-row { display: flex; gap: 14px; align-items: flex-start; margin-top: 12px; flex-wrap: wrap; }
+    .question-inputs-row { display: flex; gap: 14px; align-items: flex-start; margin-top: 12px; }
     .question-inputs-row label { margin-top: 0; }
     .scale-horizontal { display: flex; gap: 8px; overflow-x: auto; margin-top: 10px; padding-bottom: 6px; }
     .scale-col { display: flex; flex-direction: column; align-items: center; min-width: 72px; }
@@ -926,16 +926,16 @@ Important rules:
             placeholder="Enter question ${questionCount}">
     
           <div class="question-inputs-row">
-            <div style="flex:0 0 160px;">
+            <div style="flex:0 0 auto;">
               <label>Response Type:</label>
-              <select id="question${questionCount}ScaleType" onchange="showScaleOptions(${questionCount})">
+              <select style="width:155px;" id="question${questionCount}ScaleType" onchange="showScaleOptions(${questionCount})">
                 <option value="discrete">Discrete Scale</option>
                 <option value="continuous">Continuous Scale</option>
                 <option value="text">Text Response</option>
               </select>
             </div>
 
-            <div id="question${questionCount}ScaleSetup" style="display:flex;gap:12px;flex:1;min-width:190px;">
+            <div id="question${questionCount}ScaleSetup" style="display:flex;gap:12px;flex:1;">
               <div style="flex:1;">
                 <label>No. of scale points:</label>
                 <input type="number" min="2" max="20"
@@ -955,9 +955,9 @@ Important rules:
               </div>
             </div>
 
-            <div id="question${questionCount}MaxWordsRow" style="display:none;flex:0 0 150px;">
+            <div id="question${questionCount}MaxWordsRow" style="display:none;flex:0 0 auto;">
               <label>Response word limit:</label>
-              <input type="number" min="1"
+              <input style="width:140px;" type="number" min="1"
                 id="question${questionCount}MaxWords"
                 placeholder="e.g. 100"
                 oninput="updateInputEstimate()">
@@ -1370,7 +1370,7 @@ Important rules:
 
       if (scaleType === "text") {
         if (setupRow) setupRow.style.display = "none";
-        if (maxWordsRow) maxWordsRow.style.display = "block";
+        if (maxWordsRow) maxWordsRow.style.display = "flex";
         container.innerHTML = "";
         updateInputEstimate();
         return;
