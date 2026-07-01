@@ -1852,6 +1852,7 @@ Important rules:
       return personas;
     }
 
+    // Numeric-first sort mirrors _sort_by_pid() in app.py so preview order matches generation order
     function sortPersonasByPid(personas) {
       return [...personas].sort((a, b) => {
         const na = parseFloat(a.pid), nb = parseFloat(b.pid);
