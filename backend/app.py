@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import uuid
 import random
 import requests
@@ -726,4 +727,43 @@ def get_progress(job_id: str):
     }
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    import tkinter as tk
+
+    PORT = 8000
+
+    # Start uvicorn in a background thread using Server so we can stop it cleanly
+    config = uvicorn.Config(app, host="127.0.0.1", port=PORT, log_level="error")
+    server = uvicorn.Server(config)
+    server_thread = Thread(target=server.run, daemon=True)
+    server_thread.start()
+
+    # Build the status window
+    root = tk.Tk()
+    root.title("OLSEDG Helper")
+    root.geometry("420x160")
+    root.resizable(False, False)
+
+    frame = tk.Frame(root, padx=24, pady=18)
+    frame.pack(fill="both", expand=True)
+
+    tk.Label(frame, text="OLSEDG Helper", font=("Helvetica", 17, "bold")).pack(anchor="w")
+
+    status_label = tk.Label(frame, text="Starting server…", font=("Helvetica", 12), fg="#888")
+    status_label.pack(anchor="w", pady=(10, 0))
+
+    note_label = tk.Label(frame, text="", font=("Helvetica", 11), fg="#888")
+    note_label.pack(anchor="w", pady=(4, 0))
+
+    def update_status():
+        status_label.config(text=f"Running on http://127.0.0.1:{PORT}", fg="#16a34a")
+        note_label.config(text="Keep this window open while using SEDG.")
+
+    root.after(1200, update_status)
+
+    def on_close():
+        server.should_exit = True
+        root.destroy()
+        sys.exit(0)
+
+    root.protocol("WM_DELETE_WINDOW", on_close)
+    root.mainloop()

@@ -16,8 +16,9 @@ del /q *.spec
 
 pyinstaller ^
   --onefile ^
-  --console ^
+  --windowed ^
   --name "OLSEDG-Helper" ^
+  --hidden-import=tkinter ^
   --hidden-import=datasets ^
   --hidden-import=pandas ^
   --hidden-import=docx ^

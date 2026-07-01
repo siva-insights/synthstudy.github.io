@@ -20,6 +20,7 @@ rm -f *.spec
 pyinstaller \
   --windowed \
   --name "OLSEDG Helper" \
+  --hidden-import=tkinter \
   --hidden-import=datasets \
   --hidden-import=pandas \
   --hidden-import=docx \
