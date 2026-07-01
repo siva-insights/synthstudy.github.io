@@ -1922,6 +1922,24 @@ Important rules:
       `;
     }
 
+    function _arrayBufferToBase64(buffer) {
+      let binary = "";
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.length; i += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      }
+      return btoa(binary);
+    }
+
+    async function _saveToSEDGOutputs(filename, content_base64) {
+      const resp = await fetch("http://localhost:8000/save-file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, content_base64 })
+      });
+      return resp.ok;
+    }
+
     async function downloadPreviewExcel() {
       if (!window.XLSX) {
         alert("Excel export is not available. Please check your internet connection and try again.");
@@ -1944,7 +1962,21 @@ Important rules:
       const worksheet = XLSX.utils.json_to_sheet(rows, { header: columns });
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Preview Output");
-      XLSX.writeFile(workbook, `OLSEDG_preview_output_${rows.length}_samples.xlsx`);
+
+      const filename = `SEDG_preview_${rows.length}_samples_${formatTimestampForFilename()}.xlsx`;
+      const wbout = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+      const b64 = _arrayBufferToBase64(wbout);
+
+      try {
+        const saved = await _saveToSEDGOutputs(filename, b64);
+        if (saved) {
+          alert(`Saved to SEDG_outputs on your Desktop:\n${filename}`);
+          return;
+        }
+      } catch (_) {}
+
+      // Fallback: browser download when helper is not running
+      XLSX.writeFile(workbook, filename);
     }
 
     async function downloadStudyInfo() {
@@ -2018,10 +2050,22 @@ Important rules:
 
       const doc = new Document({ sections: [{ children }] });
       const blob = await Packer.toBlob(doc);
+      const filename = `SEDG_study_info_${formatTimestampForFilename()}.docx`;
+
+      try {
+        const b64 = _arrayBufferToBase64(await blob.arrayBuffer());
+        const saved = await _saveToSEDGOutputs(filename, b64);
+        if (saved) {
+          alert(`Saved to SEDG_outputs on your Desktop:\n${filename}`);
+          return;
+        }
+      } catch (_) {}
+
+      // Fallback: browser download when helper is not running
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `sedg-study-info-${formatTimestampForFilename()}.docx`;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
