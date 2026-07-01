@@ -93,6 +93,7 @@ class Question(BaseModel):
     scale_points: list[str]
     scale_start: int = 1
     scale_type: str = "discrete"
+    max_words: int = 0
 
 
 class PersonaRecord(BaseModel):
@@ -227,26 +228,37 @@ def build_prompt(
     question_lookup = {}
 
     for q in questions:
-        min_code = q.scale_start
-        max_code = q.scale_start + len(q.scale_points) - 1
-
-        scale_text = "\n".join(
-            [f"{q.scale_start + i} = {label}" for i, label in enumerate(q.scale_points)]
-        )
-
-        if q.scale_type == "continuous":
-            range_instruction = (
-                f"Allowed response range: {min_code} to {max_code}\n"
-                f"Please select a number in the range."
-            )
+        if q.scale_type == "text":
+            max_words_str = f"{q.max_words} words" if q.max_words > 0 else "unlimited"
+            embedded_question = f"""
+[Q{q.question_number}]
+Question: {q.question_text}
+Response type: Text
+Max words: {max_words_str}
+Please provide a text response within the allowed word count.
+[/Q{q.question_number}]
+""".strip()
         else:
-            range_instruction = (
-                f"Allowed response codes: {min_code} to {max_code}\n"
-                f"Please select an integer in the range."
+            min_code = q.scale_start
+            max_code = q.scale_start + len(q.scale_points) - 1
+
+            scale_text = "\n".join(
+                [f"{q.scale_start + i} = {label}" for i, label in enumerate(q.scale_points)]
             )
 
-        response_type_label = "Continuous" if q.scale_type == "continuous" else "Discrete"
-        embedded_question = f"""
+            if q.scale_type == "continuous":
+                range_instruction = (
+                    f"Allowed response range: {min_code} to {max_code}\n"
+                    f"Please select a number in the range."
+                )
+            else:
+                range_instruction = (
+                    f"Allowed response codes: {min_code} to {max_code}\n"
+                    f"Please select an integer in the range."
+                )
+
+            response_type_label = "Continuous" if q.scale_type == "continuous" else "Discrete"
+            embedded_question = f"""
 [Q{q.question_number}]
 Question: {q.question_text}
 Response type: {response_type_label}
@@ -288,7 +300,7 @@ Study materials with embedded questions:
 
 Important rules:
 - Choose only allowed option codes for each question.
-- Each answer must be selected based on the question's scale type: use an integer for discrete scales and a float/number for continuous scales, within the allowed response-code range.
+- Each answer must match the question's response type: use an integer for discrete scales, a float/number for continuous scales, or text within the allowed word count for text response questions.
 - Do not choose values below the minimum code or above the maximum code.
 - Return only the final answer values.
 - Do not include explanations.
@@ -311,7 +323,7 @@ Study materials with embedded questions:
 
 Important rules:
 - Choose only allowed option codes for each question.
-- Each answer must be selected based on the question's scale type: use an integer for discrete scales and a float/number for continuous scales, within the allowed response-code range.
+- Each answer must match the question's response type: use an integer for discrete scales, a float/number for continuous scales, or text within the allowed word count for text response questions.
 - Do not choose values below the minimum code or above the maximum code.
 - Return only the final answer values.
 - Do not include explanations.
@@ -378,22 +390,32 @@ def parse_answers(raw_text, questions):
 
     for q in questions:
         q_num = q.question_number
-        min_code = q.scale_start
-        max_code = q.scale_start + len(q.scale_points) - 1
-        is_continuous = q.scale_type == "continuous"
 
-        pattern = rf"Q{q_num}\s*=\s*(-?\d+\.?\d*)"
-        match = re.search(pattern, raw_text, re.IGNORECASE)
-
-        if match:
-            value = float(match.group(1)) if is_continuous else int(match.group(1))
-            answers[f"Q{q_num}"] = value
-
-            if not (min_code <= value <= max_code):
+        if q.scale_type == "text":
+            pattern = rf"Q{q_num}\s*=\s*(.+)"
+            match = re.search(pattern, raw_text, re.IGNORECASE)
+            if match:
+                answers[f"Q{q_num}"] = match.group(1).strip()
+            else:
+                answers[f"Q{q_num}"] = ""
                 invalid_questions.append(f"Q{q_num}")
         else:
-            answers[f"Q{q_num}"] = ""
-            invalid_questions.append(f"Q{q_num}")
+            min_code = q.scale_start
+            max_code = q.scale_start + len(q.scale_points) - 1
+            is_continuous = q.scale_type == "continuous"
+
+            pattern = rf"Q{q_num}\s*=\s*(-?\d+\.?\d*)"
+            match = re.search(pattern, raw_text, re.IGNORECASE)
+
+            if match:
+                value = float(match.group(1)) if is_continuous else int(match.group(1))
+                answers[f"Q{q_num}"] = value
+
+                if not (min_code <= value <= max_code):
+                    invalid_questions.append(f"Q{q_num}")
+            else:
+                answers[f"Q{q_num}"] = ""
+                invalid_questions.append(f"Q{q_num}")
 
     validation = "valid" if not invalid_questions else "invalid"
 
