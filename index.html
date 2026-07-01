@@ -255,7 +255,7 @@
         Open LLM (Local Machine)
         <span class="tooltip">?
           <span class="tooltip-text">
-            Download an open large language model of your choice to your computer and generate synthetic responses entirely offline. No API key or usage fees required.
+            Download an open large language model of your choice to your computer and generate synthetic responses entirely offline. No API key or usage fees required. If your study includes images in the stimuli, select a model that supports image input.
           </span>
         </span>
       </label>
@@ -426,7 +426,7 @@
         <label for="openRouterApiKey">Enter OpenRouter API key:</label>
         <input type="password" id="openRouterApiKey" name="openRouterApiKey" placeholder="Enter OpenRouter API key">
 
-        <label for="openRouterModelChoice">Select OpenRouter model:</label>
+        <label for="openRouterModelChoice">Select OpenRouter model: <span class="tooltip">?<span class="tooltip-text">If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
         <select id="openRouterModelChoice" name="openRouterModelChoice" onchange="toggleOtherModelInput('openRouterModelChoice'); updateInputEstimate();">
           <option value="">Select a model</option>
           <optgroup label="— Free Models —">
