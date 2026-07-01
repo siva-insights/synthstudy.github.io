@@ -2390,41 +2390,39 @@ Important rules:
     async function pollGenerationProgress(jobId) {
       _activeJobId = jobId;
       const previewArea = document.getElementById("previewArea");
-    
+
       const interval = setInterval(async () => {
         try {
           const response = await fetch(`http://localhost:8000/progress/${jobId}`);
           const data = await response.json();
-    
-          if (!data.success) {
-            clearInterval(interval);
-            return;
-          }
-    
+
+          if (!data.success) { clearInterval(interval); return; }
+
           const completed = data.completed || 0;
-          const total = data.total || 1;
-          const pending = total - completed;
-          const percent = Math.round((completed / total) * 100);
-    
-          const progressBar = document.getElementById("generationProgressBar");
+          const total     = data.total || 1;
+          const pending   = total - completed;
+          const percent   = Math.round((completed / total) * 100);
+
+          const progressBar  = document.getElementById("generationProgressBar");
           const progressText = document.getElementById("generationProgressText");
-    
-          if (progressBar) {
-            progressBar.style.width = `${percent}%`;
-          }
-    
-          const remainingMinutes = data.estimated_remaining_seconds
-            ? Math.round(data.estimated_remaining_seconds / 60)
-            : 0;
-          
+
+          if (progressBar) progressBar.style.width = `${percent}%`;
+
           if (progressText) {
-            progressText.innerHTML = `
-              ${completed}/${total} respondents completed.
-              ${pending} pending.
-              Progress: ${percent}%.
-            `;
+            // Build estimated-time string from running average returned by backend
+            let timeStr = "";
+            if (completed > 0 && data.estimated_remaining_seconds != null) {
+              const sec = data.estimated_remaining_seconds;
+              timeStr = sec < 90
+                ? ` · ~${Math.round(sec)}s remaining`
+                : ` · ~${Math.round(sec / 60)} min remaining`;
+            } else if (completed === 0) {
+              timeStr = " · Estimating time…";
+            }
+            progressText.innerHTML =
+              `${completed} of ${total} respondents completed (${percent}%)${timeStr}`;
           }
-          
+
           if (data.status === "complete" || data.status === "stopped") {
             clearInterval(interval);
             _activeJobId = null;
@@ -2432,32 +2430,44 @@ Important rules:
             const isComplete = data.status === "complete";
             const title = isComplete ? "Generation Complete" : "Generation Stopped";
             const color = isComplete ? "#16a34a" : "#d97706";
-            const msg = isComplete
-              ? `All ${data.total} responses generated.`
-              : data.message;
+            const msg   = isComplete ? `All ${data.total} responses generated.` : data.message;
 
             previewArea.innerHTML = `
               <div class="preview-box">
                 <div class="preview-title">${title}</div>
                 <p>${msg}</p>
-                <p style="color:${color}; font-weight:600;">
-                  ✓ Your response file is downloading now. Check your <strong>Downloads</strong> folder.
+                <p id="dlStatusMsg" style="color:${color}; font-weight:600;">
+                  ✓ Preparing your response file for download…
                 </p>
               </div>
             `;
 
-            // Trigger browser download from the helper
-            const dlLink = document.createElement("a");
-            dlLink.href = `http://localhost:8000/download-result/${jobId}`;
-            dlLink.download = "";
-            document.body.appendChild(dlLink);
-            dlLink.click();
-            document.body.removeChild(dlLink);
+            // Fetch the file as a blob and trigger a real browser download
+            try {
+              const fileResp = await fetch(`http://localhost:8000/download-result/${jobId}`);
+              if (!fileResp.ok) throw new Error("not ready");
+              const blob = await fileResp.blob();
+              const blobUrl = URL.createObjectURL(blob);
+              const dlLink = document.createElement("a");
+              dlLink.href = blobUrl;
+              dlLink.download = `SEDG_responses_${completed || total}_samples.xlsx`;
+              document.body.appendChild(dlLink);
+              dlLink.click();
+              document.body.removeChild(dlLink);
+              setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+              const dlMsg = document.getElementById("dlStatusMsg");
+              if (dlMsg) dlMsg.textContent = "✓ Response file downloaded. Check your Downloads folder.";
+            } catch (_) {
+              const dlMsg = document.getElementById("dlStatusMsg");
+              if (dlMsg) {
+                dlMsg.style.color = "#dc2626";
+                dlMsg.innerHTML = "Download failed. Please rebuild the OLSEDG Helper app and try again.";
+              }
+            }
           }
 
           if (data.status === "error") {
             clearInterval(interval);
-
             previewArea.innerHTML = `
               <div class="preview-box">
                 <div class="preview-title">Generation Failed</div>
@@ -2465,11 +2475,10 @@ Important rules:
               </div>
             `;
           }
-    
+
         } catch (error) {
           clearInterval(interval);
           _activeJobId = null;
-
           previewArea.innerHTML = `
             <div class="preview-box">
               <div class="preview-title">Generation Failed</div>
