@@ -326,18 +326,6 @@
         Select the language model for response generation:
         <span class="tooltip">?
           <span class="tooltip-text">
-            Approximate context limits:<br>
-            deepseek-r1:14b: 131,072 tokens ≈ 98,000 words<br>
-            gemma3:4b: 131,072 tokens ≈ 98,000 words<br>
-            gemma3:12b: 131,072 tokens ≈ 98,000 words<br>
-            llama3.1:8b: 131,072 tokens ≈ 98,000 words<br>
-            llama3.2:3b: 131,072 tokens ≈ 98,000 words<br>
-            mistral:7b-instruct: 32,000 tokens ≈ 24,000 words<br>
-            mistral-small3.2:24b: 131,072 tokens ≈ 98,000 words<br>
-            qwen2.5:7b: 40,960 tokens ≈ 30,000 words<br>
-            qwen2.5:7b-instruct: 40,960 tokens ≈ 30,000 words<br>
-            qwen2.5:14b: 40,960 tokens ≈ 30,000 words<br>
-            qwen3:14b: 40,960 tokens ≈ 30,000 words<br><br>
             If your study includes images in the stimuli, select a model that supports image input.
           </span>
         </span>
@@ -378,7 +366,7 @@
         <label for="openAiApiKey">Enter OpenAI API key:</label>
         <input type="password" id="openAiApiKey" name="openAiApiKey" placeholder="Enter OpenAI API key">
 
-        <label for="openAiModelChoice">Select OpenAI model:</label>
+        <label for="openAiModelChoice">Select OpenAI model: <span class="tooltip">?<span class="tooltip-text">If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
         <select id="openAiModelChoice" name="openAiModelChoice" onchange="toggleOtherModelInput('openAiModelChoice'); updateInputEstimate();">
           <option value="">Select a model</option>
           <option value="gpt-5.5">GPT-5.5</option>
@@ -396,7 +384,7 @@
         <label for="geminiApiKey">Enter Google Gemini API key:</label>
         <input type="password" id="geminiApiKey" name="geminiApiKey" placeholder="Enter Google Gemini API key">
 
-        <label for="geminiModelChoice">Select Google Gemini model:</label>
+        <label for="geminiModelChoice">Select Google Gemini model: <span class="tooltip">?<span class="tooltip-text">If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
         <select id="geminiModelChoice" name="geminiModelChoice" onchange="toggleOtherModelInput('geminiModelChoice'); updateInputEstimate();">
           <option value="">Select a model</option>
           <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
@@ -411,7 +399,7 @@
         <label for="claudeApiKey">Enter Anthropic Claude API key:</label>
         <input type="password" id="claudeApiKey" name="claudeApiKey" placeholder="Enter Anthropic Claude API key">
 
-        <label for="claudeModelChoice">Select Anthropic Claude model:</label>
+        <label for="claudeModelChoice">Select Anthropic Claude model: <span class="tooltip">?<span class="tooltip-text">If your study includes images in the stimuli, select a model that supports image input.</span></span></label>
         <select id="claudeModelChoice" name="claudeModelChoice" onchange="toggleOtherModelInput('claudeModelChoice'); updateInputEstimate();">
           <option value="">Select a model</option>
           <option value="claude-opus-4-5">Claude Opus 4.5</option>
