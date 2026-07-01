@@ -581,15 +581,14 @@ Study materials with embedded questions:
 {embedded_stimuli}
 
 Important rules:
-- Choose only allowed option codes for each question.
-- Each answer must match the question's response type: use an integer for discrete scales, a float/number for continuous scales, or text within the allowed word count for text response questions.
-- Do not choose values below the minimum code or above the maximum code.
-- Return only the final answer values.
-- Do not include explanations.
-- Do not include markdown.
-- Do not repeat the questions.
-- Return answers only in this format:
-{answer_template}</textarea>
+* Use only the allowed response codes or response format for each question.
+* Match each answer to the question type:
+    * Discrete scale: use an integer.
+    * Continuous scale: use a number/float.
+    * Text response: write text within the allowed word limit.
+* Do not use values below the minimum code or above the maximum code.
+* Return only the final responses. Do not include explanations, markdown, or repeat questions.
+* Return answers only in this format: {answer_template}</textarea>
     </div>
 
     <div id="inputEstimateBox" class="input-estimate-box">
@@ -1340,9 +1339,10 @@ Important rules:
           <h2>Stimuli</h2>
 
           <div class="note">
-            <b>Instructions:</b> Enter only the stimuli here. Use placeholders such as
-            <b>{Q1}</b>, <b>{Q2}</b>, etc. wherever you want questions to appear in the study.
-            This version supports text input only. Input limits vary by model and are shown in the model selection section.
+            <b>Instructions:</b> Enter only the study stimuli here. Use placeholders such as
+            <b>{Q1}</b>, <b>{Q2}</b>, etc., wherever you want survey questions to appear. Similarly, use
+            <b>{Image1}</b>, <b>{Image2}</b>, etc., wherever you want images to appear.
+            This version supports text and images only. Please note maximum input length depends on the selected LLM.
           </div>
       `;
 
@@ -1351,6 +1351,20 @@ Important rules:
           <div class="condition-card">
             <label>Condition ${i} name:</label>
             <input type="text" id="condition${i}Name" placeholder="Example: Control, Treatment A (defaults to Condition ${i})">
+
+            <div class="question-inputs-row">
+              <div style="flex:0 0 auto;">
+                <label>Condition code:</label>
+                <input type="number" style="width:80px;" id="condition${i}Code" value="${i}">
+              </div>
+              <div style="flex:1;">
+                <label>No. of Images:</label>
+                <input type="number" min="0" style="width:80px;" id="condition${i}ImageCount" value="0" placeholder="0" oninput="showConditionImages(${i})">
+              </div>
+            </div>
+
+            <div id="condition${i}Images"></div>
+
             <label>Enter stimuli for Condition ${i}:</label>
             <textarea id="condition${i}Stimuli" oninput="updateInputEstimate()" placeholder="Example: Intro text {Q1} follow-up text {Q2}"></textarea>
           </div>
@@ -1360,6 +1374,21 @@ Important rules:
       html += `</div>`;
       container.innerHTML = html;
       document.getElementById("previewArea").innerHTML = "";
+    }
+
+    function showConditionImages(conditionNumber) {
+      const count = parseInt(document.getElementById(`condition${conditionNumber}ImageCount`)?.value) || 0;
+      const container = document.getElementById(`condition${conditionNumber}Images`);
+      container.innerHTML = "";
+      for (let i = 1; i <= count; i++) {
+        container.innerHTML += `
+          <div style="margin-top:10px;">
+            <label style="font-weight:bold;">Upload Image ${i}:</label>
+            <input type="file" accept="image/*" id="condition${conditionNumber}Image${i}"
+              style="display:block;margin-top:4px;font-size:14px;">
+          </div>
+        `;
+      }
     }
 
     function showScaleOptions(questionNumber) {
@@ -1512,7 +1541,9 @@ Important rules:
     }
 
     function buildPreviewPrompt(persona, embeddedStimuli, questionNumbers, includePersona) {
-      const answerTemplate = questionNumbers.map((q) => `Q${q}=?`).join("\n");
+      const answerTemplate = questionNumbers.map((q) =>
+        getQuestionScaleType(q) === "text" ? `Q${q}="?"` : `Q${q}=?`
+      ).join("\n");
       let promptTemplate = document.getElementById("genericInstruction")?.value.trim() || "";
 
       if (!includePersona) {
@@ -2422,8 +2453,9 @@ Important rules:
         const scaleType = getQuestionScaleType(q);
 
         if (scaleType === "text") {
-          const pattern = new RegExp(`Q${q}\\s*=\\s*(.+)`, "i");
-          const match = rawText.match(pattern);
+          const quotedMatch = rawText.match(new RegExp(`Q${q}\\s*=\\s*"([^"]*)"`, "i"));
+          const fallbackMatch = !quotedMatch && rawText.match(new RegExp(`Q${q}\\s*=\\s*(.+)`, "i"));
+          const match = quotedMatch || fallbackMatch;
           if (match) {
             answers[`Q${q}`] = match[1].trim();
           } else {
