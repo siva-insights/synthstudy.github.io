@@ -1721,7 +1721,9 @@ Important rules:
 
     async function getPreviewPersonas(totalSampleCount) {
       const personaSelection = document.getElementById("personaSelection")?.value || "default";
+      const personaOrder = document.getElementById("personaOrder")?.value || "random";
       const requestedCount = Math.max(1, parseInt(totalSampleCount) || 1);
+      const sequential = personaOrder === "sequential";
 
       if (personaSelection === "none") {
         return Array.from({ length: requestedCount }, (_, index) => ({
@@ -1739,10 +1741,15 @@ Important rules:
         }
 
         const personas = await readPersonaSheet(personaSheet);
-        return samplePreviewPersonas(personas, requestedCount).map((persona) => ({
-          ...persona,
-          includePersona: true
-        }));
+        const selected = sequential
+          ? samplePreviewPersonasSequential(personas, requestedCount)
+          : samplePreviewPersonas(personas, requestedCount);
+        return selected.map((persona) => ({ ...persona, includePersona: true }));
+      }
+
+      if (sequential) {
+        const personas = await fetchSequentialDefaultPreviewPersonas(requestedCount);
+        return personas.map((p) => ({ pid: p.pid, persona: p.persona, includePersona: true }));
       }
 
       const personas = await fetchDefaultPreviewPersonas(requestedCount);
@@ -1843,6 +1850,58 @@ Important rules:
       }
 
       return personas;
+    }
+
+    function sortPersonasByPid(personas) {
+      return [...personas].sort((a, b) => {
+        const na = parseFloat(a.pid), nb = parseFloat(b.pid);
+        if (!isNaN(na) && !isNaN(nb)) return na - nb;
+        return String(a.pid).localeCompare(String(b.pid));
+      });
+    }
+
+    function samplePreviewPersonasSequential(personas, requestedCount) {
+      if (personas.length === 0) {
+        throw new Error("No personas are available for preview.");
+      }
+      const sorted = sortPersonasByPid(personas);
+      const result = [];
+      for (let i = 0; i < requestedCount; i++) {
+        result.push(sorted[i % sorted.length]);
+      }
+      return result;
+    }
+
+    async function fetchSequentialDefaultPreviewPersonas(requestedCount) {
+      const batchSize = Math.min(Math.max(requestedCount, 20), 100);
+      const url = new URL("https://datasets-server.huggingface.co/rows");
+      url.searchParams.set("dataset", DEFAULT_PERSONA_DATASET);
+      url.searchParams.set("config", DEFAULT_PERSONA_CONFIG);
+      url.searchParams.set("split", DEFAULT_PERSONA_SPLIT);
+      url.searchParams.set("offset", "0");
+      url.searchParams.set("length", String(batchSize));
+
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        throw new Error("Could not load default personas from Hugging Face for preview.");
+      }
+
+      const data = await response.json();
+      const rows = data?.rows || [];
+      const personas = rows
+        .map(r => ({ pid: String(r.row?.pid ?? "").trim(), persona: String(r.row?.persona_summary ?? "").trim() }))
+        .filter(p => p.pid && p.persona);
+
+      if (personas.length === 0) {
+        throw new Error("No default personas were returned for sequential preview.");
+      }
+
+      const sorted = sortPersonasByPid(personas);
+      const result = [];
+      for (let i = 0; i < requestedCount; i++) {
+        result.push(sorted[i % sorted.length]);
+      }
+      return result;
     }
 
     function getPreviewOutputColumns(questionNumbers) {
