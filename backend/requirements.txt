@@ -3,5 +3,6 @@ uvicorn
 requests
 datasets
 pandas
+openpyxl
 python-docx
 pyinstaller

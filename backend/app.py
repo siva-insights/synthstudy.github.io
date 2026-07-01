@@ -526,8 +526,8 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         num_conditions = len(data.conditions)
         samples_per_condition = data.sample_count_per_condition
 
-        csv_filename = f"SEDG_{total_needed}samples_{timestamp}.csv"
-        csv_path = OUTPUT_DIR / csv_filename
+        xlsx_filename = f"SEDG_{total_needed}samples_{timestamp}.xlsx"
+        csv_path = OUTPUT_DIR / f"_tmp_{timestamp}.csv"   # temp; converted to xlsx at end
 
         question_columns = [f"Q{q.question_number}" for q in data.questions]
         columns = [
@@ -564,6 +564,10 @@ def run_generation_job(job_id: str, data: GenerateRequest):
 
         for i in range(total_needed):
             if JOBS.get(job_id, {}).get("stop_requested"):
+                if csv_path.exists():
+                    xlsx_path = OUTPUT_DIR / xlsx_filename
+                    pd.read_csv(csv_path).to_excel(xlsx_path, index=False, engine="openpyxl")
+                    csv_path.unlink(missing_ok=True)
                 update_job(job_id, status="stopped",
                            message=f"Generation stopped after {i} respondents.")
                 return
@@ -673,6 +677,11 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 estimated_total_seconds=round(estimated_total_seconds, 1),
                 message=f"{completed}/{total_needed} respondents completed. {pending} remaining."
             )
+
+        # Convert the temp CSV to XLSX then remove the CSV
+        xlsx_path = OUTPUT_DIR / xlsx_filename
+        pd.read_csv(csv_path).to_excel(xlsx_path, index=False, engine="openpyxl")
+        csv_path.unlink(missing_ok=True)
 
         update_job(
             job_id,

@@ -23,10 +23,12 @@ pyinstaller \
   --hidden-import=tkinter \
   --hidden-import=datasets \
   --hidden-import=pandas \
+  --hidden-import=openpyxl \
   --hidden-import=docx \
   --hidden-import=requests \
   --collect-all datasets \
   --collect-all pandas \
+  --collect-all openpyxl \
   --collect-all pyarrow \
   --exclude-module torch \
   --exclude-module torchvision \
