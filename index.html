@@ -2210,6 +2210,19 @@ Important rules:
 
       const imagesData = await getSharedImagesData();
 
+      // Build condition assignments matching backend logic (shuffle if random, keep order if sequential)
+      const stimuliAssignment = document.getElementById("stimuliAssignment")?.value || "random";
+      const conditionAssignments = [];
+      for (let c = 1; c <= conditionCount; c++) {
+        for (let s = 0; s < samplesPerCondition; s++) conditionAssignments.push(c);
+      }
+      if (stimuliAssignment === "random") {
+        for (let i = conditionAssignments.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [conditionAssignments[i], conditionAssignments[j]] = [conditionAssignments[j], conditionAssignments[i]];
+        }
+      }
+
       for (let c = 1; c <= conditionCount; c++) {
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
         let htmlStimuli = escapeHTML(stimuli);
@@ -2227,7 +2240,7 @@ Important rules:
         }
 
         const embeddedStimuli = buildEmbeddedStimuliText(stimuli, questionNumbers, imagesData);
-        const conditionPersonas = previewPersonas.slice((c - 1) * samplesPerCondition, c * samplesPerCondition);
+        const conditionPersonas = previewPersonas.filter((_, i) => conditionAssignments[i] === c);
 
         previews.push({
           condition: c,
