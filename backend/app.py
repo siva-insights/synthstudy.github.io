@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import uuid
+import base64
 import random
 import shutil
 import subprocess
@@ -126,11 +127,23 @@ class GenerateRequest(BaseModel):
     persona_source: Literal["default", "custom", "none"] = "default"
     custom_personas: Optional[list[PersonaRecord]] = None
 
+class SaveFileRequest(BaseModel):
+    filename: str
+    content_base64: str
+
 
 # API endpoints
 @app.get("/health")
 def health():
     return {"helper_running": True, "message": "OLSEDG Helper is running"}
+
+@app.post("/save-file")
+def save_file(req: SaveFileRequest):
+    safe_name = Path(req.filename).name  # strip any path traversal
+    dest = OUTPUT_DIR / safe_name
+    with open(dest, "wb") as f:
+        f.write(base64.b64decode(req.content_base64))
+    return {"success": True, "path": str(dest)}
 
 @app.get("/estimate-time/{model_name}/{total_respondents}")
 def estimate_time(model_name: str, total_respondents: int):
