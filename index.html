@@ -1910,7 +1910,7 @@ Important rules:
         "study_name",
         "pid",
         "persona_summary",
-        "condition",
+        "condition_code",
         "condition_name",
         "condition_stimuli",
         "model_name",
@@ -1941,7 +1941,7 @@ Important rules:
         study_name: document.getElementById("studyName")?.value.trim() || "",
         pid: persona.pid,
         persona_summary: persona.persona,
-        condition: preview.condition,
+        condition_code: preview.condition,
         condition_name: preview.conditionName,
         condition_stimuli: preview.stimuli,
         model_name: getSelectedModelName(),
@@ -2243,7 +2243,7 @@ Important rules:
         const conditionPersonas = previewPersonas.filter((_, i) => conditionAssignments[i] === c);
 
         previews.push({
-          condition: c,
+          condition: parseInt(document.getElementById(`condition${c}Code`)?.value) || c,
           conditionName: getConditionName(c),
           conditionIndex: c - 1,
           html: htmlStimuli || "No stimuli entered for this condition.",
@@ -2357,7 +2357,7 @@ Important rules:
     
       for (let c = 1; c <= conditionCount; c++) {
         conditions.push({
-          condition_number: c,
+          condition_number: parseInt(document.getElementById(`condition${c}Code`)?.value) || c,
           condition_name: getConditionName(c),
           stimuli: document.getElementById(`condition${c}Stimuli`).value.trim()
         });
