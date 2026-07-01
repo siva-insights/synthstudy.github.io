@@ -26,11 +26,13 @@ from typing import Literal, Optional
 # Constants
 OLLAMA_URL = "http://localhost:11434"
 
-# Hidden working directory for temp files and history — not exposed to user
+# Hidden dir for history and temp CSV; final XLSX always goes to Downloads
 _APP_DIR = Path.home() / ".sedg_helper"
 _APP_DIR.mkdir(parents=True, exist_ok=True)
-OUTPUT_DIR = _APP_DIR / "outputs"
+OUTPUT_DIR = _APP_DIR / "outputs"   # temp CSV lives here
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+DOWNLOADS_DIR = Path.home() / "Downloads"
+DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 HISTORY_FILE = _APP_DIR / "generation_history.json"
 
 # FastAPI app setup + CORS
@@ -564,7 +566,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         for i in range(total_needed):
             if JOBS.get(job_id, {}).get("stop_requested"):
                 if csv_path.exists():
-                    _xp = OUTPUT_DIR / xlsx_filename
+                    _xp = DOWNLOADS_DIR / xlsx_filename
                     pd.read_csv(csv_path).to_excel(_xp, index=False, engine="openpyxl")
                     csv_path.unlink(missing_ok=True)
                     update_job(job_id, status="stopped", xlsx_path=str(_xp),
@@ -681,7 +683,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             )
 
         # Convert the temp CSV to XLSX then remove the CSV
-        xlsx_path = OUTPUT_DIR / xlsx_filename
+        xlsx_path = DOWNLOADS_DIR / xlsx_filename
         pd.read_csv(csv_path).to_excel(xlsx_path, index=False, engine="openpyxl")
         csv_path.unlink(missing_ok=True)
 
