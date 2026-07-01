@@ -829,8 +829,6 @@ if __name__ == "__main__":
     hdr.pack(fill="x"); hdr.pack_propagate(False)
     tk.Label(hdr, text="OLSEDG Helper", bg=C["blue"], fg="white",
              font=("Helvetica", 14, "bold")).pack(side="left", padx=16)
-    tk.Label(hdr, text=f"● http://127.0.0.1:{PORT}", bg=C["blue"], fg=C["sky"],
-             font=("Helvetica", 10)).pack(side="right", padx=16)
 
     # Notebook styles
     sty = ttk.Style(); sty.theme_use("clam")
@@ -1193,6 +1191,14 @@ if __name__ == "__main__":
         Thread(target=do, daemon=True).start()
 
     t3_ref.config(command=refresh_t3)
+
+    # ── Footer ───────────────────────────────────────────────────────────
+    ftr = tk.Frame(root, bg=C["bg"])
+    ftr.pack(fill="x", side="bottom")
+    tk.Frame(ftr, bg=C["border"], height=1).pack(fill="x")
+    tk.Label(ftr,
+             text="© 2026 Siva Shanmugam Mariappan and Ashwin Malshe. Licensed under the MIT License.",
+             font=("Helvetica", 9), fg=C["muted"], bg=C["bg"]).pack(pady=6)
 
     # ── Startup ──────────────────────────────────────────────────────────
     Thread(target=do_check, daemon=True).start()
