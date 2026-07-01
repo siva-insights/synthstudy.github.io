@@ -736,14 +736,32 @@ if __name__ == "__main__":
     PORT = 8000
     OLLAMA_BASE = "http://localhost:11434"
 
+    # Colours matching synthstudy.vercel.app
+    C = {
+        "bg":      "#f1f5f9",   # page background
+        "card":    "#ffffff",   # card / tab content
+        "blue":    "#1e40af",   # primary / header
+        "blue2":   "#1d4ed8",   # button hover
+        "sky":     "#93c5fd",   # header muted text
+        "green":   "#16a34a",   # success
+        "green_bg":"#f0fdf4",   # success badge bg
+        "red":     "#dc2626",   # error
+        "red_bg":  "#fef2f2",   # error badge bg
+        "text":    "#1e293b",   # primary text
+        "muted":   "#64748b",   # secondary text
+        "border":  "#e2e8f0",   # subtle border
+        "row":     "#f8fafc",   # alternate row bg
+    }
+
     MODEL_SIZES = {
-        "deepseek-r1:14b": "~9.0 GB", "gemma3:4b": "~3.3 GB", "gemma3:12b": "~8.1 GB",
-        "llama3.1:8b": "~4.7 GB", "llama3.2:3b": "~2.0 GB", "mistral:7b-instruct": "~4.1 GB",
-        "mistral-small3.2:24b": "~14.0 GB", "qwen2.5:7b": "~4.4 GB",
-        "qwen2.5:7b-instruct": "~4.4 GB", "qwen2.5:14b": "~9.0 GB", "qwen3:14b": "~9.3 GB",
+        "deepseek-r1:14b": "~9.0 GB", "gemma3:4b": "~3.3 GB",  "gemma3:12b": "~8.1 GB",
+        "llama3.1:8b":     "~4.7 GB", "llama3.2:3b": "~2.0 GB", "mistral:7b-instruct": "~4.1 GB",
+        "mistral-small3.2:24b": "~14 GB", "qwen2.5:7b": "~4.4 GB",
+        "qwen2.5:7b-instruct":  "~4.4 GB", "qwen2.5:14b": "~9.0 GB", "qwen3:14b": "~9.3 GB",
     }
     MODEL_LIST = list(MODEL_SIZES.keys()) + ["Other (enter below)"]
 
+    # ── Ollama helpers ───────────────────────────────────────────────────
     def _ollama_ok():
         try:
             return requests.get(f"{OLLAMA_BASE}/api/tags", timeout=3).status_code == 200
@@ -751,9 +769,7 @@ if __name__ == "__main__":
             return False
 
     def _ollama_installed():
-        if os.path.exists("/Applications/Ollama.app"):
-            return True
-        return shutil.which("ollama") is not None
+        return os.path.exists("/Applications/Ollama.app") or shutil.which("ollama") is not None
 
     def _start_ollama():
         if os.path.exists("/Applications/Ollama.app"):
@@ -764,6 +780,19 @@ if __name__ == "__main__":
             if cli:
                 subprocess.Popen([cli, "serve"],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def _ensure_ollama_running():
+        """Start Ollama if needed. Returns True when running."""
+        if _ollama_ok():
+            return True
+        if not _ollama_installed():
+            return False
+        _start_ollama()
+        for _ in range(12):
+            time.sleep(1)
+            if _ollama_ok():
+                return True
+        return False
 
     def _installed_models():
         try:
@@ -777,172 +806,229 @@ if __name__ == "__main__":
     server = uvicorn.Server(config)
     Thread(target=server.run, daemon=True).start()
 
-    # ── Root window ──────────────────────────────────────────────────────
+    # ── Window ───────────────────────────────────────────────────────────
     root = tk.Tk()
     root.title("OLSEDG Helper")
-    root.geometry("500x450")
+    root.geometry("500x460")
     root.resizable(False, False)
-    BG, BLUE, GREEN, RED, MUTED = "#f8fafc", "#1e40af", "#16a34a", "#dc2626", "#64748b"
-    root.configure(bg=BG)
+    root.configure(bg=C["bg"])
 
-    hdr = tk.Frame(root, bg=BLUE, height=44)
+    # Header bar
+    hdr = tk.Frame(root, bg=C["blue"], height=46)
     hdr.pack(fill="x"); hdr.pack_propagate(False)
-    tk.Label(hdr, text="OLSEDG Helper", bg=BLUE, fg="white",
-             font=("Helvetica", 13, "bold")).pack(side="left", padx=14)
-    tk.Label(hdr, text=f"● http://127.0.0.1:{PORT}", bg=BLUE, fg="#93c5fd",
-             font=("Helvetica", 10)).pack(side="right", padx=14)
+    tk.Label(hdr, text="OLSEDG Helper", bg=C["blue"], fg="white",
+             font=("Helvetica", 14, "bold")).pack(side="left", padx=16)
+    tk.Label(hdr, text=f"● http://127.0.0.1:{PORT}", bg=C["blue"], fg=C["sky"],
+             font=("Helvetica", 10)).pack(side="right", padx=16)
 
+    # Notebook styles
     sty = ttk.Style(); sty.theme_use("clam")
-    sty.configure("TNotebook", background=BG, borderwidth=0)
-    sty.configure("TNotebook.Tab", padding=[14, 5], font=("Helvetica", 10))
-    sty.map("TNotebook.Tab", background=[("selected", "#dbeafe")])
-    sty.configure("TFrame", background=BG)
+    sty.configure("TNotebook", background=C["bg"], borderwidth=0, tabmargins=0)
+    sty.configure("TNotebook.Tab", padding=[16, 6], font=("Helvetica", 10),
+                  background=C["border"], foreground=C["muted"])
+    sty.map("TNotebook.Tab",
+            background=[("selected", C["card"])],
+            foreground=[("selected", C["blue"])])
+    sty.configure("TFrame", background=C["card"])
+    sty.configure("Horizontal.TProgressbar",
+                  troughcolor=C["border"], background=C["blue"],
+                  borderwidth=0, thickness=8)
 
     nb = ttk.Notebook(root)
-    nb.pack(fill="both", expand=True, padx=8, pady=6)
+    nb.pack(fill="both", expand=True, padx=10, pady=(6, 10))
+
+    def _btn(parent, text, cmd, **kw):
+        """Flat blue button matching SEDG style."""
+        b = tk.Button(parent, text=text, command=cmd,
+                      bg=C["blue"], fg="white", activebackground=C["blue2"],
+                      activeforeground="white", relief="flat", bd=0,
+                      padx=14, pady=7, font=("Helvetica", 10, "bold"),
+                      cursor="hand2", **kw)
+        return b
+
+    def _ghost_btn(parent, text, cmd):
+        """Muted secondary button."""
+        return tk.Button(parent, text=text, command=cmd,
+                         bg=C["border"], fg=C["text"], activebackground="#cbd5e1",
+                         relief="flat", bd=0, padx=10, pady=5,
+                         font=("Helvetica", 9), cursor="hand2")
+
+    def _card(parent):
+        """White card frame with a subtle border feel."""
+        return tk.Frame(parent, bg=C["card"], padx=20, pady=18)
 
     # ── TAB 1 : Ollama Setup ─────────────────────────────────────────────
     tab1 = ttk.Frame(nb); nb.add(tab1, text="1. Ollama Setup")
-    p1 = tk.Frame(tab1, bg=BG, padx=18, pady=16); p1.pack(fill="both", expand=True)
+    p1 = _card(tab1); p1.pack(fill="both", expand=True)
 
-    r1h = tk.Frame(p1, bg=BG); r1h.pack(anchor="w")
-    tk.Label(r1h, text="Validate Ollama Setup", font=("Helvetica", 13, "bold"), bg=BG).pack(side="left")
-    tip = tk.Label(r1h, text="  ⓘ", font=("Helvetica", 11), fg=MUTED, bg=BG, cursor="hand2")
+    # Title + tooltip
+    th = tk.Frame(p1, bg=C["card"]); th.pack(anchor="w")
+    tk.Label(th, text="Validate Ollama Setup", font=("Helvetica", 13, "bold"),
+             bg=C["card"], fg=C["text"]).pack(side="left")
+    tip = tk.Label(th, text="  ⓘ", font=("Helvetica", 11), fg=C["muted"],
+                   bg=C["card"], cursor="hand2")
     tip.pack(side="left")
 
     _tw = [None]
     def _show_tip(e):
         if _tw[0]: return
-        w = tk.Toplevel(root); w.overrideredirect(True); w.configure(bg="#1e293b")
+        w = tk.Toplevel(root); w.overrideredirect(True)
+        w.configure(bg=C["text"])
         tk.Label(w, text=("Ollama runs open-source LLMs locally on your computer.\n"
                            "OLSEDG Helper sends prompts to it to generate synthetic\n"
                            "responses — no data ever leaves your machine."),
-                 bg="#1e293b", fg="white", font=("Helvetica", 10),
-                 padx=10, pady=8, justify="left").pack()
-        w.geometry(f"+{e.x_root + 8}+{e.y_root + 8}"); _tw[0] = w
+                 bg=C["text"], fg="white", font=("Helvetica", 10),
+                 padx=12, pady=10, justify="left").pack()
+        w.geometry(f"+{e.x_root+8}+{e.y_root+8}"); _tw[0] = w
     def _hide_tip(e):
         if _tw[0]: _tw[0].destroy(); _tw[0] = None
     tip.bind("<Enter>", _show_tip); tip.bind("<Leave>", _hide_tip)
 
-    t1_stat = tk.Label(p1, text="", font=("Helvetica", 11), bg=BG)
-    t1_stat.pack(anchor="w", pady=(14, 0))
-    t1_det = tk.Label(p1, text="", font=("Helvetica", 10), fg=MUTED, bg=BG, wraplength=430)
+    tk.Frame(p1, bg=C["border"], height=1).pack(fill="x", pady=(10, 14))
+
+    t1_stat = tk.Label(p1, text="", font=("Helvetica", 12), bg=C["card"])
+    t1_stat.pack(anchor="w")
+    t1_det  = tk.Label(p1, text="", font=("Helvetica", 10), fg=C["muted"],
+                        bg=C["card"], wraplength=440)
     t1_det.pack(anchor="w", pady=(4, 0))
-    t1_lnk = tk.Label(p1, text="", font=("Helvetica", 10), fg="#2563eb", bg=BG, cursor="hand2")
+    t1_lnk  = tk.Label(p1, text="", font=("Helvetica", 10, "underline"),
+                        fg=C["blue"], bg=C["card"], cursor="hand2")
     t1_lnk.pack(anchor="w", pady=(4, 0))
     t1_lnk.bind("<Button-1>", lambda e: webbrowser.open("https://ollama.ai"))
-    t1_btn = tk.Button(p1, text="Check Again", bg=BLUE, fg="white", relief="flat",
-                        padx=10, pady=4, font=("Helvetica", 10), cursor="hand2")
-    t1_btn.pack(anchor="w", pady=(14, 0))
+
+    tk.Frame(p1, bg=C["card"], height=6).pack()
+    t1_btn = _btn(p1, "Check Again", lambda: Thread(target=do_check, daemon=True).start())
+    t1_btn.pack(anchor="w")
 
     def do_check():
-        root.after(0, lambda: t1_stat.config(text="Checking…", fg=MUTED))
+        root.after(0, lambda: (t1_stat.config(text="Checking…", fg=C["muted"]),
+                               t1_det.config(text=""), t1_lnk.config(text="")))
         ok = _ollama_ok()
         if not ok and _ollama_installed():
-            root.after(0, lambda: (
-                t1_stat.config(text="Ollama found — starting…", fg=MUTED),
-                t1_det.config(text=""),
-                t1_lnk.config(text=""),
-            ))
+            root.after(0, lambda: t1_stat.config(text="Ollama found — starting…", fg=C["muted"]))
             _start_ollama()
-            for _ in range(10):
+            for _ in range(12):
                 time.sleep(1)
-                if _ollama_ok():
-                    ok = True
-                    break
+                if _ollama_ok(): ok = True; break
         def u():
             if ok:
-                t1_stat.config(text="✓  Ollama is running.", fg=GREEN)
-                t1_det.config(text="Proceed to Install Model to set up your LLM.")
+                t1_stat.config(text="✓  Ollama is running.", fg=C["green"])
+                t1_det.config(text="Proceed to Install Model to choose your LLM.")
                 t1_lnk.config(text="")
             elif _ollama_installed():
-                t1_stat.config(text="✗  Could not start Ollama.", fg=RED)
+                t1_stat.config(text="✗  Could not start Ollama.", fg=C["red"])
                 t1_det.config(text="Try opening Ollama manually, then click Check Again.")
                 t1_lnk.config(text="")
             else:
-                t1_stat.config(text="✗  Ollama not installed.", fg=RED)
+                t1_stat.config(text="✗  Ollama not installed.", fg=C["red"])
                 t1_det.config(text="Download and install Ollama, then click Check Again.")
-                t1_lnk.config(text="→  Download Ollama at ollama.ai")
+                t1_lnk.config(text="↗  ollama.ai — download Ollama")
         root.after(0, u)
-    t1_btn.config(command=lambda: Thread(target=do_check, daemon=True).start())
 
     # ── TAB 2 : Install Model ────────────────────────────────────────────
     tab2 = ttk.Frame(nb); nb.add(tab2, text="2. Install Model")
-    p2 = tk.Frame(tab2, bg=BG, padx=18, pady=16); p2.pack(fill="both", expand=True)
+    p2 = _card(tab2); p2.pack(fill="both", expand=True)
 
-    tk.Label(p2, text="Install a Model", font=("Helvetica", 13, "bold"), bg=BG).pack(anchor="w")
+    tk.Label(p2, text="Install a Model", font=("Helvetica", 13, "bold"),
+             bg=C["card"], fg=C["text"]).pack(anchor="w")
     tk.Label(p2, text="Choose a model for generating synthetic survey responses.",
-             font=("Helvetica", 10), fg=MUTED, bg=BG).pack(anchor="w", pady=(2, 8))
+             font=("Helvetica", 10), fg=C["muted"], bg=C["card"]).pack(anchor="w", pady=(2, 0))
+    tk.Frame(p2, bg=C["border"], height=1).pack(fill="x", pady=(10, 12))
 
     t2_var = tk.StringVar(value="Select a model")
-    t2_cb = ttk.Combobox(p2, textvariable=t2_var, values=MODEL_LIST,
-                          state="readonly", width=30, font=("Helvetica", 11))
+    t2_cb  = ttk.Combobox(p2, textvariable=t2_var, values=MODEL_LIST,
+                           state="readonly", width=32, font=("Helvetica", 11))
     t2_cb.pack(anchor="w")
 
-    # "Other" entry — packed/unpacked dynamically
-    t2_of = tk.Frame(p2, bg=BG)
+    # "Other" entry (shown only when Other is selected)
+    t2_of = tk.Frame(p2, bg=C["card"])
     t2_ov = tk.StringVar()
-    tk.Entry(t2_of, textvariable=t2_ov, font=("Helvetica", 11), width=32).pack(anchor="w", pady=(4, 0))
+    tk.Entry(t2_of, textvariable=t2_ov, font=("Helvetica", 11), width=34,
+             bg=C["row"], relief="flat", bd=1).pack(anchor="w", pady=(6, 0))
     tk.Label(t2_of, text="Enter model name from ollama.com/library  (e.g. llama3.2:1b)",
-             font=("Helvetica", 9), fg=MUTED, bg=BG).pack(anchor="w")
+             font=("Helvetica", 9), fg=C["muted"], bg=C["card"]).pack(anchor="w", pady=(3, 0))
 
-    t2_info = tk.Label(p2, text="", font=("Helvetica", 10), bg=BG, wraplength=430)
-    t2_info.pack(anchor="w", pady=(8, 0))
+    # Info badge (size + installed status)
+    t2_badge = tk.Frame(p2, bg=C["card"]); t2_badge.pack(anchor="w", pady=(10, 0))
+    t2_badge_lbl = tk.Label(t2_badge, text="", font=("Helvetica", 10), bg=C["card"])
+    t2_badge_lbl.pack(anchor="w")
 
-    # Progress frame — packed/unpacked dynamically
-    t2_pf = tk.Frame(p2, bg=BG)
-    t2_pg = ttk.Progressbar(t2_pf, mode="determinate", length=430)
+    # Progress frame
+    t2_pf = tk.Frame(p2, bg=C["card"])
+    t2_pg = ttk.Progressbar(t2_pf, style="Horizontal.TProgressbar",
+                             mode="determinate", length=440)
     t2_pg.pack(anchor="w")
-    t2_pl = tk.Label(t2_pf, text="", font=("Helvetica", 9), fg=MUTED, bg=BG)
-    t2_pl.pack(anchor="w", pady=(2, 0))
+    t2_pl = tk.Label(t2_pf, text="", font=("Helvetica", 9), fg=C["muted"], bg=C["card"])
+    t2_pl.pack(anchor="w", pady=(3, 0))
 
-    t2_stat = tk.Label(p2, text="", font=("Helvetica", 10), bg=BG, wraplength=430)
-    t2_stat.pack(anchor="w", pady=(4, 0))
-    t2_lnk = tk.Label(p2, text="", font=("Helvetica", 10), fg="#2563eb", bg=BG, cursor="hand2")
+    t2_stat = tk.Label(p2, text="", font=("Helvetica", 10), bg=C["card"], wraplength=440)
+    t2_stat.pack(anchor="w", pady=(6, 0))
+    t2_lnk  = tk.Label(p2, text="", font=("Helvetica", 10, "underline"),
+                        fg=C["blue"], bg=C["card"], cursor="hand2")
     t2_lnk.pack(anchor="w")
     t2_lnk.bind("<Button-1>", lambda e: webbrowser.open("https://synthstudy.vercel.app"))
 
-    t2_btn = tk.Button(p2, text="Install Model", bg=BLUE, fg="white", relief="flat",
-                        padx=12, pady=5, font=("Helvetica", 10), cursor="hand2")
-    t2_btn.pack(anchor="w", pady=(10, 0))
+    tk.Frame(p2, bg=C["card"], height=4).pack()
+    t2_btn = _btn(p2, "Install Model", lambda: None)
+    t2_btn.pack(anchor="w")
+
+    def _check_installed_async(model_name, callback):
+        def run():
+            names = [m.get("name", "") for m in _installed_models()]
+            callback(model_name in names)
+        Thread(target=run, daemon=True).start()
 
     def on_t2_select(e=None):
         val = t2_var.get()
         t2_pf.pack_forget()
         t2_stat.config(text=""); t2_lnk.config(text="")
+        t2_badge_lbl.config(text="", bg=C["card"]); t2_badge.config(bg=C["card"])
         if val == "Other (enter below)":
-            t2_of.pack(anchor="w", pady=(6, 0), before=t2_info)
-            t2_info.config(text="")
-        else:
-            t2_of.pack_forget()
-            if val not in ("Select a model", ""):
-                sz = MODEL_SIZES.get(val, "")
-                names = [m.get("name", "") for m in _installed_models()]
-                already = val in names
-                t2_info.config(
-                    text=(f"Download size: {sz}  " if sz else "") + ("✓ Already installed" if already else ""),
-                    fg=GREEN if already else MUTED)
-            else:
-                t2_info.config(text="")
+            t2_of.pack(anchor="w", pady=(6, 0), before=t2_badge)
+            return
+        t2_of.pack_forget()
+        if val in ("Select a model", ""):
+            return
+        sz = MODEL_SIZES.get(val, "")
+        t2_badge_lbl.config(text=f"Download size: {sz}" if sz else "Size: checking…",
+                             fg=C["muted"], bg=C["card"]); t2_badge.config(bg=C["card"])
+        def on_installed(already):
+            def u():
+                if already:
+                    t2_badge.config(bg=C["green_bg"])
+                    t2_badge_lbl.config(
+                        text=f"✓  Already installed" + (f"  ·  {sz}" if sz else ""),
+                        fg=C["green"], bg=C["green_bg"])
+                    t2_btn.config(text="Reinstall")
+                else:
+                    t2_badge.config(bg=C["card"])
+                    t2_badge_lbl.config(
+                        text=f"Download size: {sz}" if sz else "",
+                        fg=C["muted"], bg=C["card"])
+                    t2_btn.config(text="Install Model")
+            root.after(0, u)
+        _check_installed_async(val, on_installed)
+
     t2_cb.bind("<<ComboboxSelected>>", on_t2_select)
 
     def do_install():
-        val = t2_var.get()
+        val   = t2_var.get()
         model = (t2_ov.get().strip() if val == "Other (enter below)"
                  else (None if val in ("Select a model", "") else val))
         if not model:
-            t2_stat.config(text="Please select or enter a model name.", fg=RED); return
+            t2_stat.config(text="Please select or enter a model name.", fg=C["red"]); return
 
         t2_btn.config(state="disabled", text="Installing…")
-        t2_stat.config(text=f"Installing {model}…", fg=MUTED)
+        t2_stat.config(text="", fg=C["muted"])
+        t2_pf.pack(anchor="w", pady=(10, 0), before=t2_stat)
         t2_pg["value"] = 0; t2_pl.config(text=""); t2_lnk.config(text="")
-        t2_pf.pack(anchor="w", pady=(8, 0), before=t2_stat)
 
         def on_p(status, total, completed):
             def u():
                 if total and completed:
                     t2_pg["value"] = int(completed / total * 100)
-                    t2_pl.config(text=f"{status}  {completed/1024**2:.0f} / {total/1024**2:.0f} MB")
+                    t2_pl.config(text=f"{status}  ·  "
+                                      f"{completed/1024**2:.0f} / {total/1024**2:.0f} MB")
                 else:
                     t2_pl.config(text=status)
             root.after(0, u)
@@ -950,19 +1036,26 @@ if __name__ == "__main__":
         def on_done():
             def u():
                 t2_pg["value"] = 100; t2_pl.config(text="")
-                t2_stat.config(text=f"✓  {model} is ready to use.", fg=GREEN)
-                t2_lnk.config(text="→  Open SEDG at synthstudy.vercel.app")
+                t2_stat.config(text=f"✓  {model} is ready to use.", fg=C["green"])
+                t2_lnk.config(text="↗  Open SEDG at synthstudy.vercel.app")
                 t2_btn.config(state="normal", text="Install Model")
+                t2_badge.config(bg=C["green_bg"])
+                t2_badge_lbl.config(text="✓  Installed", fg=C["green"], bg=C["green_bg"])
             root.after(0, u)
 
         def on_err(msg):
             def u():
-                t2_stat.config(text=f"Error: {msg}", fg=RED)
+                t2_stat.config(text=f"Error: {msg}", fg=C["red"])
                 t2_pf.pack_forget()
                 t2_btn.config(state="normal", text="Install Model")
             root.after(0, u)
 
-        def pull():
+        def run():
+            # Ensure Ollama is running before pulling
+            root.after(0, lambda: t2_pl.config(text="Checking Ollama…"))
+            if not _ensure_ollama_running():
+                on_err("Ollama is not running. Validate setup in tab 1 first."); return
+            root.after(0, lambda: t2_pl.config(text="Connecting to Ollama…"))
             try:
                 resp = requests.post(f"{OLLAMA_BASE}/api/pull",
                                      json={"name": model}, stream=True, timeout=None)
@@ -975,53 +1068,58 @@ if __name__ == "__main__":
                 on_done()
             except Exception as ex:
                 on_err(str(ex))
-        Thread(target=pull, daemon=True).start()
+
+        Thread(target=run, daemon=True).start()
 
     t2_btn.config(command=do_install)
 
     # ── TAB 3 : Manage Models ────────────────────────────────────────────
     tab3 = ttk.Frame(nb); nb.add(tab3, text="3. Manage Models")
-    p3 = tk.Frame(tab3, bg=BG, padx=18, pady=16); p3.pack(fill="both", expand=True)
+    p3 = _card(tab3); p3.pack(fill="both", expand=True)
 
-    t3h = tk.Frame(p3, bg=BG); t3h.pack(fill="x")
-    tk.Label(t3h, text="Installed Models", font=("Helvetica", 13, "bold"), bg=BG).pack(side="left")
-    t3_ref = tk.Button(t3h, text="↻ Refresh", font=("Helvetica", 9), relief="flat",
-                        bg="#e2e8f0", padx=6, pady=3, cursor="hand2")
+    t3h = tk.Frame(p3, bg=C["card"]); t3h.pack(fill="x")
+    tk.Label(t3h, text="Installed Models", font=("Helvetica", 13, "bold"),
+             bg=C["card"], fg=C["text"]).pack(side="left")
+    t3_ref = _ghost_btn(t3h, "↻  Refresh", lambda: refresh_t3())
     t3_ref.pack(side="right")
 
-    t3_list = tk.Frame(p3, bg=BG)
-    t3_list.pack(fill="both", expand=True, pady=(10, 0))
-    t3_stat = tk.Label(p3, text="", font=("Helvetica", 10), bg=BG)
-    t3_stat.pack(anchor="w", pady=(4, 0))
+    tk.Frame(p3, bg=C["border"], height=1).pack(fill="x", pady=(10, 10))
+
+    t3_list = tk.Frame(p3, bg=C["card"])
+    t3_list.pack(fill="both", expand=True)
+    t3_stat = tk.Label(p3, text="", font=("Helvetica", 10), bg=C["card"])
+    t3_stat.pack(anchor="w", pady=(6, 0))
 
     def refresh_t3():
         for w in t3_list.winfo_children(): w.destroy()
         t3_stat.config(text="")
-        tk.Label(t3_list, text="Loading…", fg=MUTED, bg=BG, font=("Helvetica", 10)).pack(anchor="w")
+        tk.Label(t3_list, text="Loading…", fg=C["muted"], bg=C["card"],
+                 font=("Helvetica", 10)).pack(anchor="w")
 
         def do():
             models = _installed_models()
             def upd():
                 for w in t3_list.winfo_children(): w.destroy()
                 if not models:
-                    tk.Label(t3_list, text="No models installed.", fg=MUTED, bg=BG,
-                             font=("Helvetica", 10)).pack(anchor="w")
+                    tk.Label(t3_list, text="No models installed.", fg=C["muted"],
+                             bg=C["card"], font=("Helvetica", 10)).pack(anchor="w")
                     return
                 for m in models:
                     name = m.get("name", "")
-                    sz = m.get("size", 0)
-                    row = tk.Frame(t3_list, bg="#f1f5f9", padx=8, pady=5)
-                    row.pack(fill="x", pady=2)
+                    sz   = m.get("size", 0)
+                    row  = tk.Frame(t3_list, bg=C["row"], padx=10, pady=7)
+                    row.pack(fill="x", pady=3)
                     tk.Label(row, text=name, font=("Helvetica", 10, "bold"),
-                             bg="#f1f5f9").pack(side="left")
+                             bg=C["row"], fg=C["text"]).pack(side="left")
                     if sz:
-                        tk.Label(row, text=f"  {sz/1024**3:.1f} GB", font=("Helvetica", 9),
-                                 fg=MUTED, bg="#f1f5f9").pack(side="left")
+                        tk.Label(row, text=f"  {sz/1024**3:.1f} GB",
+                                 font=("Helvetica", 9), fg=C["muted"],
+                                 bg=C["row"]).pack(side="left")
 
                     def make_rm(n):
                         def rm():
-                            if not messagebox.askyesno("Uninstall",
-                                                        f"Remove {n}?\nThis will free up disk space."):
+                            if not messagebox.askyesno(
+                                    "Uninstall", f"Remove {n}?\nThis frees up disk space."):
                                 return
                             def do_rm():
                                 try:
@@ -1029,18 +1127,21 @@ if __name__ == "__main__":
                                                         json={"name": n}, timeout=10)
                                     def af():
                                         t3_stat.config(
-                                            text=f"✓  {n} removed." if r.ok else f"Failed to remove {n}.",
-                                            fg=GREEN if r.ok else RED)
+                                            text=f"✓  {n} removed." if r.ok
+                                                 else f"Failed to remove {n}.",
+                                            fg=C["green"] if r.ok else C["red"])
                                         refresh_t3()
                                     root.after(0, af)
                                 except Exception as ex:
-                                    root.after(0, lambda: t3_stat.config(text=str(ex), fg=RED))
+                                    root.after(0, lambda: t3_stat.config(
+                                        text=str(ex), fg=C["red"]))
                             Thread(target=do_rm, daemon=True).start()
                         return rm
 
-                    tk.Button(row, text="Uninstall", font=("Helvetica", 9), relief="flat",
-                              bg="#fee2e2", fg=RED, padx=6, pady=2, cursor="hand2",
-                              command=make_rm(name)).pack(side="right")
+                    tk.Button(row, text="Uninstall", font=("Helvetica", 9),
+                              relief="flat", bd=0, bg=C["red_bg"], fg=C["red"],
+                              activebackground="#fecaca", padx=8, pady=3,
+                              cursor="hand2", command=make_rm(name)).pack(side="right")
             root.after(0, upd)
         Thread(target=do, daemon=True).start()
 
