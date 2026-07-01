@@ -202,6 +202,14 @@ def check_model(model_name: str):
         }
 
 
+def _sort_by_pid(df: pd.DataFrame) -> pd.DataFrame:
+    try:
+        numeric = pd.to_numeric(df["pid"], errors="raise")
+        return df.iloc[numeric.argsort().values].reset_index(drop=True)
+    except (ValueError, TypeError):
+        return df.sort_values("pid").reset_index(drop=True)
+
+
 def sample_personas(df_small: pd.DataFrame, total_needed: int, sequential: bool = False):
     if sequential:
         # Repeat the list cyclically until total_needed rows are available, then take first N
@@ -240,7 +248,7 @@ def load_personas(
             raise ValueError("Custom persona file must include at least one non-empty persona.")
 
         if sequential:
-            df_small = df_small.sort_values("pid").reset_index(drop=True)
+            df_small = _sort_by_pid(df_small)
 
         return sample_personas(df_small, total_needed, sequential=sequential)
 
@@ -254,7 +262,7 @@ def load_personas(
 
     df_small = df[["pid", "persona_summary"]].dropna().copy()
     if sequential:
-        df_small = df_small.sort_values("pid").reset_index(drop=True)
+        df_small = _sort_by_pid(df_small)
     return sample_personas(df_small, total_needed, sequential=sequential)
 
 
