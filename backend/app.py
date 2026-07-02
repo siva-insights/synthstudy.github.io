@@ -880,15 +880,23 @@ if __name__ == "__main__":
         return False
 
     def _quit_ollama():
-        # Gracefully quit the macOS app bundle (menu bar icon)
-        subprocess.run(["osascript", "-e", 'quit app "Ollama"'],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        # Force-kill both the app bundle process (Ollama) and the background
-        # server process (ollama) — covers both .app and CLI installs
-        subprocess.run(["killall", "Ollama"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(["killall", "ollama"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        import platform
+        if platform.system() == "Darwin":
+            # Gracefully quit the macOS app bundle (menu bar icon)
+            subprocess.run(["osascript", "-e", 'quit app "Ollama"'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Force-kill both the app bundle process (Ollama) and the background
+            # server process (ollama) — covers both .app and CLI installs
+            subprocess.run(["killall", "Ollama"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["killall", "ollama"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif platform.system() == "Windows":
+            # taskkill covers both the Ollama tray app and the background server process
+            subprocess.run(["taskkill", "/F", "/IM", "ollama.exe"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["taskkill", "/F", "/IM", "ollama app.exe"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def _installed_models():
         try:
@@ -1292,7 +1300,10 @@ if __name__ == "__main__":
     root.after(800, refresh_t3)
 
     def on_close():
-        _quit_ollama()
+        try:
+            _quit_ollama()
+        except Exception:
+            pass
         server.should_exit = True
         root.destroy()
         sys.exit(0)
