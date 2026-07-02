@@ -1345,13 +1345,11 @@ Important rules:
         const stimuliText = document.getElementById(`condition${c}Stimuli`)?.value || "";
         const embeddedStimuli = buildEmbeddedStimuliText(stimuliText, questionNumbers);
         const prompt = buildPreviewPrompt(personaPlaceholder, embeddedStimuli, questionNumbers, includePersona);
-        estimatedTotalWords = Math.max(estimatedTotalWords, countWords(prompt));
+        estimatedTotalWords += countWords(prompt);
       }
 
       const sampleCount = parseInt(document.getElementById("sampleCount")?.value) || 1;
-      const conditionCountForTokens = parseInt(document.getElementById("conditionCount")?.value) || 1;
-      const totalRespondents = sampleCount * conditionCountForTokens;
-      const approxTokens = Math.round(estimatedTotalWords * 1.33 * totalRespondents);
+      const approxTokens = Math.round(estimatedTotalWords * sampleCount * 1.33);
 
       let message = `Approx. total tokens for this study: <strong>${approxTokens.toLocaleString()}</strong>
         <span style="color:#64748b; font-size:12px;">(estimated as prompt words × 1.33 × total respondents; image tokens not included)</span>`;
@@ -1955,7 +1953,7 @@ Important rules:
         totalPromptWords += rows.reduce((sum, row) => sum + (parseInt(row.prompt_words) || 0), 0);
       }
 
-      return Math.round(totalPromptWords * 1.34);
+      return Math.round(totalPromptWords * 1.33);
     }
 
     function buildPreviewOutputRows(preview, respondentOffset = 0) {
@@ -2470,7 +2468,15 @@ Important rules:
       }
 
       updateTotalSamples();
-    
+
+      const previewArea = document.getElementById("previewArea");
+      previewArea.innerHTML = `
+        <div class="preview-box">
+          <div class="preview-title">Preparing Generation…</div>
+          <p style="color:#64748b;">Loading personas and building payload, please wait…</p>
+        </div>
+      `;
+
       const conditions = [];
     
       for (let c = 1; c <= conditionCount; c++) {
@@ -2553,8 +2559,6 @@ Important rules:
         stimuli_assignment: document.getElementById("stimuliAssignment")?.value || "random",
         custom_personas: customPersonas
       };
-    
-      const previewArea = document.getElementById("previewArea");
     
       previewArea.innerHTML = `
         <div class="preview-box">
