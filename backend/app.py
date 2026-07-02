@@ -898,7 +898,9 @@ if __name__ == "__main__":
             return []
 
     # FastAPI background server thread: starts uvicorn on localhost:8000
-    config = uvicorn.Config(app, host="127.0.0.1", port=PORT, log_level="error")
+    # log_config=None disables uvicorn's formatter setup, which crashes on Windows
+    # when running --windowed (no console) because sys.stdout is None
+    config = uvicorn.Config(app, host="127.0.0.1", port=PORT, log_level="error", log_config=None)
     server = uvicorn.Server(config)
     Thread(target=server.run, daemon=True).start()
 
