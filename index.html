@@ -760,6 +760,8 @@ Important rules:
     let questionCount = 0;
     let _showPreviewCallId = 0;
     let _personaPool = null; // full default persona dataset, fetched once from HuggingFace
+    let _studyDf = null;    // sampled personas for the current study config
+    let _studyDfKey = null; // key of inputs that produced _studyDf; cleared when inputs change
 
     // Constants / config: Supabase project credentials and client
     const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
@@ -1726,34 +1728,48 @@ Important rules:
       const requestedCount = Math.max(1, parseInt(totalSampleCount) || 1);
       const sequential = personaOrder === "sequential";
 
+      // Build a key from every input that affects which personas go into the study df.
+      // If inputs haven't changed, return the same df so View Preview / Download Preview /
+      // Generate Responses all work from the exact same set of personas.
+      const customFile = document.getElementById("personaSheet")?.files?.[0];
+      const studyKey = [
+        personaSelection,
+        personaOrder,
+        requestedCount,
+        personaSelection === "custom" ? (customFile ? customFile.name + customFile.size : "") : ""
+      ].join("|");
+
+      if (_studyDf && _studyDfKey === studyKey) return _studyDf;
+
+      let result;
+
       if (personaSelection === "none") {
-        return Array.from({ length: requestedCount }, (_, index) => ({
+        result = Array.from({ length: requestedCount }, (_, index) => ({
           pid: `no_persona_${index + 1}`,
           persona: "",
           includePersona: false
         }));
-      }
-
-      if (personaSelection === "custom") {
-        const personaSheet = document.getElementById("personaSheet")?.files?.[0];
-
-        if (!personaSheet) {
+      } else if (personaSelection === "custom") {
+        if (!customFile) {
           throw new Error("Please upload a persona Excel sheet before previewing the output rows.");
         }
-
-        const personas = await readPersonaSheet(personaSheet);
+        const personas = await readPersonaSheet(customFile);
         const selected = sequential
           ? samplePreviewPersonasSequential(personas, requestedCount)
           : samplePreviewPersonas(personas, requestedCount);
-        return selected.map((persona) => ({ ...persona, includePersona: true }));
+        result = selected.map((persona) => ({ ...persona, includePersona: true }));
+      } else {
+        // Pool is fetched once; sampling here is in-memory
+        const pool = await loadDefaultPersonaPool();
+        const sampled = sequential
+          ? samplePreviewPersonasSequential(pool, requestedCount)
+          : samplePreviewPersonas(pool, requestedCount);
+        result = sampled.map(p => ({ pid: p.pid, persona: p.persona, includePersona: true }));
       }
 
-      // Pool is fetched once on first use; all subsequent calls sample from memory
-      const pool = await loadDefaultPersonaPool();
-      const sampled = sequential
-        ? samplePreviewPersonasSequential(pool, requestedCount)
-        : samplePreviewPersonas(pool, requestedCount);
-      return sampled.map(p => ({ pid: p.pid, persona: p.persona, includePersona: true }));
+      _studyDf = result;
+      _studyDfKey = studyKey;
+      return result;
     }
 
     const DEFAULT_PERSONA_DATASET = "LLM-Digital-Twin/Twin-2K-500";
