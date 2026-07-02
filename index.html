@@ -2626,6 +2626,24 @@ Important rules:
         await loadSiteMetrics();
         addLog("Site metrics loaded — handing off to progress poller");
 
+        previewArea.innerHTML = `
+          <div class="preview-box">
+            <div class="preview-title">Response Generation In Progress</div>
+            <p style="color:#dc2626; font-weight:600; font-size:15px;">
+              ⚠ Do not close this tab — it will stop generation early.
+              If you do close it, all responses generated so far will be automatically saved to your <strong>Downloads</strong> folder.
+            </p>
+            <div class="progress-container">
+              <div id="generationProgressBar" class="progress-bar"></div>
+            </div>
+            <div id="generationProgressText" class="progress-text">
+              Starting generation...
+            </div>
+            <button type="button" id="stopGenerationBtn" style="margin-top:14px; background:#dc2626; color:#fff; border:none; padding:8px 20px; border-radius:6px; font-size:14px; cursor:pointer;"
+              onclick="stopGeneration()">Stop Generation</button>
+          </div>
+        `;
+
         pollGenerationProgress(data.job_id);
 
       } catch (error) {
