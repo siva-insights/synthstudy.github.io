@@ -2533,17 +2533,17 @@ Important rules:
       }
 
       if (personaSelection === "default") {
-        // Fetch personas once (cache hit if preview was already shown) and pass them
-        // to the backend so it uses the exact same personas the user saw in preview.
-        try {
-          const totalSampleCount = conditionCount * sampleCount;
-          const fetched = await getPreviewPersonas(totalSampleCount);
-          customPersonas = fetched.map(p => ({ pid: p.pid, persona: p.persona }));
+        // If the user already viewed the preview, reuse the cached personas so
+        // generation uses the exact same set. Otherwise let the backend fetch them
+        // via its local HuggingFace cache — never block the UI on a network call here.
+        const personaOrder = document.getElementById("personaOrder")?.value || "random";
+        const totalSampleCount = conditionCount * sampleCount;
+        const studyKey = `default|${personaOrder}|${totalSampleCount}|`;
+        if (_studyDf && _studyDfKey === studyKey) {
+          customPersonas = _studyDf.map(p => ({ pid: p.pid, persona: p.persona }));
           payloadPersonaSource = "custom";
-        } catch (error) {
-          alert(error.message || "Could not load personas. Please try again.");
-          return;
         }
+        // else: persona_source stays "default", backend fetches via Python datasets library
       }
 
       const payload = {
