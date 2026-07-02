@@ -10,6 +10,8 @@ call build-venv\Scripts\activate.bat
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 
+taskkill /F /IM "OLSEDG-Helper.exe" >nul 2>&1
+
 rmdir /s /q build
 rmdir /s /q dist
 del /q *.spec
