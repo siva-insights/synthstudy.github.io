@@ -2233,7 +2233,9 @@ Important rules:
         const scaleLabels = getScaleLabels(q);
         const scaleStartRaw = parseInt(document.getElementById(`question${q}ScaleStart`)?.value);
         const scaleStart = isNaN(scaleStartRaw) ? 1 : scaleStartRaw;
-        const scaleEnd = scaleStart + scaleLabels.length - 1;
+        const scaleCountRaw = parseInt(document.getElementById(`question${q}ScaleCount`)?.value);
+        const scaleCount = isNaN(scaleCountRaw) ? scaleLabels.length : scaleCountRaw;
+        const scaleEnd = scaleStart + scaleCount - 1;
         const maxWords = parseInt(document.getElementById(`question${q}MaxWords`)?.value) || 0;
 
         children.push(new Paragraph({ text: `Q${q}: ${questionText}`, heading: HeadingLevel.HEADING_3 }));
