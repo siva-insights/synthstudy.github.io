@@ -2503,6 +2503,8 @@ Important rules:
       addLog("Generate clicked — validation passed");
       addLog(`Study: "${studyName}" | Conditions: ${conditionCount} | Samples/condition: ${sampleCount} | Questions: ${questionNumbers.length}`);
 
+      try {
+
       const conditions = [];
       for (let c = 1; c <= conditionCount; c++) {
         conditions.push({
@@ -2515,13 +2517,14 @@ Important rules:
 
       const questions = [];
       for (const q of questionNumbers) {
-        const questionText = document.getElementById(`question${q}`).value.trim();
-        const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`).value);
+        addLog(`  Building question ${q}…`);
+        const questionText = document.getElementById(`question${q}`)?.value.trim() ?? "";
+        const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`)?.value) || 0;
         const scaleStartParsed = parseInt(document.getElementById(`question${q}ScaleStart`)?.value);
         const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
         const scalePoints = [];
         for (let s = 1; s <= scaleCount; s++) {
-          scalePoints.push(document.getElementById(`question${q}Scale${s}`).value.trim());
+          scalePoints.push(document.getElementById(`question${q}Scale${s}`)?.value.trim() ?? "");
         }
         questions.push({
           question_number: q,
@@ -2634,6 +2637,11 @@ Important rules:
             <pre style="background:#0f172a;color:#fca5a5;font-size:12px;padding:12px;border-radius:6px;margin-top:10px;white-space:pre-wrap;">${logLines.join("\n")}</pre>
           </div>
         `;
+      }
+
+      } catch (err) {
+        addLog(`UNCAUGHT ERROR: ${err.name}: ${err.message}`);
+        if (err.stack) addLog(err.stack.split("\n").slice(0, 4).join("\n"));
       }
     }
 
