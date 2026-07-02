@@ -2127,7 +2127,8 @@ Important rules:
               const mw = t.replace("Max Words:", "").trim();
               cur.maxWords = mw === "Unlimited" ? 0 : parseInt(mw) || 0;
             } else if (collectLabels && /^-?\d+\s*=\s*.+/.test(t)) {
-              cur.scaleLabels.push(t.slice(t.indexOf("=") + 1).trim());
+              const lm = t.match(/^(-?\d+)\s*=\s*(.+)/);
+              if (lm) cur.scaleLabels.push({ code: parseInt(lm[1]), label: lm[2].trim() });
             }
           }
         }
@@ -2161,8 +2162,13 @@ Important rules:
       if (qContainer) qContainer.innerHTML = "";
       questionCount = 0;
       for (const q of config.questions) {
+        const positionalLabels = Array(q.scaleCount).fill("");
+        (q.scaleLabels || []).forEach(({ code, label }) => {
+          const idx = code - q.scaleStart;
+          if (idx >= 0 && idx < q.scaleCount) positionalLabels[idx] = label;
+        });
         addQuestion({ questionText: q.text, scaleType: q.scaleType, scaleStart: q.scaleStart,
-                      scaleCount: q.scaleCount, scaleLabels: q.scaleLabels, maxWords: q.maxWords });
+                      scaleCount: q.scaleCount, scaleLabels: positionalLabels, maxWords: q.maxWords });
       }
 
       document.getElementById("genericInstruction").value = config.genericInstruction || "";
