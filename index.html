@@ -775,8 +775,9 @@ Important rules:
 
     let questionCount = 0;
     let _showPreviewCallId = 0;
-    let _personaPool = null; // full default persona dataset, fetched once from HuggingFace
-    let _studyDf = null;    // sampled personas for the current study config
+    let _personaPool = null;        // full default persona dataset, fetched once from HuggingFace
+    let _personaPoolPromise = null; // in-flight promise so concurrent callers share one fetch
+    let _studyDf = null;            // sampled personas for the current study config
     let _studyDfKey = null; // key of inputs that produced _studyDf; cleared when inputs change
 
     // Constants / config: Supabase project credentials and client
@@ -948,6 +949,7 @@ Important rules:
     
     window.addEventListener("load", loadComments);
     window.addEventListener("load", recordPageView);
+    window.addEventListener("load", () => loadDefaultPersonaPool().catch(() => {}));
     
     // Utility functions: question card helpers, word count, condition/persona toggles
     function getExistingQuestionNumbers() {
@@ -1797,7 +1799,7 @@ Important rules:
       if (!defaultPersonaTotalRowsPromise) {
         defaultPersonaTotalRowsPromise = (async () => {
           const url = `https://datasets-server.huggingface.co/size?dataset=${encodeURIComponent(DEFAULT_PERSONA_DATASET)}&config=${encodeURIComponent(DEFAULT_PERSONA_CONFIG)}&split=${encodeURIComponent(DEFAULT_PERSONA_SPLIT)}`;
-          const response = await fetch(url);
+          const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
           const data = response.ok ? await response.json() : null;
           const totalRows = data?.size?.splits?.[0]?.num_rows;
 
@@ -1821,38 +1823,44 @@ Important rules:
     // no further HuggingFace requests are made regardless of parameter changes.
     async function loadDefaultPersonaPool() {
       if (_personaPool) return _personaPool;
+      if (_personaPoolPromise) return _personaPoolPromise;
 
-      const totalRows = await getDefaultPersonaTotalRows();
-      const BATCH_SIZE = 100;
-      const offsets = Array.from({ length: Math.ceil(totalRows / BATCH_SIZE) }, (_, i) => i * BATCH_SIZE);
+      _personaPoolPromise = (async () => {
+        const totalRows = await getDefaultPersonaTotalRows();
+        const BATCH_SIZE = 100;
+        const offsets = Array.from({ length: Math.ceil(totalRows / BATCH_SIZE) }, (_, i) => i * BATCH_SIZE);
 
-      const batches = await Promise.all(offsets.map(offset => {
-        const url = new URL("https://datasets-server.huggingface.co/rows");
-        url.searchParams.set("dataset", DEFAULT_PERSONA_DATASET);
-        url.searchParams.set("config", DEFAULT_PERSONA_CONFIG);
-        url.searchParams.set("split", DEFAULT_PERSONA_SPLIT);
-        url.searchParams.set("offset", String(offset));
-        url.searchParams.set("length", String(Math.min(BATCH_SIZE, totalRows - offset)));
-        return fetch(url.toString())
-          .then(r => {
-            if (!r.ok) throw new Error("Could not load default Toubia et al. personas from Hugging Face.");
-            return r.json();
-          })
-          .then(data =>
-            (data?.rows || [])
-              .map(r => ({ pid: String(r.row?.pid ?? "").trim(), persona: String(r.row?.persona_summary ?? "").trim() }))
-              .filter(p => p.pid && p.persona)
-          );
-      }));
+        const batches = await Promise.all(offsets.map(offset => {
+          const url = new URL("https://datasets-server.huggingface.co/rows");
+          url.searchParams.set("dataset", DEFAULT_PERSONA_DATASET);
+          url.searchParams.set("config", DEFAULT_PERSONA_CONFIG);
+          url.searchParams.set("split", DEFAULT_PERSONA_SPLIT);
+          url.searchParams.set("offset", String(offset));
+          url.searchParams.set("length", String(Math.min(BATCH_SIZE, totalRows - offset)));
+          return fetch(url.toString(), { signal: AbortSignal.timeout(20000) })
+            .then(r => {
+              if (!r.ok) throw new Error("Could not load default Toubia et al. personas from Hugging Face.");
+              return r.json();
+            })
+            .then(data =>
+              (data?.rows || [])
+                .map(r => ({ pid: String(r.row?.pid ?? "").trim(), persona: String(r.row?.persona_summary ?? "").trim() }))
+                .filter(p => p.pid && p.persona)
+            );
+        }));
 
-      _personaPool = batches.flat();
+        _personaPool = batches.flat();
 
-      if (_personaPool.length === 0) {
-        _personaPool = null;
-        throw new Error("No default Toubia et al. personas were returned from Hugging Face.");
-      }
+        if (_personaPool.length === 0) {
+          _personaPool = null;
+          throw new Error("No default Toubia et al. personas were returned from Hugging Face.");
+        }
 
-      return _personaPool;
+        return _personaPool;
+      })();
+
+      _personaPoolPromise.catch(() => { _personaPoolPromise = null; });
+      return _personaPoolPromise;
     }
 
     // Numeric-first sort mirrors _sort_by_pid() in app.py so preview order matches generation order
@@ -2533,17 +2541,19 @@ Important rules:
       }
 
       if (personaSelection === "default") {
-        // If the user already viewed the preview, reuse the cached personas so
-        // generation uses the exact same set. Otherwise let the backend fetch them
-        // via its local HuggingFace cache — never block the UI on a network call here.
-        const personaOrder = document.getElementById("personaOrder")?.value || "random";
-        const totalSampleCount = conditionCount * sampleCount;
-        const studyKey = `default|${personaOrder}|${totalSampleCount}|`;
-        if (_studyDf && _studyDfKey === studyKey) {
-          customPersonas = _studyDf.map(p => ({ pid: p.pid, persona: p.persona }));
+        try {
+          const totalSampleCount = conditionCount * sampleCount;
+          const fetched = await getPreviewPersonas(totalSampleCount);
+          customPersonas = fetched.map(p => ({ pid: p.pid, persona: p.persona }));
           payloadPersonaSource = "custom";
+        } catch (error) {
+          previewArea.innerHTML = `
+            <div class="preview-box">
+              <div class="preview-title">Generation Failed</div>
+              <p>${error.message || "Could not load personas. Please check your internet connection and try again."}</p>
+            </div>`;
+          return;
         }
-        // else: persona_source stays "default", backend fetches via Python datasets library
       }
 
       const payload = {
