@@ -1338,28 +1338,47 @@ Important rules:
       const questionNumbers = getExistingQuestionNumbers();
       const personaSelection = document.getElementById("personaSelection")?.value || "default";
       const includePersona = personaSelection !== "none";
+      let approxTokens;
+      let tokenNote;
+
+      if (previews && previews.length > 0) {
+        // Preview has been generated — use actual prompt words (most accurate)
+        approxTokens = getPreviewTotalApproxTokens();
+        tokenNote = `(sum of actual prompt words × 1.33; image tokens not included)`;
+      } else {
+        // No preview yet — estimate using persona placeholder
+        const personaMaxWords = await getPersonaMaxWords();
+        const personaPlaceholder = includePersona ? Array(personaMaxWords).fill("x").join(" ") : "";
+        let estimatedTotalWords = 0;
+        for (let c = 1; c <= conditionCount; c++) {
+          const stimuliText = document.getElementById(`condition${c}Stimuli`)?.value || "";
+          const embeddedStimuli = buildEmbeddedStimuliText(stimuliText, questionNumbers);
+          const prompt = buildPreviewPrompt(personaPlaceholder, embeddedStimuli, questionNumbers, includePersona);
+          estimatedTotalWords += countWords(prompt);
+        }
+        const sampleCount = parseInt(document.getElementById("sampleCount")?.value) || 1;
+        approxTokens = Math.round(estimatedTotalWords * sampleCount * 1.33);
+        tokenNote = `(estimated as prompt words × 1.33 × total respondents; image tokens not included)`;
+      }
+
+      // Per-condition prompt length for model limit check (always use estimate)
       const personaMaxWords = await getPersonaMaxWords();
       const personaPlaceholder = includePersona ? Array(personaMaxWords).fill("x").join(" ") : "";
-
-      let estimatedTotalWords = 0;
-
+      let maxConditionWords = 0;
       for (let c = 1; c <= conditionCount; c++) {
         const stimuliText = document.getElementById(`condition${c}Stimuli`)?.value || "";
         const embeddedStimuli = buildEmbeddedStimuliText(stimuliText, questionNumbers);
         const prompt = buildPreviewPrompt(personaPlaceholder, embeddedStimuli, questionNumbers, includePersona);
-        estimatedTotalWords += countWords(prompt);
+        maxConditionWords = Math.max(maxConditionWords, countWords(prompt));
       }
 
-      const sampleCount = parseInt(document.getElementById("sampleCount")?.value) || 1;
-      const approxTokens = Math.round(estimatedTotalWords * sampleCount * 1.33);
-
       let message = `Approx. total tokens for this study: <strong>${approxTokens.toLocaleString()}</strong>
-        <span style="color:#64748b; font-size:12px;">(estimated as prompt words × 1.33 × total respondents; image tokens not included)</span>`;
+        <span style="color:#64748b; font-size:12px;">${tokenNote}</span>`;
 
       if (selectedModelName) {
         const limits = getModelWordLimit(selectedModelName);
         if (limits) {
-          if (estimatedTotalWords > limits.inputWords) {
+          if (maxConditionWords > limits.inputWords) {
             message += `<br><span style="color:#dc2626;">⚠ Estimated prompt length may exceed the selected model's input limit.</span>`;
           } else {
             message += `<br><span style="color:#16a34a;">✓ Estimated prompt length is within the selected model's input limit.</span>`;
@@ -2380,6 +2399,7 @@ Important rules:
 
       currentPreviewIndex = 0;
       renderPreview();
+      updateInputEstimate();
 
       if (downloadAfterPreview) {
         downloadPreviewExcel();
@@ -2393,7 +2413,7 @@ Important rules:
       previewArea.innerHTML = `
         <div class="preview-box">
           <div class="preview-title">Preview: Condition ${preview.condition}</div>
-          <p><strong>Total Samples:</strong> ${escapeHTML(String(getPreviewTotalSamples()))} &nbsp;|&nbsp; <strong>Approx. total tokens:</strong> ${escapeHTML(String(getPreviewTotalApproxTokens()).replace(/\B(?=(\d{3})+(?!\d))/g, ","))} <span style="color:#64748b; font-size:12px;">(image tokens not included)</span></p>
+          <p><strong>Total Samples:</strong> ${escapeHTML(String(getPreviewTotalSamples()))}</p>
 
           <div class="preview-nav">
             <button type="button" onclick="previousPreview()" ${currentPreviewIndex === 0 ? "disabled" : ""}>Previous</button>
