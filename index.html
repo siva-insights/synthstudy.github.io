@@ -2464,12 +2464,12 @@ Important rules:
         alert("Please select a language model.");
         return;
       }
-    
+
       const studyName = document.getElementById("studyName").value.trim();
       const conditionCount = parseInt(document.getElementById("conditionCount").value);
       const sampleCount = parseInt(document.getElementById("sampleCount").value);
       const temperature = parseFloat(document.getElementById("temperature").value);
-    
+
       if (!studyName || !conditionCount || conditionCount < 1 || !sampleCount || sampleCount < 1 || questionNumbers.length < 1) {
         alert("Please complete study name, conditions, samples, and at least one question.");
         return;
@@ -2478,15 +2478,32 @@ Important rules:
       updateTotalSamples();
 
       const previewArea = document.getElementById("previewArea");
+      const t0 = Date.now();
+
+      const logLines = [];
+      function addLog(msg) {
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+        const line = `[+${elapsed}s] ${msg}`;
+        logLines.push(line);
+        console.log(line);
+        const logEl = document.getElementById("genDebugLog");
+        if (logEl) {
+          logEl.textContent = logLines.join("\n");
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+      }
+
       previewArea.innerHTML = `
         <div class="preview-box">
           <div class="preview-title">Preparing Generation…</div>
-          <p style="color:#64748b;">Loading personas and building payload, please wait…</p>
+          <pre id="genDebugLog" style="background:#0f172a;color:#86efac;font-size:12px;padding:12px;border-radius:6px;max-height:320px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin-top:10px;"></pre>
         </div>
       `;
 
+      addLog("Generate clicked — validation passed");
+      addLog(`Study: "${studyName}" | Conditions: ${conditionCount} | Samples/condition: ${sampleCount} | Questions: ${questionNumbers.length}`);
+
       const conditions = [];
-    
       for (let c = 1; c <= conditionCount; c++) {
         conditions.push({
           condition_number: parseInt(document.getElementById(`condition${c}Code`)?.value) || c,
@@ -2494,22 +2511,18 @@ Important rules:
           stimuli: document.getElementById(`condition${c}Stimuli`).value.trim()
         });
       }
-    
+      addLog(`Built ${conditions.length} condition(s)`);
+
       const questions = [];
-    
       for (const q of questionNumbers) {
         const questionText = document.getElementById(`question${q}`).value.trim();
         const scaleCount = parseInt(document.getElementById(`question${q}ScaleCount`).value);
         const scaleStartParsed = parseInt(document.getElementById(`question${q}ScaleStart`)?.value);
         const scaleStart = isNaN(scaleStartParsed) ? 1 : scaleStartParsed;
-
         const scalePoints = [];
-
         for (let s = 1; s <= scaleCount; s++) {
-          const label = document.getElementById(`question${q}Scale${s}`).value.trim();
-          scalePoints.push(label);
+          scalePoints.push(document.getElementById(`question${q}Scale${s}`).value.trim());
         }
-
         questions.push({
           question_number: q,
           question_text: questionText,
@@ -2519,21 +2532,24 @@ Important rules:
           max_words: parseInt(document.getElementById(`question${q}MaxWords`)?.value) || 0
         });
       }
-    
+      addLog(`Built ${questions.length} question(s)`);
+
       const personaSelection = document.getElementById("personaSelection")?.value || "default";
       let customPersonas = null;
       let payloadPersonaSource = personaSelection;
 
+      addLog(`Persona selection: ${personaSelection}`);
+
       if (personaSelection === "custom") {
         const personaSheet = document.getElementById("personaSheet")?.files?.[0];
-
         if (!personaSheet) {
           alert("Please upload a persona Excel sheet with pid and persona columns.");
           return;
         }
-
         try {
+          addLog("Reading custom persona Excel sheet…");
           customPersonas = await readPersonaSheet(personaSheet);
+          addLog(`Custom personas loaded: ${customPersonas.length} rows`);
         } catch (error) {
           alert(error.message || "Could not read the persona Excel sheet.");
           return;
@@ -2543,10 +2559,14 @@ Important rules:
       if (personaSelection === "default") {
         try {
           const totalSampleCount = conditionCount * sampleCount;
+          const cacheHit = _studyDf && _studyDfKey === [personaSelection, document.getElementById("personaOrder")?.value || "random", totalSampleCount, ""].join("|");
+          addLog(`getPreviewPersonas(${totalSampleCount}) — cache ${cacheHit ? "HIT (instant)" : "MISS (will fetch from HuggingFace)"}`);
           const fetched = await getPreviewPersonas(totalSampleCount);
+          addLog(`Personas ready: ${fetched.length} personas`);
           customPersonas = fetched.map(p => ({ pid: p.pid, persona: p.persona }));
           payloadPersonaSource = "custom";
         } catch (error) {
+          addLog(`ERROR loading personas: ${error.message}`);
           previewArea.innerHTML = `
             <div class="preview-box">
               <div class="preview-title">Generation Failed</div>
@@ -2556,7 +2576,8 @@ Important rules:
         }
       }
 
-      const payload = {
+      addLog("Building JSON payload…");
+      const payloadBody = JSON.stringify({
         study_name: studyName,
         model_name: selectedModel.value,
         temperature: temperature,
@@ -2568,41 +2589,23 @@ Important rules:
         persona_order: document.getElementById("personaOrder")?.value || "random",
         stimuli_assignment: document.getElementById("stimuliAssignment")?.value || "random",
         custom_personas: customPersonas
-      };
-    
-      previewArea.innerHTML = `
-        <div class="preview-box">
-          <div class="preview-title">Response Generation In Progress</div>
-          <p style="color:#dc2626; font-weight:600; font-size:15px;">
-            ⚠ Do not close this tab — it will stop generation early.
-            If you do close it, all responses generated so far will be automatically saved to your <strong>Downloads</strong> folder.
-          </p>
+      });
+      addLog(`Payload built — size: ${(payloadBody.length / 1024).toFixed(1)} KB`);
 
-          <div class="progress-container">
-            <div id="generationProgressBar" class="progress-bar"></div>
-          </div>
-
-          <div id="generationProgressText" class="progress-text">
-            Starting generation...
-          </div>
-
-          <button type="button" id="stopGenerationBtn" style="margin-top:14px; background:#dc2626; color:#fff; border:none; padding:8px 20px; border-radius:6px; font-size:14px; cursor:pointer;"
-            onclick="stopGeneration()">Stop Generation</button>
-        </div>
-      `;
-    
+      addLog("POST → http://localhost:8000/generate …");
       try {
         const response = await fetch("http://localhost:8000/generate", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(payload)
+          headers: { "Content-Type": "application/json" },
+          body: payloadBody
         });
-    
+        addLog(`POST response received — HTTP ${response.status}`);
+
         const data = await response.json();
-    
+        addLog(`Response parsed — success: ${data.success}, job_id: ${data.job_id || "n/a"}`);
+
         if (!data.success) {
+          addLog("ERROR: Backend returned success=false");
           previewArea.innerHTML = `
             <div class="preview-box">
               <div class="preview-title">Generation Failed</div>
@@ -2611,19 +2614,24 @@ Important rules:
           `;
           return;
         }
-        
+
         const totalSyntheticResponses = conditionCount * sampleCount;
 
+        addLog("Updating site metrics…");
         await incrementSiteMetricBy("synthetic_responses_generated", totalSyntheticResponses);
+        addLog("Site metrics incremented");
         await loadSiteMetrics();
-        
+        addLog("Site metrics loaded — handing off to progress poller");
+
         pollGenerationProgress(data.job_id);
-    
+
       } catch (error) {
+        addLog(`FETCH ERROR: ${error.message}`);
         previewArea.innerHTML = `
           <div class="preview-box">
             <div class="preview-title">Generation Failed</div>
             <p>OLSEDG Helper is not running or could not connect to Ollama.</p>
+            <pre style="background:#0f172a;color:#fca5a5;font-size:12px;padding:12px;border-radius:6px;margin-top:10px;white-space:pre-wrap;">${logLines.join("\n")}</pre>
           </div>
         `;
       }
