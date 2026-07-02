@@ -688,6 +688,7 @@ Important rules:
     // Constants / config: module-level state, Supabase credentials, and top-level variables
     let previews = [];
     let currentPreviewIndex = 0;
+    let _conditionAssignments = null; // condition assignment per respondent from last showPreview()
     let _withPersonaInstruction = null;
     let cloudGenerationRows = [];
     let cloudGenerationColumns = [];
@@ -1307,26 +1308,29 @@ Important rules:
     
     const DEFAULT_PERSONA_MAX_WORDS = 3061;
 
-    async function getPersonaMaxWords() {
+    async function getPersonaAvgWords() {
       const personaSelection = document.getElementById("personaSelection")?.value || "default";
 
-      if (personaSelection === "none") {
-        return 0;
-      }
+      if (personaSelection === "none") return 0;
 
       if (personaSelection === "custom") {
         const personaSheet = document.getElementById("personaSheet")?.files?.[0];
-
-        if (!personaSheet) {
-          return 0;
-        }
-
+        if (!personaSheet) return 0;
         try {
           const personas = await readPersonaSheet(personaSheet);
-          return personas.reduce((max, p) => Math.max(max, countWords(p.persona)), 0);
+          if (!personas.length) return 0;
+          const total = personas.reduce((sum, p) => sum + countWords(p.persona || ""), 0);
+          return Math.round(total / personas.length);
         } catch (error) {
           return 0;
         }
+      }
+
+      // Default: use actual average from _studyDf (loaded at page start) if available
+      const source = _studyDf || _personaPool;
+      if (source && source.length > 0) {
+        const total = source.reduce((sum, p) => sum + countWords(p.persona || ""), 0);
+        return Math.round(total / source.length);
       }
 
       return DEFAULT_PERSONA_MAX_WORDS;
@@ -1347,8 +1351,8 @@ Important rules:
         tokenNote = `(sum of actual prompt words × 1.33; image tokens not included)`;
       } else {
         // No preview yet — estimate using persona placeholder
-        const personaMaxWords = await getPersonaMaxWords();
-        const personaPlaceholder = includePersona ? Array(personaMaxWords).fill("x").join(" ") : "";
+        const personaAvgWords = await getPersonaAvgWords();
+        const personaPlaceholder = includePersona ? Array(personaAvgWords).fill("x").join(" ") : "";
         let estimatedTotalWords = 0;
         for (let c = 1; c <= conditionCount; c++) {
           const stimuliText = document.getElementById(`condition${c}Stimuli`)?.value || "";
@@ -1362,8 +1366,8 @@ Important rules:
       }
 
       // Per-condition prompt length for model limit check (always use estimate)
-      const personaMaxWords = await getPersonaMaxWords();
-      const personaPlaceholder = includePersona ? Array(personaMaxWords).fill("x").join(" ") : "";
+      const personaAvgWords = await getPersonaAvgWords();
+      const personaPlaceholder = includePersona ? Array(personaAvgWords).fill("x").join(" ") : "";
       let maxConditionWords = 0;
       for (let c = 1; c <= conditionCount; c++) {
         const stimuliText = document.getElementById(`condition${c}Stimuli`)?.value || "";
@@ -2365,6 +2369,7 @@ Important rules:
           [conditionAssignments[i], conditionAssignments[j]] = [conditionAssignments[j], conditionAssignments[i]];
         }
       }
+      _conditionAssignments = [...conditionAssignments];
 
       for (let c = 1; c <= conditionCount; c++) {
         let stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
@@ -2599,6 +2604,20 @@ Important rules:
         }
       }
 
+      // If the user viewed the preview, reorder personas to match the preview's
+      // condition assignments exactly, then tell the backend to use them in order
+      // (sequential) so the output file matches what the preview showed.
+      let payloadStimuliAssignment = document.getElementById("stimuliAssignment")?.value || "random";
+      if (customPersonas && _conditionAssignments && _conditionAssignments.length === customPersonas.length) {
+        const byCondition = {};
+        for (let c = 1; c <= conditionCount; c++) byCondition[c] = [];
+        _conditionAssignments.forEach((cond, i) => byCondition[cond].push(customPersonas[i]));
+        customPersonas = [];
+        for (let c = 1; c <= conditionCount; c++) customPersonas.push(...(byCondition[c] || []));
+        payloadStimuliAssignment = "sequential";
+        addLog("Personas reordered to match preview condition assignments");
+      }
+
       addLog("Building JSON payload…");
       const payloadBody = JSON.stringify({
         study_name: studyName,
@@ -2610,7 +2629,7 @@ Important rules:
         generic_instruction: document.getElementById("genericInstruction")?.value || "",
         persona_source: payloadPersonaSource,
         persona_order: document.getElementById("personaOrder")?.value || "random",
-        stimuli_assignment: document.getElementById("stimuliAssignment")?.value || "random",
+        stimuli_assignment: payloadStimuliAssignment,
         custom_personas: customPersonas
       });
       addLog(`Payload built — size: ${(payloadBody.length / 1024).toFixed(1)} KB`);
