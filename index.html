@@ -492,7 +492,22 @@
 
     <!-- Study Setup: study name, condition count, samples per condition, persona source, temperature -->
     <div class="section">
-      <h2>Study Setup</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h2 style="margin:0;">Study Setup</h2>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button type="button" onclick="document.getElementById('studyInfoUploadInput').click()"
+            style="font-size:12px;padding:4px 10px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;color:#1e293b;font-weight:500;">
+            ↑ Load Study Config
+          </button>
+          <span class="tooltip" style="font-size:13px;color:#64748b;cursor:help;">?
+            <span class="tooltip-text" style="min-width:220px;">
+              Upload a <strong>Download Study Info</strong> (.docx) file to restore all study fields automatically. Condition codes, persona order, and stimuli assignment will reset to defaults.
+            </span>
+          </span>
+          <input type="file" id="studyInfoUploadInput" accept=".docx" style="display:none"
+            onchange="handleStudyInfoUpload(this)">
+        </div>
+      </div>
       <table class="input-table">
         <tr>
           <td><label for="studyName">Study Name:</label></td>
@@ -668,6 +683,7 @@ Important rules:
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.iife.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script>
     // Constants / config: module-level state, Supabase credentials, and top-level variables
     let previews = [];
@@ -2014,6 +2030,143 @@ Important rules:
 
       const filename = `SEDG_preview_${rows.length}_samples_${formatTimestampForFilename()}.xlsx`;
       XLSX.writeFile(workbook, filename);
+    }
+
+    function handleStudyInfoUpload(input) {
+      const file = input.files?.[0];
+      input.value = "";
+      if (!file) return;
+      parseStudyDocx(file)
+        .then(config => { populateStudyFromConfig(config); })
+        .catch(err => alert("Could not load study config: " + (err.message || "Make sure you upload a SEDG Study Info .docx file.")));
+    }
+
+    async function parseStudyDocx(file) {
+      if (!window.JSZip) throw new Error("JSZip library not available. Check your internet connection.");
+
+      const zip = await JSZip.loadAsync(await file.arrayBuffer());
+      const xmlStr = await zip.file("word/document.xml").async("string");
+      const NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+      const xmlDoc = new DOMParser().parseFromString(xmlStr, "application/xml");
+
+      // Extract paragraphs as {type, text}
+      const paras = Array.from(xmlDoc.getElementsByTagNameNS(NS, "p")).map(p => {
+        const style = p.getElementsByTagNameNS(NS, "pStyle")[0]?.getAttribute("w:val") || "";
+        const text = Array.from(p.getElementsByTagNameNS(NS, "t")).map(t => t.textContent).join("");
+        const type = style === "Heading1" ? "h1" : style === "Heading2" ? "h2" : style === "Heading3" ? "h3" : "p";
+        return { type, text: text };
+      });
+
+      const config = { studyName: "", sampleCount: "", temperature: "0", personaSource: "default",
+                       genericInstruction: "", conditions: [], questions: [] };
+      let state = "start";
+      let cur = null;         // current condition or question being built
+      let genericLines = [];
+      let collectLabels = false;
+
+      function saveCondition() {
+        if (cur?.stimuliLines !== undefined) {
+          config.conditions.push({ name: cur.name, stimuli: cur.stimuliLines.join("\n").trimEnd() });
+          cur = null;
+        }
+      }
+      function saveQuestion() {
+        if (cur?.text !== undefined) { config.questions.push(cur); cur = null; collectLabels = false; }
+      }
+
+      for (const { type, text } of paras) {
+        const t = text.trim();
+
+        if (state === "start") {
+          if (type === "h2" && t === "Study Information") state = "study_info";
+
+        } else if (state === "study_info") {
+          if (type === "h2" && t.includes("Generic Instruction")) { state = "generic_instruction"; }
+          else if (type === "p" && t.includes(": ")) {
+            const ci = t.indexOf(": ");
+            const key = t.slice(0, ci).trim(), val = t.slice(ci + 2).trim();
+            if (key === "Study Name")              config.studyName = val;
+            else if (key === "Samples per Condition") config.sampleCount = val;
+            else if (key === "Temperature")        config.temperature = val;
+            else if (key === "Persona Source") {
+              config.personaSource = val.includes("No persona") ? "none"
+                                   : val.includes("Input persona") ? "custom" : "default";
+            }
+          }
+
+        } else if (state === "generic_instruction") {
+          if (type === "h2" && t === "Conditions and Stimuli") {
+            config.genericInstruction = genericLines.join("\n").trimEnd();
+            state = "conditions";
+          } else if (type === "p") { genericLines.push(t); }
+
+        } else if (state === "conditions") {
+          if (type === "h2" && t.includes("Questions and Response Scales")) {
+            saveCondition(); state = "questions";
+          } else if (type === "h3") { saveCondition(); cur = { name: t, stimuliLines: [] }; }
+          else if (type === "p" && cur) { cur.stimuliLines.push(t); }
+
+        } else if (state === "questions") {
+          if (type === "h3") {
+            saveQuestion();
+            const m = t.match(/^Q\d+:\s*(.+)$/);
+            cur = { text: m ? m[1].trim() : t, scaleType: "discrete",
+                    scaleStart: 1, scaleCount: 0, scaleLabels: [], maxWords: 0 };
+          } else if (type === "p" && cur) {
+            if (t.startsWith("Scale Type:")) {
+              const s = t.replace("Scale Type:", "").trim();
+              cur.scaleType = s.includes("Text") ? "text" : s.includes("Continuous") ? "continuous" : "discrete";
+            } else if (t.startsWith("Range:")) {
+              const m = t.match(/(-?\d+)\s+to\s+(-?\d+)/);
+              if (m) { cur.scaleStart = parseInt(m[1]); cur.scaleCount = parseInt(m[2]) - parseInt(m[1]) + 1; }
+            } else if (t === "Scale Points:") {
+              collectLabels = true;
+            } else if (t.startsWith("Max Words:")) {
+              const mw = t.replace("Max Words:", "").trim();
+              cur.maxWords = mw === "Unlimited" ? 0 : parseInt(mw) || 0;
+            } else if (collectLabels && /^-?\d+\s*=\s*.+/.test(t)) {
+              cur.scaleLabels.push(t.slice(t.indexOf("=") + 1).trim());
+            }
+          }
+        }
+      }
+      saveQuestion();
+
+      if (!config.studyName && config.conditions.length === 0 && config.questions.length === 0) {
+        throw new Error("This does not appear to be a valid SEDG Study Info file.");
+      }
+      return config;
+    }
+
+    function populateStudyFromConfig(config) {
+      document.getElementById("studyName").value = config.studyName || "";
+      document.getElementById("sampleCount").value = config.sampleCount || "";
+      document.getElementById("temperature").value = config.temperature || "0";
+
+      const personaSel = document.getElementById("personaSelection");
+      if (personaSel) { personaSel.value = config.personaSource || "default"; personaSel.dispatchEvent(new Event("change")); }
+
+      document.getElementById("conditionCount").value = config.conditions.length || 1;
+      showConditionInputs();
+      for (let i = 0; i < config.conditions.length; i++) {
+        const nameEl = document.getElementById(`condition${i + 1}Name`);
+        const stimEl = document.getElementById(`condition${i + 1}Stimuli`);
+        if (nameEl) nameEl.value = config.conditions[i].name || "";
+        if (stimEl) stimEl.value = config.conditions[i].stimuli || "";
+      }
+
+      const qContainer = document.getElementById("questionFields");
+      if (qContainer) qContainer.innerHTML = "";
+      questionCount = 0;
+      for (const q of config.questions) {
+        addQuestion({ questionText: q.text, scaleType: q.scaleType, scaleStart: q.scaleStart,
+                      scaleCount: q.scaleCount, scaleLabels: q.scaleLabels, maxWords: q.maxWords });
+        showScaleOptions(questionCount);
+      }
+
+      document.getElementById("genericInstruction").value = config.genericInstruction || "";
+      updateTotalSamples();
+      updateInputEstimate();
     }
 
     async function downloadStudyInfo() {
