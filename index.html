@@ -759,6 +759,7 @@ Important rules:
 
     let questionCount = 0;
     let _showPreviewCallId = 0;
+    let _personaCache = null; // { key, personas } — reused across preview and local generation
 
     // Constants / config: Supabase project credentials and client
     const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
@@ -1747,17 +1748,23 @@ Important rules:
         return selected.map((persona) => ({ ...persona, includePersona: true }));
       }
 
-      if (sequential) {
-        const personas = await fetchSequentialDefaultPreviewPersonas(requestedCount);
-        return personas.map((p) => ({ pid: p.pid, persona: p.persona, includePersona: true }));
+      // Cache key covers everything that determines which default personas are selected
+      const cacheKey = `${requestedCount}|${personaOrder}`;
+      if (_personaCache && _personaCache.key === cacheKey) {
+        return _personaCache.personas;
       }
 
-      const personas = await fetchDefaultPreviewPersonas(requestedCount);
-      return personas.map((persona) => ({
-        pid: persona.pid,
-        persona: persona.persona,
-        includePersona: true
-      }));
+      let result;
+      if (sequential) {
+        const personas = await fetchSequentialDefaultPreviewPersonas(requestedCount);
+        result = personas.map((p) => ({ pid: p.pid, persona: p.persona, includePersona: true }));
+      } else {
+        const personas = await fetchDefaultPreviewPersonas(requestedCount);
+        result = personas.map((persona) => ({ pid: persona.pid, persona: persona.persona, includePersona: true }));
+      }
+
+      _personaCache = { key: cacheKey, personas: result };
+      return result;
     }
 
     const DEFAULT_PERSONA_DATASET = "LLM-Digital-Twin/Twin-2K-500";
@@ -2370,6 +2377,7 @@ Important rules:
     
       const personaSelection = document.getElementById("personaSelection")?.value || "default";
       let customPersonas = null;
+      let payloadPersonaSource = personaSelection;
 
       if (personaSelection === "custom") {
         const personaSheet = document.getElementById("personaSheet")?.files?.[0];
@@ -2387,6 +2395,20 @@ Important rules:
         }
       }
 
+      if (personaSelection === "default") {
+        // Fetch personas once (cache hit if preview was already shown) and pass them
+        // to the backend so it uses the exact same personas the user saw in preview.
+        try {
+          const totalSampleCount = conditionCount * sampleCount;
+          const fetched = await getPreviewPersonas(totalSampleCount);
+          customPersonas = fetched.map(p => ({ pid: p.pid, persona: p.persona }));
+          payloadPersonaSource = "custom";
+        } catch (error) {
+          alert(error.message || "Could not load personas. Please try again.");
+          return;
+        }
+      }
+
       const payload = {
         study_name: studyName,
         model_name: selectedModel.value,
@@ -2395,7 +2417,7 @@ Important rules:
         conditions: conditions,
         questions: questions,
         generic_instruction: document.getElementById("genericInstruction")?.value || "",
-        persona_source: personaSelection,
+        persona_source: payloadPersonaSource,
         persona_order: document.getElementById("personaOrder")?.value || "random",
         stimuli_assignment: document.getElementById("stimuliAssignment")?.value || "random",
         custom_personas: customPersonas
