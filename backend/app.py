@@ -1237,7 +1237,7 @@ if __name__ == "__main__":
                  font=("Helvetica", 10)).pack(anchor="w")
 
         def do():
-            models = _installed_models()
+            models = sorted(_installed_models(), key=lambda m: m.get("name", "").lower())
             def upd():
                 for w in t3_list.winfo_children(): w.destroy()
                 if not models:
