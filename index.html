@@ -1061,6 +1061,8 @@ Important rules:
               scaleInput.value = prefill.scaleLabels[s - 1] || "";
             }
           }
+        } else {
+          showScaleOptions(questionCount);
         }
       }
     
@@ -2161,7 +2163,6 @@ Important rules:
       for (const q of config.questions) {
         addQuestion({ questionText: q.text, scaleType: q.scaleType, scaleStart: q.scaleStart,
                       scaleCount: q.scaleCount, scaleLabels: q.scaleLabels, maxWords: q.maxWords });
-        showScaleOptions(questionCount);
       }
 
       document.getElementById("genericInstruction").value = config.genericInstruction || "";
