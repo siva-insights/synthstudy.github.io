@@ -759,7 +759,7 @@ Important rules:
 
     let questionCount = 0;
     let _showPreviewCallId = 0;
-    let _personaCache = null; // { key, personas } — reused across preview and local generation
+    let _personaPool = null; // full default persona dataset, fetched once from HuggingFace
 
     // Constants / config: Supabase project credentials and client
     const SUPABASE_URL = "https://rlhhtfmbjdbrrtfipkhw.supabase.co";
@@ -1748,23 +1748,12 @@ Important rules:
         return selected.map((persona) => ({ ...persona, includePersona: true }));
       }
 
-      // Cache key covers everything that determines which default personas are selected
-      const cacheKey = `${requestedCount}|${personaOrder}`;
-      if (_personaCache && _personaCache.key === cacheKey) {
-        return _personaCache.personas;
-      }
-
-      let result;
-      if (sequential) {
-        const personas = await fetchSequentialDefaultPreviewPersonas(requestedCount);
-        result = personas.map((p) => ({ pid: p.pid, persona: p.persona, includePersona: true }));
-      } else {
-        const personas = await fetchDefaultPreviewPersonas(requestedCount);
-        result = personas.map((persona) => ({ pid: persona.pid, persona: persona.persona, includePersona: true }));
-      }
-
-      _personaCache = { key: cacheKey, personas: result };
-      return result;
+      // Pool is fetched once on first use; all subsequent calls sample from memory
+      const pool = await loadDefaultPersonaPool();
+      const sampled = sequential
+        ? samplePreviewPersonasSequential(pool, requestedCount)
+        : samplePreviewPersonas(pool, requestedCount);
+      return sampled.map(p => ({ pid: p.pid, persona: p.persona, includePersona: true }));
     }
 
     const DEFAULT_PERSONA_DATASET = "LLM-Digital-Twin/Twin-2K-500";
@@ -1795,26 +1784,26 @@ Important rules:
       return defaultPersonaTotalRowsPromise;
     }
 
-    async function fetchDefaultPreviewPersonas(requestedCount) {
-      // Fetch in batches of 100 (HuggingFace API max) from random offsets.
-      // This replaces the old one-request-per-persona approach which sent hundreds
-      // of simultaneous requests and triggered rate-limiting for large sample counts.
+    // Fetches the entire default persona dataset once and keeps it in memory.
+    // All sampling (random, sequential, any count) is done locally from this pool —
+    // no further HuggingFace requests are made regardless of parameter changes.
+    async function loadDefaultPersonaPool() {
+      if (_personaPool) return _personaPool;
+
       const totalRows = await getDefaultPersonaTotalRows();
       const BATCH_SIZE = 100;
-      const batchesNeeded = Math.ceil(requestedCount / BATCH_SIZE);
-      const maxOffset = Math.max(0, totalRows - BATCH_SIZE);
+      const offsets = Array.from({ length: Math.ceil(totalRows / BATCH_SIZE) }, (_, i) => i * BATCH_SIZE);
 
-      const batchFetches = Array.from({ length: batchesNeeded }, () => {
-        const offset = Math.floor(Math.random() * (maxOffset + 1));
+      const batches = await Promise.all(offsets.map(offset => {
         const url = new URL("https://datasets-server.huggingface.co/rows");
         url.searchParams.set("dataset", DEFAULT_PERSONA_DATASET);
         url.searchParams.set("config", DEFAULT_PERSONA_CONFIG);
         url.searchParams.set("split", DEFAULT_PERSONA_SPLIT);
         url.searchParams.set("offset", String(offset));
-        url.searchParams.set("length", String(BATCH_SIZE));
+        url.searchParams.set("length", String(Math.min(BATCH_SIZE, totalRows - offset)));
         return fetch(url.toString())
           .then(r => {
-            if (!r.ok) throw new Error("Could not load default Toubia et al. personas from Hugging Face for preview.");
+            if (!r.ok) throw new Error("Could not load default Toubia et al. personas from Hugging Face.");
             return r.json();
           })
           .then(data =>
@@ -1822,20 +1811,16 @@ Important rules:
               .map(r => ({ pid: String(r.row?.pid ?? "").trim(), persona: String(r.row?.persona_summary ?? "").trim() }))
               .filter(p => p.pid && p.persona)
           );
-      });
+      }));
 
-      const all = shufflePreviewPersonas((await Promise.all(batchFetches)).flat());
+      _personaPool = batches.flat();
 
-      if (all.length === 0) {
-        throw new Error("No default Toubia et al. personas were returned for preview.");
+      if (_personaPool.length === 0) {
+        _personaPool = null;
+        throw new Error("No default Toubia et al. personas were returned from Hugging Face.");
       }
 
-      // Tile if requestedCount exceeds collected personas (rare edge case)
-      const result = [];
-      for (let i = 0; i < requestedCount; i++) {
-        result.push(all[i % all.length]);
-      }
-      return result;
+      return _personaPool;
     }
 
     // Numeric-first sort mirrors _sort_by_pid() in app.py so preview order matches generation order
@@ -1851,38 +1836,6 @@ Important rules:
       if (personas.length === 0) {
         throw new Error("No personas are available for preview.");
       }
-      const sorted = sortPersonasByPid(personas);
-      const result = [];
-      for (let i = 0; i < requestedCount; i++) {
-        result.push(sorted[i % sorted.length]);
-      }
-      return result;
-    }
-
-    async function fetchSequentialDefaultPreviewPersonas(requestedCount) {
-      const batchSize = Math.min(Math.max(requestedCount, 20), 100);
-      const url = new URL("https://datasets-server.huggingface.co/rows");
-      url.searchParams.set("dataset", DEFAULT_PERSONA_DATASET);
-      url.searchParams.set("config", DEFAULT_PERSONA_CONFIG);
-      url.searchParams.set("split", DEFAULT_PERSONA_SPLIT);
-      url.searchParams.set("offset", "0");
-      url.searchParams.set("length", String(batchSize));
-
-      const response = await fetch(url.toString());
-      if (!response.ok) {
-        throw new Error("Could not load default personas from Hugging Face for preview.");
-      }
-
-      const data = await response.json();
-      const rows = data?.rows || [];
-      const personas = rows
-        .map(r => ({ pid: String(r.row?.pid ?? "").trim(), persona: String(r.row?.persona_summary ?? "").trim() }))
-        .filter(p => p.pid && p.persona);
-
-      if (personas.length === 0) {
-        throw new Error("No default personas were returned for sequential preview.");
-      }
-
       const sorted = sortPersonasByPid(personas);
       const result = [];
       for (let i = 0; i < requestedCount; i++) {
