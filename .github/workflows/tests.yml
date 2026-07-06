@@ -25,5 +25,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
+      - name: Lint
+        # ponytail: ruff not pinned in requirements-dev; install here since it's CI-only
+        run: |
+          pip install ruff
+          ruff check backend/
+
       - name: Run tests
         run: pytest backend/tests/ -v
