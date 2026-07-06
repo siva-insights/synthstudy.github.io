@@ -20,6 +20,7 @@ from app import (
     build_prompt,
     estimate_num_ctx,
     get_average_seconds_per_respondent,
+    origin_allowed,
     parse_answers,
     sample_personas,
     Question,
@@ -226,3 +227,11 @@ class TestHistoryAverage:
         hfile.write_text(json.dumps([{"model_name": "llama3", "seconds_taken": 5}]))
         monkeypatch.setattr(app, "HISTORY_FILE", hfile)
         assert get_average_seconds_per_respondent("gpt4") is None
+
+
+# ── origin_allowed ─────────────────────────────────────────────────────────────
+
+def test_origin_allowed():
+    assert origin_allowed("https://synthstudy.vercel.app") is True
+    assert origin_allowed("https://evil.example.com") is False
+    assert origin_allowed(None) is True

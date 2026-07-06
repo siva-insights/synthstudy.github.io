@@ -250,13 +250,19 @@
     Page views: -- · Synthetic responses generated: --
   </div>
   <div class="container">
-    <h1>SYNTHETIC EXPERIMENTAL DATA GENERATOR (SEDG)</h1>
+    <h1>Synthetic Experimental Data Generator (SEDG)</h1>
 
-    <!--
+    <!-- ponytail: dismissible ethical-use banner, dismiss state kept in localStorage -->
+    <div id="ethicalUseBanner" class="note" style="border:1px solid #f59e0b;background:#fffbeb;position:relative;padding-right:34px;" hidden>
+      <b>Ethical use notice:</b> Synthetic LLM responses are for piloting, pretesting, and exploration only.
+      They are <b>not</b> a substitute for human-subject data in confirmatory research. Validate against real
+      human data before drawing conclusions.
+      <span onclick="dismissEthicalUseBanner()" title="Dismiss" style="position:absolute;top:8px;right:12px;cursor:pointer;font-weight:bold;color:#92400e;">&times;</span>
+    </div>
+
     <div class="cite-button-wrap">
       <button onclick="showCitations()">Cite this generator</button>
     </div>
-    -->
 
     <!-- Model Selection: top-level radio to choose Local vs Cloud provider -->
     <div class="section">
@@ -529,6 +535,16 @@
         </tr>
 
         <tr>
+          <td><label for="pilotRunToggle">Pilot run:</label></td>
+          <td>
+            <label style="font-weight:normal;display:inline;">
+              <input type="checkbox" id="pilotRunToggle" style="width:auto;display:inline;" onchange="updateTotalSamples(); updateInputEstimate();">
+              Pilot run (quick, cheap — caps to 5 responses per condition)
+            </label>
+          </td>
+        </tr>
+
+        <tr>
           <td><label for="totalSamples">Total Samples:</label></td>
           <td><input type="text" id="totalSamples" value="0" readonly aria-live="polite"></td>
         </tr>
@@ -580,6 +596,17 @@
             </span>
           </label></td>
           <td><input type="number" id="temperature" min="0" max="2" step="0.1" value="0"></td>
+        </tr>
+
+        <tr>
+          <td><label for="seedInput">Random seed (optional):
+            <span class="tooltip">?
+              <span class="tooltip-text">
+                Controls persona order and condition assignment so a run can be reproduced later. Leave blank to auto-generate one; the seed actually used will be filled in here after Preview or Generate.
+              </span>
+            </span>
+          </label></td>
+          <td><input type="number" id="seedInput" step="1" placeholder="Leave blank for a random seed"></td>
         </tr>
       </table>
 
@@ -652,6 +679,23 @@ Important rules:
     <!-- Preview: populated dynamically by showPreview() / renderPreview() -->
     <div id="previewArea"></div>
 
+    <!-- Analysis: bias/diversity diagnostics, human-vs-synthetic comparison, persona transparency.
+         Populated by renderAnalysisPanel() once cloudGenerationRows is non-empty. -->
+    <div id="analysisSection" class="section" hidden>
+      <h2>Analysis</h2>
+
+      <div id="biasDiagnosticsBox"></div>
+
+      <div class="note" style="margin-top:20px;">
+        <b>Compare with human data (.xlsx)</b> — upload a sheet whose columns include the same
+        question headers (Q1, Q2, ...) as this run to see human vs. synthetic means side by side.
+      </div>
+      <input type="file" id="humanDataUpload" accept=".xlsx" onchange="handleHumanDataUpload(event)">
+      <div id="humanCompareBox"></div>
+
+      <div id="personaTransparencyBox"></div>
+    </div>
+
     <!-- Download / Comments section -->
     <div class="section">
       <h2>Comments</h2>
@@ -686,6 +730,8 @@ Important rules:
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script>
     // Constants / config: module-level state, Supabase credentials, and top-level variables
+    const SEDG_VERSION = "1.0.0";
+    const WORDS_PER_TOKEN = 1.33;
     let previews = [];
     let currentPreviewIndex = 0;
     let _conditionAssignments = null; // condition assignment per respondent from last showPreview()
@@ -693,6 +739,38 @@ Important rules:
     let cloudGenerationRows = [];
     let cloudGenerationColumns = [];
     let cloudGenerationTimestamp = "";
+
+    // Seeded PRNG (mulberry32) — deterministic float generator so preview and generation
+    // can draw the same shuffled order/condition assignment for a given seed.
+    function mulberry32(seed) {
+      let a = seed >>> 0;
+      return function () {
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    // Returns the seed for this run: uses seedInput's value if set, otherwise generates
+    // one via crypto.getRandomValues and writes it back so the user can see/record it.
+    function getSeed() {
+      const seedField = document.getElementById("seedInput");
+      const parsed = parseInt(seedField?.value);
+      if (seedField && !isNaN(parsed)) return parsed;
+
+      const generated = crypto.getRandomValues(new Uint32Array(1))[0];
+      if (seedField) seedField.value = String(generated);
+      return generated;
+    }
+
+    // djb2-style string hash — deterministic, no external lib; used to fingerprint the
+    // prompt template for the xlsx manifest sheet so runs can be compared later.
+    function hashString(str) {
+      let hash = 5381;
+      for (let i = 0; i < str.length; i++) hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
+      return (hash >>> 0).toString(16);
+    }
 
     // Utility functions: timestamp formatting, provider toggling, model name resolution
     function formatTimestampForFilename(date = new Date()) {
@@ -951,7 +1029,19 @@ Important rules:
     window.addEventListener("load", loadComments);
     window.addEventListener("load", recordPageView);
     window.addEventListener("load", () => loadDefaultPersonaPool().catch(() => {}));
-    
+
+    // ponytail: FEATURE 17 — ethical-use banner, dismiss state persisted in localStorage
+    const ETHICAL_BANNER_DISMISS_KEY = "sedgEthicalBannerDismissed";
+    function dismissEthicalUseBanner() {
+      localStorage.setItem(ETHICAL_BANNER_DISMISS_KEY, "1");
+      const banner = document.getElementById("ethicalUseBanner");
+      if (banner) banner.hidden = true;
+    }
+    window.addEventListener("load", () => {
+      const banner = document.getElementById("ethicalUseBanner");
+      if (banner) banner.hidden = localStorage.getItem(ETHICAL_BANNER_DISMISS_KEY) === "1";
+    });
+
     // Utility functions: question card helpers, word count, condition/persona toggles
     function getExistingQuestionNumbers() {
       return Array.from(document.querySelectorAll(".question-card"))
@@ -1225,9 +1315,19 @@ Important rules:
       }
     }
     
+    // ponytail: FEATURE 19 — pilot-run toggle. Field keeps the user's real value;
+    // this is the one shared read-point every generation/estimate call site should use
+    // so the cap actually applies everywhere instead of per-caller patches.
+    const PILOT_RUN_SAMPLE_CAP = 5;
+    function getEffectiveSampleCount() {
+      const raw = parseInt(document.getElementById("sampleCount")?.value) || 0;
+      const pilotRun = document.getElementById("pilotRunToggle")?.checked;
+      return pilotRun ? Math.min(raw, PILOT_RUN_SAMPLE_CAP) : raw;
+    }
+
     function updateTotalSamples() {
       const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
-      const sampleCount = parseInt(document.getElementById("sampleCount")?.value) || 0;
+      const sampleCount = getEffectiveSampleCount();
       const totalSamplesField = document.getElementById("totalSamples");
 
       if (!totalSamplesField) return;
@@ -1236,6 +1336,38 @@ Important rules:
         ? String(conditionCount * sampleCount)
         : "0";
     }
+
+    // ponytail: FEATURE 18 — rough cloud cost table, USD per 1M tokens. update prices as
+    // providers change; rough estimate only. Keyed by the same model-name strings used
+    // in the cloud <select> options above.
+    const CLOUD_MODEL_PRICE_PER_1M = {
+      "gpt-5.5": { in: 1.75, out: 12.00 },
+      "gpt-5.4": { in: 1.25, out: 10.00 },
+      "gpt-5.4-mini": { in: 0.25, out: 2.00 },
+      "gpt-4.1": { in: 2.00, out: 8.00 },
+      "gpt-4.1-mini": { in: 0.40, out: 1.60 },
+      "gpt-4o-mini": { in: 0.15, out: 0.60 },
+      "gemini-2.5-pro": { in: 1.25, out: 10.00 },
+      "gemini-2.5-flash": { in: 0.30, out: 2.50 },
+      "gemini-2.5-flash-lite": { in: 0.10, out: 0.40 },
+      "claude-opus-4-5": { in: 5.00, out: 25.00 },
+      "claude-sonnet-4-5": { in: 3.00, out: 15.00 },
+      "claude-sonnet-4-20250514": { in: 3.00, out: 15.00 },
+      "claude-haiku-4-5": { in: 1.00, out: 5.00 },
+      "openai/gpt-4.1": { in: 2.00, out: 8.00 },
+      "openai/gpt-4o": { in: 2.50, out: 10.00 },
+      "openai/gpt-4o-mini": { in: 0.15, out: 0.60 },
+      "anthropic/claude-opus-4-5": { in: 5.00, out: 25.00 },
+      "anthropic/claude-sonnet-4-5": { in: 3.00, out: 15.00 },
+      "anthropic/claude-3.5-sonnet": { in: 3.00, out: 15.00 },
+      "anthropic/claude-3-haiku": { in: 0.25, out: 1.25 },
+      "google/gemini-2.5-pro": { in: 1.25, out: 10.00 },
+      "google/gemini-2.5-flash": { in: 0.30, out: 2.50 },
+      "google/gemini-2.0-flash-001": { in: 0.10, out: 0.40 }
+    };
+    // ponytail: no per-response output token estimate exists elsewhere in the app;
+    // assume a modest fixed figure per respondent (short scale/text answers).
+    const ASSUMED_OUTPUT_TOKENS_PER_RESPONSE = 200;
 
     function getModelWordLimit(modelName) {
       // Local Ollama models share one context window for input + output combined.
@@ -1348,7 +1480,7 @@ Important rules:
       if (previews && previews.length > 0) {
         // Preview has been generated — use actual prompt words (most accurate)
         approxTokens = getPreviewTotalApproxTokens();
-        tokenNote = `(sum of actual prompt words × 1.33; image tokens not included)`;
+        tokenNote = `(sum of actual prompt words × ${WORDS_PER_TOKEN}; image tokens not included)`;
       } else {
         // No preview yet — estimate using persona placeholder
         const personaAvgWords = await getPersonaAvgWords();
@@ -1360,9 +1492,9 @@ Important rules:
           const prompt = buildPreviewPrompt(personaPlaceholder, embeddedStimuli, questionNumbers, includePersona);
           estimatedTotalWords += countWords(prompt);
         }
-        const sampleCount = parseInt(document.getElementById("sampleCount")?.value) || 1;
-        approxTokens = Math.round(estimatedTotalWords * sampleCount * 1.33);
-        tokenNote = `(estimated as prompt words × 1.33 × total respondents; image tokens not included)`;
+        const sampleCount = getEffectiveSampleCount() || 1;
+        approxTokens = Math.round(estimatedTotalWords * sampleCount * WORDS_PER_TOKEN);
+        tokenNote = `(estimated as prompt words × ${WORDS_PER_TOKEN} × total respondents; image tokens not included)`;
       }
 
       // Per-condition prompt length for model limit check (always use estimate)
@@ -1392,6 +1524,20 @@ Important rules:
         }
       } else {
         message += `<br><span style="color:#64748b;">Select a model to check against its input limit.</span>`;
+      }
+
+      // ponytail: FEATURE 18 — cloud-only cost estimate, reuses approxTokens (input) above
+      const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
+      if (selectedProvider && selectedProvider.value === "cloud") {
+        const totalRespondents = conditionCount * (getEffectiveSampleCount() || 0);
+        const pricing = selectedModelName ? CLOUD_MODEL_PRICE_PER_1M[selectedModelName] : null;
+        if (pricing && totalRespondents > 0) {
+          const outputTokens = totalRespondents * ASSUMED_OUTPUT_TOKENS_PER_RESPONSE;
+          const cost = (approxTokens / 1e6) * pricing.in + (outputTokens / 1e6) * pricing.out;
+          message += `<br><span style="color:#475569;">Est. cost: ~$${cost.toFixed(2)} (rough)</span>`;
+        } else {
+          message += `<br><span style="color:#64748b;">Est. cost: n/a</span>`;
+        }
       }
 
       document.getElementById("inputEstimateBox").innerHTML = message;
@@ -1734,9 +1880,10 @@ Important rules:
     // Preview logic: persona shuffling, sampling, HuggingFace dataset fetching, and table rendering
     function shufflePreviewPersonas(personas) {
       const shuffled = [...personas];
+      const rand = mulberry32(getSeed());
 
       for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(rand() * (i + 1));
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
 
@@ -1755,9 +1902,10 @@ Important rules:
       }
 
       const sampled = [...shuffled];
+      const rand = mulberry32(getSeed());
 
       while (sampled.length < requestedCount) {
-        sampled.push(shuffled[Math.floor(Math.random() * shuffled.length)]);
+        sampled.push(shuffled[Math.floor(rand() * shuffled.length)]);
       }
 
       return sampled;
@@ -1984,7 +2132,7 @@ Important rules:
         totalPromptWords += rows.reduce((sum, row) => sum + (parseInt(row.prompt_words) || 0), 0);
       }
 
-      return Math.round(totalPromptWords * 1.33);
+      return Math.round(totalPromptWords * WORDS_PER_TOKEN);
     }
 
     function buildPreviewOutputRows(preview, respondentOffset = 0) {
@@ -2343,7 +2491,8 @@ Important rules:
       const questionNumbers = getExistingQuestionNumbers();
       let previewPersonas;
 
-      const samplesPerCondition = parseInt(sampleCount);
+      // ponytail: FEATURE 19 — pilot run caps what's actually generated, not the field value
+      const samplesPerCondition = getEffectiveSampleCount();
       const totalSampleCount = conditionCount * samplesPerCondition;
 
       try {
@@ -2364,8 +2513,9 @@ Important rules:
         for (let s = 0; s < samplesPerCondition; s++) conditionAssignments.push(c);
       }
       if (stimuliAssignment === "random") {
+        const rand = mulberry32(getSeed());
         for (let i = conditionAssignments.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
+          const j = Math.floor(rand() * (i + 1));
           [conditionAssignments[i], conditionAssignments[j]] = [conditionAssignments[j], conditionAssignments[i]];
         }
       }
@@ -2492,7 +2642,7 @@ Important rules:
 
       const studyName = document.getElementById("studyName").value.trim();
       const conditionCount = parseInt(document.getElementById("conditionCount").value);
-      const sampleCount = parseInt(document.getElementById("sampleCount").value);
+      const sampleCount = getEffectiveSampleCount(); // ponytail: FEATURE 19 — capped for pilot runs
       const temperature = parseFloat(document.getElementById("temperature").value);
 
       if (!studyName || !conditionCount || conditionCount < 1 || !sampleCount || sampleCount < 1 || questionNumbers.length < 1) {
@@ -2598,7 +2748,7 @@ Important rules:
           previewArea.innerHTML = `
             <div class="preview-box">
               <div class="preview-title">Generation Failed</div>
-              <p>${error.message || "Could not load personas. Please check your internet connection and try again."}</p>
+              <p>${escapeHTML(error.message || "Could not load personas. Please check your internet connection and try again.")}</p>
             </div>`;
           return;
         }
@@ -2630,7 +2780,8 @@ Important rules:
         persona_source: payloadPersonaSource,
         persona_order: document.getElementById("personaOrder")?.value || "random",
         stimuli_assignment: payloadStimuliAssignment,
-        custom_personas: customPersonas
+        custom_personas: customPersonas,
+        seed: getSeed()
       });
       addLog(`Payload built — size: ${(payloadBody.length / 1024).toFixed(1)} KB`);
 
@@ -2761,7 +2912,7 @@ Important rules:
             const isComplete = data.status === "complete";
             const title = isComplete ? "Generation Complete" : "Generation Stopped";
             const color = isComplete ? "#16a34a" : "#d97706";
-            const msg   = isComplete ? `All ${data.total} responses generated.` : data.message;
+            const msg   = isComplete ? `All ${data.total} responses generated.` : escapeHTML(data.message);
 
             previewArea.innerHTML = `
               <div class="preview-box">
@@ -2802,7 +2953,7 @@ Important rules:
             previewArea.innerHTML = `
               <div class="preview-box">
                 <div class="preview-title">Generation Failed</div>
-                <p>${data.message}</p>
+                <p>${escapeHTML(data.message)}</p>
               </div>
             `;
           }
@@ -2914,7 +3065,8 @@ Important rules:
         body: JSON.stringify({
           model: modelName,
           messages: [{ role: "user", content }],
-          temperature: temperature
+          temperature: temperature,
+          seed: getSeed()
         })
       });
 
@@ -2929,7 +3081,7 @@ Important rules:
 
     // API call functions — Gemini: generateContent endpoint with inline image data
     async function callGeminiChat(apiKey, modelName, contentParts, temperature) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent`;
 
       const parts = contentParts.map(p => p.type === "text"
         ? { text: p.text }
@@ -2937,7 +3089,7 @@ Important rules:
 
       const response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           contents: [{ role: "user", parts }],
           generationConfig: { temperature: temperature }
@@ -3156,15 +3308,242 @@ Important rules:
       }
     }
 
+    // ===== Analysis panel: bias/diversity diagnostics (14), human-vs-synthetic (15), persona transparency (16) =====
+    // ponytail: analysis only covers cloudGenerationRows (in-memory cloud results). The local-helper path
+    // streams its output file straight from the backend and never holds parsed rows in JS, so there is
+    // nothing in memory to analyze for that path — noted in the panel note below.
+
+    function mean(nums) {
+      // self-check: mean([1,2,3])===2
+      return nums.reduce((a, b) => a + b, 0) / nums.length;
+    }
+
+    function sd(nums) {
+      // self-check: sd([1,1,1])===0
+      const m = mean(nums);
+      return Math.sqrt(nums.reduce((a, b) => a + (b - m) ** 2, 0) / nums.length);
+    }
+
+    function dupRate(strings) {
+      // self-check: dupRate(["a","A ","b"])===2/3 (both "a"/"A " normalize to the same duplicate value)
+      const normalized = strings.map((s) => String(s).trim().toLowerCase());
+      const counts = {};
+      normalized.forEach((s) => { counts[s] = (counts[s] || 0) + 1; });
+      const dupCount = normalized.filter((s) => counts[s] > 1).length;
+      return normalized.length ? dupCount / normalized.length : 0;
+    }
+
+    // Feature 15 — bias & diversity diagnostics
+    function computeBiasDiagnostics(rows, questionNumbers) {
+      const results = [];
+
+      for (const q of questionNumbers) {
+        const key = `Q${q}`;
+        const scaleType = getQuestionScaleType(q);
+        const values = rows.map((r) => r[key]).filter((v) => v !== "" && v != null);
+        if (values.length === 0) continue;
+
+        if (scaleType === "text") {
+          const rate = dupRate(values);
+          results.push({
+            question: key, type: "text", n: values.length,
+            detail: `near-duplicate rate ${(rate * 100).toFixed(0)}%`,
+            flag: rate > 0.3 ? "High duplicate rate" : ""
+          });
+        } else {
+          const nums = values.map(Number).filter((v) => !isNaN(v));
+          if (nums.length === 0) continue;
+          const m = mean(nums);
+          const s = sd(nums);
+          const cardData = getQuestionCardData(q);
+          const flags = [];
+          if (s < 0.5) flags.push("Low variance");
+          if (cardData.scaleCount > 0) {
+            const min = cardData.scaleStart;
+            const max = cardData.scaleStart + cardData.scaleCount - 1;
+            const atEdge = nums.filter((v) => v === min || v === max).length / nums.length;
+            if (atEdge > 0.6) flags.push("Ceiling/floor clustering");
+          }
+          results.push({
+            question: key, type: scaleType, n: nums.length,
+            detail: `mean ${m.toFixed(2)}, SD ${s.toFixed(2)}`,
+            flag: flags.join("; ")
+          });
+        }
+      }
+
+      return results;
+    }
+
+    function renderBiasDiagnostics(rows, questionNumbers) {
+      const box = document.getElementById("biasDiagnosticsBox");
+      if (!box) return;
+
+      const diagnostics = computeBiasDiagnostics(rows, questionNumbers);
+      if (diagnostics.length === 0) {
+        box.innerHTML = "";
+        return;
+      }
+
+      box.innerHTML = `
+        <div class="preview-title">Bias &amp; Diversity Diagnostics</div>
+        <table class="preview-output-table">
+          <thead><tr><th>Question</th><th>Type</th><th>n</th><th>Stat</th><th>Flag</th></tr></thead>
+          <tbody>
+            ${diagnostics.map((d) => `
+              <tr>
+                <td>${escapeHTML(d.question)}</td>
+                <td>${escapeHTML(d.type)}</td>
+                <td>${d.n}</td>
+                <td>${escapeHTML(d.detail)}</td>
+                <td style="${d.flag ? "color:#dc2626; font-weight:600;" : ""}">${escapeHTML(d.flag || "—")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    // Feature 14 — human-vs-synthetic comparison
+    async function handleHumanDataUpload(event) {
+      const file = event.target?.files?.[0];
+      const box = document.getElementById("humanCompareBox");
+      if (!file || !box) return;
+
+      if (!window.XLSX) {
+        box.innerHTML = `<p>Excel parser is not available. Please check your internet connection and try again.</p>`;
+        return;
+      }
+
+      try {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const humanRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        const questionNumbers = getExistingQuestionNumbers();
+        const rowsOut = [];
+
+        for (const q of questionNumbers) {
+          const key = `Q${q}`;
+          if (getQuestionScaleType(q) === "text") continue;
+          if (!humanRows.some((r) => key in r)) continue;
+
+          const humanNums = humanRows.map((r) => Number(r[key])).filter((v) => !isNaN(v));
+          const synthNums = cloudGenerationRows.map((r) => Number(r[key])).filter((v) => !isNaN(v));
+          if (humanNums.length === 0 || synthNums.length === 0) continue;
+
+          const hMean = mean(humanNums), sMean = mean(synthNums);
+          rowsOut.push({
+            question: key,
+            hMean, hSd: sd(humanNums), hN: humanNums.length,
+            sMean, sSd: sd(synthNums), sN: synthNums.length,
+            diff: sMean - hMean
+          });
+        }
+
+        if (rowsOut.length === 0) {
+          box.innerHTML = `<p>No shared numeric question columns (e.g. Q1, Q2, ...) found between the uploaded sheet and this run.</p>`;
+          return;
+        }
+
+        box.innerHTML = `
+          <div class="preview-title" style="margin-top:16px;">Human vs. Synthetic Comparison</div>
+          <table class="preview-output-table">
+            <thead>
+              <tr><th>Question</th><th>Human mean</th><th>Human SD</th><th>Human n</th>
+                  <th>Synthetic mean</th><th>Synthetic SD</th><th>Synthetic n</th><th>Mean diff (synth − human)</th></tr>
+            </thead>
+            <tbody>
+              ${rowsOut.map((r) => `
+                <tr>
+                  <td>${escapeHTML(r.question)}</td>
+                  <td>${r.hMean.toFixed(2)}</td><td>${r.hSd.toFixed(2)}</td><td>${r.hN}</td>
+                  <td>${r.sMean.toFixed(2)}</td><td>${r.sSd.toFixed(2)}</td><td>${r.sN}</td>
+                  <td>${r.diff.toFixed(2)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+          <div class="note">Means/SD/n only. Deeper distributional tests (e.g. ICC, entropy, distribution plots) can be added later.</div>
+        `;
+      } catch (error) {
+        box.innerHTML = `<p>${escapeHTML(error.message || "Could not read the uploaded file.")}</p>`;
+      }
+    }
+
+    // Feature 16 — persona demographic transparency
+    // ponytail: persona records here only ever carry {pid, persona_summary} (free text) — see
+    // loadDefaultPersonaPool() and readPersonaSheet() — no structured demographic fields exist to tabulate,
+    // so we point users at the source dataset instead of parsing demographics out of free text.
+    function renderPersonaTransparency() {
+      const box = document.getElementById("personaTransparencyBox");
+      if (!box) return;
+
+      box.innerHTML = `
+        <div class="note" style="margin-top:20px;">
+          <b>Persona composition:</b> default personas for this run are sampled from the HuggingFace dataset
+          <a href="https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500" target="_blank" rel="noopener">LLM-Digital-Twin/Twin-2K-500</a>.
+          Persona records here only expose a free-text summary (no structured age/gender/etc. fields), so
+          check the dataset page directly for its demographic composition before drawing conclusions about
+          who is represented in this run.
+        </div>
+      `;
+    }
+
+    function renderAnalysisPanel() {
+      const section = document.getElementById("analysisSection");
+      if (!section || cloudGenerationRows.length === 0) return;
+
+      section.hidden = false;
+      const questionNumbers = getExistingQuestionNumbers();
+      renderBiasDiagnostics(cloudGenerationRows, questionNumbers);
+      renderPersonaTransparency();
+    }
+
     function downloadCloudGenerationResults() {
       if (!window.XLSX || cloudGenerationRows.length === 0) {
         alert("No generated responses are available to download.");
         return;
       }
 
-      const worksheet = XLSX.utils.json_to_sheet(cloudGenerationRows, { header: cloudGenerationColumns });
+      const provider = document.getElementById("cloudModelProvider")?.value || "";
+      const model = getSelectedModelName();
+      const temperature = document.getElementById("temperature")?.value || "0";
+      const seed = getSeed();
+      const promptTemplate = document.getElementById("genericInstruction")?.value || "";
+      const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
+      const sampleCount = parseInt(document.getElementById("sampleCount")?.value) || 0;
+
+      const rowsWithProvenance = cloudGenerationRows.map((row) => ({
+        ...row,
+        data_source: "LLM-synthetic",
+        sedg_version: SEDG_VERSION,
+        provider: provider,
+        model: model,
+        temperature: temperature,
+        seed: seed
+      }));
+      const columnsWithProvenance = [...cloudGenerationColumns, "data_source", "sedg_version", "provider", "model", "temperature", "seed"];
+
+      const worksheet = XLSX.utils.json_to_sheet(rowsWithProvenance, { header: columnsWithProvenance });
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Generated Responses");
+
+      const manifestRows = [
+        { key: "sedg_version", value: SEDG_VERSION },
+        { key: "provider", value: provider },
+        { key: "model", value: model },
+        { key: "temperature", value: temperature },
+        { key: "seed", value: seed },
+        { key: "prompt_template_hash", value: hashString(promptTemplate) },
+        { key: "generated_at_utc", value: new Date().toISOString() },
+        { key: "n_conditions", value: conditionCount },
+        { key: "n_per_condition", value: sampleCount }
+      ];
+      const manifestSheet = XLSX.utils.json_to_sheet(manifestRows, { header: ["key", "value"] });
+      XLSX.utils.book_append_sheet(workbook, manifestSheet, "manifest");
+
       XLSX.writeFile(workbook, `SEDG_${cloudGenerationRows.length}samples_${cloudGenerationTimestamp}.xlsx`);
     }
 
@@ -3296,6 +3675,8 @@ Important rules:
           <button type="button" onclick="downloadCloudGenerationResults()">Download Responses</button>
         </div>
       `;
+
+      renderAnalysisPanel();
     }
 
     // Initialization / event wiring: escapeHTML, citation modal, helper health check, legacy model check
@@ -3307,22 +3688,10 @@ Important rules:
     }
 
     function showCitations() {
-      const studyName = document.getElementById("studyName").value.trim() || "Open LLM Synthetic Experimental Data Generator";
-      const author = "Siva Shanmugam Mariappan";
-      const year = new Date().getFullYear();
-
       document.getElementById("citationContent").innerHTML = `
         <div class="citation-row">
-          <div class="citation-style">MLA</div>
-          <div>${author}. "${studyName}." <i>Open LLM Synthetic Experimental Data Generator (OLSEDG)</i>, ${year}.</div>
-        </div>
-        <div class="citation-row">
-          <div class="citation-style">APA</div>
-          <div>Mariappan, S. S. (${year}). <i>${studyName}</i>. Open LLM Synthetic Experimental Data Generator (OLSEDG).</div>
-        </div>
-        <div class="citation-row">
-          <div class="citation-style">Chicago</div>
-          <div>Mariappan, Siva Shanmugam. "${studyName}." <i>Open LLM Synthetic Experimental Data Generator (OLSEDG)</i>, ${year}.</div>
+          <div class="citation-style">Cite</div>
+          <div>Mariappan, S. S., &amp; Malshe, A. (2026). SEDG: A Synthetic Experimental Data Generator for LLM-Based Behavioral Experiments. https://github.com/siva-insights/synthstudy.github.io</div>
         </div>
       `;
 
@@ -3333,56 +3702,6 @@ Important rules:
       document.getElementById("citationModal").style.display = "none";
     }
 
-    async function checkHelper() {
-      const statusBox = document.getElementById("helperStatus");
-      statusBox.innerHTML = "Checking OLSEDG Helper...";
-
-      try {
-        const response = await fetch("http://localhost:8000/health");
-        const data = await response.json();
-
-        if (data.helper_running) {
-          statusBox.innerHTML = "✅ OLSEDG Helper is running.";
-        } else {
-          statusBox.innerHTML = "❌ OLSEDG Helper is not responding.";
-        }
-
-      } catch (error) {
-        statusBox.innerHTML = "❌ OLSEDG Helper is not running. Please open OLSEDG Helper first.";
-      }
-    }
-
-    async function checkSelectedModel() {
-      const selectedModel = document.getElementById("modelChoice");
-      const statusBox = document.getElementById("helperStatus");
-
-      if (!selectedModel || !selectedModel.value) {
-        statusBox.innerHTML = "Please select a language model first.";
-        return;
-      }
-
-      const modelName = selectedModel.value;
-      statusBox.innerHTML = "Checking selected model...";
-
-      try {
-        const response = await fetch(`http://localhost:8000/check-model/${encodeURIComponent(modelName)}`);
-        const data = await response.json();
-
-        if (!data.ollama_running) {
-          statusBox.innerHTML = "❌ Ollama is not running. Please start Ollama first.";
-          return;
-        }
-
-        if (data.ready_to_use) {
-          statusBox.innerHTML = `✅ ${modelName} is installed and ready to use.`;
-        } else {
-          statusBox.innerHTML = `❌ ${modelName} is not installed locally.`;
-        }
-
-      } catch (error) {
-        statusBox.innerHTML = "❌ OLSEDG Helper is not running.";
-      }
-    }
   </script>
   <script defer src="/_vercel/insights/script.js"></script>
   <footer style="text-align:center; padding: 18px; font-size: 13px; color: #64748b; border-top: 1px solid #e2e8f0; margin-top: 24px;">

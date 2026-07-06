@@ -8,10 +8,11 @@ import random
 import shutil
 import subprocess
 import requests
+import hashlib
 import pandas as pd
 from datasets import load_dataset
 from docx import Document
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -25,6 +26,7 @@ from typing import Literal, Optional
 
 # Constants
 OLLAMA_URL = "http://localhost:11434"
+SEDG_VERSION = "1.0.0"
 
 # Hidden dir for history and temp CSV; final XLSX always goes to Downloads
 _APP_DIR = Path.home() / ".sedg_helper"
@@ -38,15 +40,27 @@ HISTORY_FILE = _APP_DIR / "generation_history.json"
 # FastAPI app setup + CORS
 app = FastAPI(title="OLSEDG Helper")
 
+ALLOWED_ORIGINS = {"https://synthstudy.vercel.app", "http://localhost:8000", "http://127.0.0.1:8000"}
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=list(ALLOWED_ORIGINS),
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR), name="outputs")
+
+
+def origin_allowed(origin):
+    # ponytail: Origin is a browser-forbidden header (page JS can't spoof it), so this blocks browser drive-by. Add token auth only if non-browser/local-process threats matter.
+    return origin is None or origin in ALLOWED_ORIGINS
+
+
+def check_origin(request: Request):
+    if not origin_allowed(request.headers.get("origin")):
+        raise HTTPException(status_code=403, detail="Origin not allowed")
 
 # Job state: in-memory dict keyed by job_id and a thread lock for safe updates
 JOBS = {}
@@ -129,6 +143,7 @@ class GenerateRequest(BaseModel):
     persona_order: Literal["random", "sequential"] = "random"
     stimuli_assignment: Literal["random", "sequential"] = "random"
     custom_personas: Optional[list[PersonaRecord]] = None
+    seed: Optional[int] = None
 
 class SaveFileRequest(BaseModel):
     filename: str
@@ -140,15 +155,20 @@ class SaveFileRequest(BaseModel):
 def health():
     return {"helper_running": True, "message": "OLSEDG Helper is running"}
 
-@app.post("/save-file")
+@app.post("/save-file", dependencies=[Depends(check_origin)])
 def save_file(req: SaveFileRequest):
     safe_name = Path(req.filename).name  # strip any path traversal
+    if Path(safe_name).suffix.lower() not in {".csv", ".xlsx"}:
+        raise HTTPException(status_code=400, detail="Only .csv or .xlsx files are allowed")
+    content = base64.b64decode(req.content_base64)
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File exceeds 50MB limit")
     dest = OUTPUT_DIR / safe_name
     with open(dest, "wb") as f:
-        f.write(base64.b64decode(req.content_base64))
+        f.write(content)
     return {"success": True, "path": str(dest)}
 
-@app.get("/estimate-time/{model_name}/{total_respondents}")
+@app.get("/estimate-time/{model_name}/{total_respondents}", dependencies=[Depends(check_origin)])
 def estimate_time(model_name: str, total_respondents: int):
     avg_seconds = get_average_seconds_per_respondent(model_name)
 
@@ -173,7 +193,7 @@ def estimate_time(model_name: str, total_respondents: int):
         "message": f"Estimated generation time: approximately {estimated_minutes} minutes."
     }
 
-@app.get("/check-model/{model_name}")
+@app.get("/check-model/{model_name}", dependencies=[Depends(check_origin)])
 def check_model(model_name: str):
     try:
         response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
@@ -211,7 +231,7 @@ def _sort_by_pid(df: pd.DataFrame) -> pd.DataFrame:
         return df.sort_values("pid").reset_index(drop=True)
 
 
-def sample_personas(df_small: pd.DataFrame, total_needed: int, sequential: bool = False):
+def sample_personas(df_small: pd.DataFrame, total_needed: int, sequential: bool = False, seed=None):
     if sequential:
         # Tile the sorted list enough times so we can slice exactly total_needed rows;
         # cyclic wrap handles the case where more respondents are needed than personas available
@@ -219,10 +239,11 @@ def sample_personas(df_small: pd.DataFrame, total_needed: int, sequential: bool 
         return pd.concat([df_small] * reps, ignore_index=True).iloc[:total_needed].reset_index(drop=True)
     # Random sampling: sample with replacement only when the pool is smaller than what's needed
     replace = total_needed > len(df_small)
+    # ponytail: seed makes local-path persona selection reproducible; pd.sample(random_state=int) is deterministic and thread-safe
     return df_small.sample(
         n=total_needed,
         replace=replace,
-        random_state=random.randint(1, 999999)
+        random_state=seed if seed is not None else random.randint(1, 999999)
     ).reset_index(drop=True)
 
 
@@ -230,7 +251,8 @@ def load_personas(
     total_needed: int,
     custom_personas: Optional[list[PersonaRecord]] = None,
     use_personas: bool = True,
-    sequential: bool = False
+    sequential: bool = False,
+    seed=None
 ):
     if not use_personas:
         return pd.DataFrame([
@@ -253,7 +275,7 @@ def load_personas(
         if sequential:
             df_small = _sort_by_pid(df_small)
 
-        return sample_personas(df_small, total_needed, sequential=sequential)
+        return sample_personas(df_small, total_needed, sequential=sequential, seed=seed)
 
     ds = load_dataset("LLM-Digital-Twin/Twin-2K-500", "full_persona")
 
@@ -266,7 +288,7 @@ def load_personas(
     df_small = df[["pid", "persona_summary"]].dropna().copy()
     if sequential:
         df_small = _sort_by_pid(df_small)
-    return sample_personas(df_small, total_needed, sequential=sequential)
+    return sample_personas(df_small, total_needed, sequential=sequential, seed=seed)
 
 
 def build_prompt(
@@ -413,8 +435,15 @@ Important rules:
     return prompt
 
 
-def call_ollama(model_name, prompt, temperature):
+def call_ollama(model_name, prompt, temperature, seed=None):
     num_ctx = estimate_num_ctx(prompt)
+
+    options = {
+        "temperature": temperature,
+        "num_ctx": num_ctx
+    }
+    if seed is not None:
+        options["seed"] = seed
 
     response = requests.post(
         f"{OLLAMA_URL}/api/generate",
@@ -422,10 +451,7 @@ def call_ollama(model_name, prompt, temperature):
             "model": model_name,
             "prompt": prompt,
             "stream": False,
-            "options": {
-                "temperature": temperature,
-                "num_ctx": num_ctx
-            }
+            "options": options
         },
         timeout=900
     )
@@ -472,7 +498,7 @@ def parse_answers(raw_text, questions):
 
     return answers, validation, invalid_questions
     
-def get_valid_response_with_retries(model_name, prompt, temperature, questions, max_retries=5):
+def get_valid_response_with_retries(model_name, prompt, temperature, questions, max_retries=5, seed=None):
     # Retry up to max_retries times; if the response is still invalid after all attempts,
     # save the last attempt as-is so no respondent row is silently dropped from the output.
     last_raw_response = ""
@@ -481,7 +507,7 @@ def get_valid_response_with_retries(model_name, prompt, temperature, questions, 
     last_invalid_questions = []
 
     for attempt in range(1, max_retries + 1):
-        raw_response = call_ollama(model_name, prompt, temperature)
+        raw_response = call_ollama(model_name, prompt, temperature, seed=seed)
         answers, validation, invalid_questions = parse_answers(raw_response, questions)
 
         if validation == "valid":
@@ -520,10 +546,20 @@ def create_docx(data, filepath):
     doc.save(filepath)
 
 
+def _write_xlsx_with_manifest(csv_path, xlsx_path, manifest):
+    # ponytail: manifest is a flat key/value sheet, not a full audit log; extend if per-row provenance diffs are ever needed
+    df = pd.read_csv(csv_path)
+    manifest_df = pd.DataFrame(list(manifest.items()), columns=["field", "value"])
+    with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="Sheet1", index=False)
+        manifest_df.to_excel(writer, sheet_name="manifest", index=False)
+
+
 # Generation job worker: runs in a background thread, generates one respondent per iteration
 def run_generation_job(job_id: str, data: GenerateRequest):
     try:
         total_needed = data.sample_count_per_condition * len(data.conditions)
+        seed = data.seed if data.seed is not None else random.randint(0, 2**31 - 1)
 
         update_job(
             job_id,
@@ -536,14 +572,14 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         use_personas = data.persona_source != "none"
         custom_personas = data.custom_personas if data.persona_source == "custom" else None
         sequential_personas = getattr(data, "persona_order", "random") == "sequential"
-        df_personas = load_personas(total_needed, custom_personas, use_personas, sequential=sequential_personas)
+        df_personas = load_personas(total_needed, custom_personas, use_personas, sequential=sequential_personas, seed=seed)
 
         condition_numbers = []
         for c in data.conditions:
             condition_numbers.extend([c.condition_number] * data.sample_count_per_condition)
 
         if getattr(data, "stimuli_assignment", "random") == "random":
-            random.shuffle(condition_numbers)
+            random.Random(seed).shuffle(condition_numbers)
         # sequential: already in order (C1 × N, C2 × N, …) — no shuffle needed
 
         condition_lookup = {c.condition_number: c.stimuli for c in data.conditions}
@@ -578,7 +614,11 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             "prompt",
             "prompt_words",
             "num_ctx_used",
-            "raw_response"
+            "raw_response",
+            "data_source",
+            "sedg_version",
+            "provider",
+            "seed",
         ] + question_columns
         pd.DataFrame(columns=columns).to_csv(csv_path, index=False)
 
@@ -592,12 +632,25 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         )
 
         job_start_time = time.time()
+        last_prompt = ""
+
+        def _manifest():
+            return {
+                "data_source": "LLM-synthetic",
+                "sedg_version": SEDG_VERSION,
+                "provider": "ollama",
+                "model": data.model_name,
+                "temperature": data.temperature,
+                "seed": seed,
+                "prompt_template_hash": hashlib.md5(last_prompt.encode()).hexdigest()[:12],
+                "generated_at_utc": datetime.utcnow().isoformat(),
+            }
 
         for i in range(total_needed):
             if JOBS.get(job_id, {}).get("stop_requested"):
                 if csv_path.exists():
                     _xp = DOWNLOADS_DIR / xlsx_filename
-                    pd.read_csv(csv_path).to_excel(_xp, index=False, engine="openpyxl")
+                    _write_xlsx_with_manifest(csv_path, _xp, _manifest())
                     csv_path.unlink(missing_ok=True)
                     update_job(job_id, status="stopped", xlsx_path=str(_xp),
                                message=f"Generation stopped after {i} respondents.")
@@ -626,6 +679,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 data.generic_instruction,
                 include_persona=use_personas
             )
+            last_prompt = prompt
 
             start_time = time.time()
 
@@ -634,7 +688,8 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 prompt,
                 data.temperature,
                 embedded_questions,
-                max_retries=5
+                max_retries=5,
+                seed=seed
             )
 
             end_time = time.time()
@@ -669,6 +724,10 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 "prompt_words": prompt_words,
                 "num_ctx_used": num_ctx_used,
                 "raw_response": str(raw_response).replace("\n", " | "),
+                "data_source": "LLM-synthetic",
+                "sedg_version": SEDG_VERSION,
+                "provider": "ollama",
+                "seed": seed,
             }
             
             # Safety check: if answers accidentally comes as a tuple, take only the answers dictionary
@@ -712,9 +771,9 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 message=f"{completed}/{total_needed} respondents completed. {pending} remaining."
             )
 
-        # Convert the temp CSV to XLSX then remove the CSV
+        # Convert the temp CSV to XLSX (+ manifest sheet) then remove the CSV
         xlsx_path = DOWNLOADS_DIR / xlsx_filename
-        pd.read_csv(csv_path).to_excel(xlsx_path, index=False, engine="openpyxl")
+        _write_xlsx_with_manifest(csv_path, xlsx_path, _manifest())
         csv_path.unlink(missing_ok=True)
 
         update_job(
@@ -737,7 +796,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
         )
         
 
-@app.get("/preview-personas/{sample_count}")
+@app.get("/preview-personas/{sample_count}", dependencies=[Depends(check_origin)])
 def preview_personas(sample_count: int):
     if sample_count < 1:
         sample_count = 1
@@ -755,9 +814,14 @@ def preview_personas(sample_count: int):
         ]
     }
 
-@app.post("/generate")
+@app.post("/generate", dependencies=[Depends(check_origin)])
 def generate(data: GenerateRequest):
     total_needed = data.sample_count_per_condition * len(data.conditions)
+    if total_needed > 5000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Requested {total_needed} responses exceeds the 5000 per-run limit. Reduce sample count or conditions."
+        )
     job_id = str(uuid.uuid4())
 
     JOBS[job_id] = {
@@ -778,7 +842,7 @@ def generate(data: GenerateRequest):
     }
 
 
-@app.get("/progress/{job_id}")
+@app.get("/progress/{job_id}", dependencies=[Depends(check_origin)])
 def get_progress(job_id: str):
     if job_id not in JOBS:
         return {
@@ -791,7 +855,7 @@ def get_progress(job_id: str):
         **JOBS[job_id]
     }
 
-@app.post("/stop/{job_id}")
+@app.post("/stop/{job_id}", dependencies=[Depends(check_origin)])
 def stop_job(job_id: str):
     if job_id not in JOBS:
         return {"success": False, "message": "Job not found"}
@@ -799,7 +863,7 @@ def stop_job(job_id: str):
         JOBS[job_id]["stop_requested"] = True
     return {"success": True}
 
-@app.get("/download-result/{job_id}")
+@app.get("/download-result/{job_id}", dependencies=[Depends(check_origin)])
 def download_result(job_id: str):
     from fastapi.responses import FileResponse
     xlsx_path = JOBS.get(job_id, {}).get("xlsx_path")
