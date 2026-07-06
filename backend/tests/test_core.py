@@ -94,13 +94,19 @@ class TestEstimateNumCtx:
         assert isinstance(estimate_num_ctx("hello world"), int)
 
     def test_known_calculation(self):
-        # 4 words: (4 + 500 + 3061) * 2 = 7130
+        # 4 words, no model: (4 + 500 + 3061) * 2 = 7130, under MAX_NUM_CTX
         assert estimate_num_ctx("one two three four") == 7130
 
     def test_longer_prompt_yields_larger_ctx(self):
         short = estimate_num_ctx("word")
         long = estimate_num_ctx(" ".join(["word"] * 500))
         assert long > short
+
+    def test_fallback_capped_at_max_num_ctx(self):
+        # No model => no /api/show; huge prompt must clamp to MAX_NUM_CTX.
+        huge = estimate_num_ctx(" ".join(["word"] * 100000))
+        assert huge == app.MAX_NUM_CTX
+        assert huge <= app.MAX_NUM_CTX
 
 
 # ── parse_answers ─────────────────────────────────────────────────────────────
@@ -163,6 +169,30 @@ class TestParseAnswers:
         assert validation == "invalid"
         assert "Q2" in invalid
         assert "Q1" not in invalid
+
+    def test_single_answer_first_match(self):
+        q = _q(1, "discrete", ["1", "2", "3", "4", "5"])
+        answers, validation, _ = parse_answers("Q1=5", [q])
+        assert answers["Q1"] == 5
+        assert validation == "valid"
+
+    def test_echoed_example_before_real_answer_takes_last(self):
+        q = _q(1, "discrete", ["1", "2", "3", "4", "5"])
+        raw = "For example, answer like e.g. Q1=1\nMy final answer:\nQ1=4"
+        answers, validation, _ = parse_answers(raw, [q])
+        assert answers["Q1"] == 4
+        assert validation == "valid"
+
+    def test_multi_question_each_parsed_correctly(self):
+        q1 = _q(1, "discrete", ["1", "2", "3", "4", "5"])
+        q2 = _q(2, "continuous", ["1", "2", "3", "4", "5"])
+        q3 = _q(3, "text", [], max_words=50)
+        answers, validation, invalid = parse_answers('Q1=3\nQ2=4.5\nQ3="Nice"', [q1, q2, q3])
+        assert answers["Q1"] == 3
+        assert answers["Q2"] == 4.5
+        assert answers["Q3"] == "Nice"
+        assert validation == "valid"
+        assert invalid == []
 
 
 # ── build_prompt ──────────────────────────────────────────────────────────────

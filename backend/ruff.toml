@@ -1,0 +1,6 @@
+# ponytail: lint scoped to pyflakes "F" (real-bug) rules only; the 4 ignores
+# below are pre-existing trips in app.py/tests kept out to keep CI green.
+# Drop an ignore as each is cleaned up; broaden `select` (E, I, ...) later.
+[lint]
+select = ["F"]
+ignore = ["F401", "F541", "F821", "F841"]

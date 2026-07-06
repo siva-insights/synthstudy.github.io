@@ -27,6 +27,7 @@ from typing import Literal, Optional
 # Constants
 OLLAMA_URL = "http://localhost:11434"
 SEDG_VERSION = "1.0.0"
+MAX_NUM_CTX = 32768  # fallback cap when the model's real context length is unknown
 
 # Hidden dir for history and temp CSV; final XLSX always goes to Downloads
 _APP_DIR = Path.home() / ".sedg_helper"
@@ -35,7 +36,9 @@ OUTPUT_DIR = _APP_DIR / "outputs"   # temp CSV lives here
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 DOWNLOADS_DIR = Path.home() / "Downloads"
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-HISTORY_FILE = _APP_DIR / "generation_history.json"
+HISTORY_FILE = _APP_DIR / "generation_history.json"       # legacy JSON array (read-only now)
+HISTORY_JSONL = _APP_DIR / "generation_history.jsonl"     # append-only, one entry per line
+HISTORY_LOCK = Lock()
 
 # FastAPI app setup + CORS
 app = FastAPI(title="OLSEDG Helper")
@@ -67,28 +70,66 @@ JOBS = {}
 JOBS_LOCK = Lock()
 
 # Utility functions: context-window estimation, history persistence, timing averages
-def estimate_num_ctx(prompt: str) -> int:
+_MODEL_CTX_CACHE = {}  # model_name -> real context length from /api/show
+
+
+def get_model_context_length(model_name):
+    """Real context window from Ollama's /api/show, cached per model. None if unavailable."""
+    if model_name in _MODEL_CTX_CACHE:
+        return _MODEL_CTX_CACHE[model_name]
+    ctx = None
+    try:
+        resp = requests.post(f"{OLLAMA_URL}/api/show", json={"model": model_name}, timeout=5)
+        resp.raise_for_status()
+        model_info = resp.json().get("model_info", {})
+        for key, value in model_info.items():
+            if key.endswith(".context_length"):
+                ctx = int(value)
+                break
+    except Exception:
+        ctx = None  # ponytail: any /api/show failure -> None, caller falls back to capped formula
+    _MODEL_CTX_CACHE[model_name] = ctx
+    return ctx
+
+
+def estimate_num_ctx(prompt: str, model_name: str = None) -> int:
     prompt_words = len(str(prompt).split())
-    num_ctx = (prompt_words + 500 + 3061) * 2
-    return int(num_ctx)
+    estimate = (prompt_words + 500 + 3061) * 2
+    real_ctx = get_model_context_length(model_name) if model_name else None
+    if real_ctx:
+        return min(estimate, real_ctx)
+    return min(estimate, MAX_NUM_CTX)
     
 def load_history():
-    if not HISTORY_FILE.exists():
-        return []
-
-    try:
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
+    history = []
+    # Legacy JSON array first, so pre-migration timing data still counts.
+    if HISTORY_FILE.exists():
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                history.extend(json.load(f))
+        except Exception:
+            pass
+    if HISTORY_JSONL.exists():
+        try:
+            with open(HISTORY_JSONL, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        history.append(json.loads(line))
+                    except Exception:
+                        continue  # ponytail: skip only the corrupt line; keep the rest, esp. newer entries appended at the end
+        except Exception:
+            pass
+    return history
 
 
 def save_history_entry(entry):
-    history = load_history()
-    history.append(entry)
-
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(history, f, indent=2)
+    # ponytail: append-only JSONL under a lock — O(1) per write, no read-modify-write race. Global lock is fine at one-generation-at-a-time throughput.
+    with HISTORY_LOCK:
+        with open(HISTORY_JSONL, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
 
 
 def get_average_seconds_per_respondent(model_name):
@@ -277,7 +318,13 @@ def load_personas(
 
         return sample_personas(df_small, total_needed, sequential=sequential, seed=seed)
 
-    ds = load_dataset("LLM-Digital-Twin/Twin-2K-500", "full_persona")
+    try:
+        ds = load_dataset("LLM-Digital-Twin/Twin-2K-500", "full_persona")
+    except Exception:
+        raise RuntimeError(
+            "Could not load the default persona dataset from HuggingFace. "
+            "Check your internet connection, or upload a custom persona file instead."
+        )
 
     if hasattr(ds, "keys"):
         split_name = list(ds.keys())[0]
@@ -436,7 +483,7 @@ Important rules:
 
 
 def call_ollama(model_name, prompt, temperature, seed=None):
-    num_ctx = estimate_num_ctx(prompt)
+    num_ctx = estimate_num_ctx(prompt, model_name)
 
     options = {
         "temperature": temperature,
@@ -468,11 +515,12 @@ def parse_answers(raw_text, questions):
         q_num = q.question_number
 
         if q.scale_type == "text":
-            match = re.search(rf'Q{q_num}\s*=\s*"([^"]*)"', raw_text, re.IGNORECASE)
-            if not match:
-                match = re.search(rf"Q{q_num}\s*=\s*(.+)", raw_text, re.IGNORECASE)
-            if match:
-                answers[f"Q{q_num}"] = match.group(1).strip()
+            # findall + last match: models echo the answer-template/examples first, real answer last
+            matches = re.findall(rf'Q{q_num}\s*=\s*"([^"]*)"', raw_text, re.IGNORECASE)
+            if not matches:
+                matches = re.findall(rf"Q{q_num}\s*=\s*(.+)", raw_text, re.IGNORECASE)
+            if matches:
+                answers[f"Q{q_num}"] = matches[-1].strip()
             else:
                 answers[f"Q{q_num}"] = ""
                 invalid_questions.append(f"Q{q_num}")
@@ -482,10 +530,11 @@ def parse_answers(raw_text, questions):
             is_continuous = q.scale_type == "continuous"
 
             pattern = rf"Q{q_num}\s*=\s*(-?\d+\.?\d*)"
-            match = re.search(pattern, raw_text, re.IGNORECASE)
+            matches = re.findall(pattern, raw_text, re.IGNORECASE)
 
-            if match:
-                value = float(match.group(1)) if is_continuous else int(match.group(1))
+            if matches:
+                last = matches[-1]
+                value = float(last) if is_continuous else int(last)
                 answers[f"Q{q_num}"] = value
 
                 if not (min_code <= value <= max_code):
@@ -704,7 +753,7 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             })
 
             prompt_words = len(str(prompt).split())
-            num_ctx_used = estimate_num_ctx(prompt)
+            num_ctx_used = estimate_num_ctx(prompt, data.model_name)
                         
             row = {
                 "respondent_id": respondent_id,
@@ -801,7 +850,10 @@ def preview_personas(sample_count: int):
     if sample_count < 1:
         sample_count = 1
 
-    df_personas = load_personas(sample_count, use_personas=True)
+    try:
+        df_personas = load_personas(sample_count, use_personas=True)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
     return {
         "success": True,
@@ -824,13 +876,28 @@ def generate(data: GenerateRequest):
         )
     job_id = str(uuid.uuid4())
 
-    JOBS[job_id] = {
-        "job_id": job_id,
-        "status": "started",
-        "message": "Generation started",
-        "completed": 0,
-        "total": total_needed,
-    }
+    ACTIVE_STATUSES = {"started", "loading_personas", "generating"}
+    now = time.time()
+    with JOBS_LOCK:
+        # Single-job guard: refuse if another job is still in progress.
+        if any(j.get("status") in ACTIVE_STATUSES for j in JOBS.values()):
+            raise HTTPException(status_code=409, detail="A generation job is already running. Wait for it to finish or stop it first.")
+        # Eviction: cap retained finished jobs to the most recent 50 by creation time.
+        # ponytail: simple count cap, not 24h TTL; swap to time-based if jobs must expire on a clock.
+        finished = sorted(
+            (jid for jid, j in JOBS.items() if j.get("status") not in ACTIVE_STATUSES),
+            key=lambda jid: JOBS[jid].get("created_at", 0),
+        )
+        for jid in finished[:-50]:
+            del JOBS[jid]
+        JOBS[job_id] = {
+            "job_id": job_id,
+            "status": "started",
+            "message": "Generation started",
+            "completed": 0,
+            "total": total_needed,
+            "created_at": now,
+        }
 
     thread = Thread(target=run_generation_job, args=(job_id, data), daemon=True)
     thread.start()
