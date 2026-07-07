@@ -959,6 +959,59 @@ Important rules:
         .filter(num => !isNaN(num))
         .sort((a, b) => a - b);
     }
+
+    function validateQuestionStimuliAlignment() {
+      const questionNumbers = getExistingQuestionNumbers();
+      const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
+      const imageCount = parseInt(document.getElementById("sharedImageCount")?.value) || 0;
+
+      const allStimuli = [];
+      for (let c = 1; c <= conditionCount; c++) {
+        allStimuli.push(document.getElementById(`condition${c}Stimuli`)?.value || "");
+      }
+
+      const errors = [];
+
+      // Collect all {Qn} and {Imagen} referenced across all condition stimuli
+      const referencedQuestions = new Set();
+      const referencedImages = new Set();
+      for (const text of allStimuli) {
+        for (const m of text.matchAll(/\{Q(\d+)\}/g)) referencedQuestions.add(parseInt(m[1]));
+        for (const m of text.matchAll(/\{Image(\d+)\}/g)) referencedImages.add(parseInt(m[1]));
+      }
+
+      // {Qn} referenced but question n not added
+      for (const n of referencedQuestions) {
+        if (!questionNumbers.includes(n)) {
+          errors.push(`{Q${n}} is referenced in a condition's stimuli but Question ${n} has not been added.`);
+        }
+      }
+
+      // Question n added but {Qn} not in any condition stimuli
+      for (const n of questionNumbers) {
+        if (!referencedQuestions.has(n)) {
+          errors.push(`Question ${n} has been added but {Q${n}} is not referenced in any condition's stimuli.`);
+        }
+      }
+
+      // {Imagen} referenced but image n not uploaded
+      for (const n of referencedImages) {
+        const uploaded = document.getElementById(`sharedImage${n}`)?.files?.[0];
+        if (!uploaded) {
+          errors.push(`{Image${n}} is referenced in a condition's stimuli but Image ${n} has not been uploaded.`);
+        }
+      }
+
+      // Image n uploaded but {Imagen} not in any condition stimuli
+      for (let n = 1; n <= imageCount; n++) {
+        const uploaded = document.getElementById(`sharedImage${n}`)?.files?.[0];
+        if (uploaded && !referencedImages.has(n)) {
+          errors.push(`Image ${n} has been uploaded but {Image${n}} is not referenced in any condition's stimuli.`);
+        }
+      }
+
+      return errors;
+    }
     
     function countWords(text) {
       if (!text) return 0;
@@ -1342,39 +1395,56 @@ Important rules:
       const questionNumbers = getExistingQuestionNumbers();
       const personaSelection = document.getElementById("personaSelection")?.value || "default";
       const includePersona = personaSelection !== "none";
-      let approxTokens;
-      let tokenNote;
+      const sampleCount = parseInt(document.getElementById("sampleCount")?.value) || 1;
+      let totalPromptWords = 0;
+      let maxConditionWords = 0;
 
       if (previews && previews.length > 0) {
-        // Preview has been generated — use actual prompt words (most accurate)
-        approxTokens = getPreviewTotalApproxTokens();
-        tokenNote = `(sum of actual prompt words × 1.33; image tokens not included)`;
+        // Preview has been generated — sum actual prompt_words from each built prompt
+        let offset = 0;
+        for (const preview of previews) {
+          const rows = buildPreviewOutputRows(preview, offset);
+          offset += rows.length;
+          for (const row of rows) {
+            const w = parseInt(row.prompt_words) || 0;
+            totalPromptWords += w;
+            maxConditionWords = Math.max(maxConditionWords, w);
+          }
+        }
+      } else if (_studyDf && _studyDf.length > 0) {
+        // Personas loaded — build temp preview objects and use buildPreviewOutputRows
+        // which already computes prompt_words per row; just sum them
+        for (let c = 1; c <= conditionCount; c++) {
+          const stimuli = document.getElementById(`condition${c}Stimuli`)?.value || "";
+          const embeddedStimuli = buildEmbeddedStimuliText(stimuli, questionNumbers);
+          const personas = [];
+          for (let s = 0; s < sampleCount; s++) {
+            const idx = ((c - 1) * sampleCount + s) % _studyDf.length;
+            personas.push({ ..._studyDf[idx], includePersona });
+          }
+          const tempPreview = { stimuli, embeddedStimuli, condition: c, conditionName: "", questionNumbers, personas };
+          for (const row of buildPreviewOutputRows(tempPreview)) {
+            const w = parseInt(row.prompt_words) || 0;
+            totalPromptWords += w;
+            maxConditionWords = Math.max(maxConditionWords, w);
+          }
+        }
       } else {
-        // No preview yet — estimate using persona placeholder
+        // Fallback: no persona data yet — estimate with placeholder
         const personaAvgWords = await getPersonaAvgWords();
         const personaPlaceholder = includePersona ? Array(personaAvgWords).fill("x").join(" ") : "";
-        let estimatedTotalWords = 0;
         for (let c = 1; c <= conditionCount; c++) {
           const stimuliText = document.getElementById(`condition${c}Stimuli`)?.value || "";
           const embeddedStimuli = buildEmbeddedStimuliText(stimuliText, questionNumbers);
           const prompt = buildPreviewPrompt(personaPlaceholder, embeddedStimuli, questionNumbers, includePersona);
-          estimatedTotalWords += countWords(prompt);
+          const w = countWords(prompt);
+          totalPromptWords += w * sampleCount;
+          maxConditionWords = Math.max(maxConditionWords, w);
         }
-        const sampleCount = parseInt(document.getElementById("sampleCount")?.value) || 1;
-        approxTokens = Math.round(estimatedTotalWords * sampleCount * 1.33);
-        tokenNote = `(estimated as prompt words × 1.33 × total respondents; image tokens not included)`;
       }
 
-      // Per-condition prompt length for model limit check (always use estimate)
-      const personaAvgWords = await getPersonaAvgWords();
-      const personaPlaceholder = includePersona ? Array(personaAvgWords).fill("x").join(" ") : "";
-      let maxConditionWords = 0;
-      for (let c = 1; c <= conditionCount; c++) {
-        const stimuliText = document.getElementById(`condition${c}Stimuli`)?.value || "";
-        const embeddedStimuli = buildEmbeddedStimuliText(stimuliText, questionNumbers);
-        const prompt = buildPreviewPrompt(personaPlaceholder, embeddedStimuli, questionNumbers, includePersona);
-        maxConditionWords = Math.max(maxConditionWords, countWords(prompt));
-      }
+      const approxTokens = Math.round(totalPromptWords * 1.33);
+      const tokenNote = `(sum of actual prompt words × 1.33; image tokens not included)`;
 
       let message = `Approx. total tokens for this study: <strong>${approxTokens.toLocaleString()}</strong>
         <span style="color:#64748b; font-size:12px;">${tokenNote}</span>`;
@@ -2340,6 +2410,12 @@ Important rules:
         return;
       }
 
+      const alignmentErrors = validateQuestionStimuliAlignment();
+      if (alignmentErrors.length > 0) {
+        alert("Please fix the following before previewing:\n\n" + alignmentErrors.map((e, i) => `${i + 1}. ${e}`).join("\n"));
+        return;
+      }
+
       const questionNumbers = getExistingQuestionNumbers();
       let previewPersonas;
 
@@ -2500,6 +2576,12 @@ Important rules:
         return;
       }
 
+      const alignmentErrors = validateQuestionStimuliAlignment();
+      if (alignmentErrors.length > 0) {
+        alert("Please fix the following before generating responses:\n\n" + alignmentErrors.map((e, i) => `${i + 1}. ${e}`).join("\n"));
+        return;
+      }
+
       updateTotalSamples();
 
       const previewArea = document.getElementById("previewArea");
@@ -2619,6 +2701,11 @@ Important rules:
       }
 
       addLog("Building JSON payload…");
+      const rawImagesData = await getSharedImagesData();
+      const imagesPayload = {};
+      for (const [idx, img] of Object.entries(rawImagesData)) {
+        imagesPayload[idx] = { base64: img.base64, mimeType: img.mimeType };
+      }
       const payloadBody = JSON.stringify({
         study_name: studyName,
         model_name: selectedModel.value,
@@ -2630,7 +2717,8 @@ Important rules:
         persona_source: payloadPersonaSource,
         persona_order: document.getElementById("personaOrder")?.value || "random",
         stimuli_assignment: payloadStimuliAssignment,
-        custom_personas: customPersonas
+        custom_personas: customPersonas,
+        images: Object.keys(imagesPayload).length > 0 ? imagesPayload : null
       });
       addLog(`Payload built — size: ${(payloadBody.length / 1024).toFixed(1)} KB`);
 

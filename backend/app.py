@@ -116,6 +116,11 @@ class PersonaRecord(BaseModel):
     persona: str
 
 
+class ImageData(BaseModel):
+    base64: str
+    mimeType: str
+
+
 class GenerateRequest(BaseModel):
     study_name: str
     model_provider: Literal["local", "openai", "gemini", "anthropic"] = "local"
@@ -129,6 +134,7 @@ class GenerateRequest(BaseModel):
     persona_order: Literal["random", "sequential"] = "random"
     stimuli_assignment: Literal["random", "sequential"] = "random"
     custom_personas: Optional[list[PersonaRecord]] = None
+    images: Optional[dict[str, ImageData]] = None
 
 class SaveFileRequest(BaseModel):
     filename: str
@@ -274,7 +280,8 @@ def build_prompt(
     stimuli,
     questions,
     generic_instruction: Optional[str] = None,
-    include_persona: bool = True
+    include_persona: bool = True,
+    images: Optional[dict] = None,
 ):
     # Two default templates: one with persona framing, one without (persona_source="none").
     # A user-supplied generic_instruction replaces both defaults entirely.
@@ -331,6 +338,13 @@ Response scale:
             placeholder,
             question_lookup[q.question_number]
         )
+
+    # Replace {Imagen} placeholders: label them so the model knows which image is which,
+    # then strip any remaining ones for conditions that don't use images.
+    if images:
+        for idx in images:
+            embedded_stimuli = embedded_stimuli.replace(f"{{Image{idx}}}", f"[Image {idx}]")
+    embedded_stimuli = re.sub(r"\{Image\d+\}", "", embedded_stimuli)
 
     answer_template = "\n".join(
         [f'Q{q.question_number}="?"' if q.scale_type == "text" else f"Q{q.question_number}=?"
@@ -413,20 +427,25 @@ Important rules:
     return prompt
 
 
-def call_ollama(model_name, prompt, temperature):
+def call_ollama(model_name, prompt, temperature, images=None):
     num_ctx = estimate_num_ctx(prompt)
+
+    payload = {
+        "model": model_name,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": temperature,
+            "num_ctx": num_ctx
+        }
+    }
+
+    if images:
+        payload["images"] = [img.base64 for img in images.values()]
 
     response = requests.post(
         f"{OLLAMA_URL}/api/generate",
-        json={
-            "model": model_name,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": temperature,
-                "num_ctx": num_ctx
-            }
-        },
+        json=payload,
         timeout=900
     )
 
@@ -472,7 +491,7 @@ def parse_answers(raw_text, questions):
 
     return answers, validation, invalid_questions
     
-def get_valid_response_with_retries(model_name, prompt, temperature, questions, max_retries=5):
+def get_valid_response_with_retries(model_name, prompt, temperature, questions, max_retries=5, images=None):
     # Retry up to max_retries times; if the response is still invalid after all attempts,
     # save the last attempt as-is so no respondent row is silently dropped from the output.
     last_raw_response = ""
@@ -481,7 +500,7 @@ def get_valid_response_with_retries(model_name, prompt, temperature, questions, 
     last_invalid_questions = []
 
     for attempt in range(1, max_retries + 1):
-        raw_response = call_ollama(model_name, prompt, temperature)
+        raw_response = call_ollama(model_name, prompt, temperature, images=images)
         answers, validation, invalid_questions = parse_answers(raw_response, questions)
 
         if validation == "valid":
@@ -619,12 +638,23 @@ def run_generation_job(job_id: str, data: GenerateRequest):
             pid = df_personas.loc[i, "pid"]
             persona = df_personas.loc[i, "persona_summary"]
 
+            # Collect only the images referenced in this condition's stimuli
+            condition_images = None
+            if data.images:
+                condition_images = {
+                    idx: img for idx, img in data.images.items()
+                    if f"{{Image{idx}}}" in stimuli
+                }
+                if not condition_images:
+                    condition_images = None
+
             prompt = build_prompt(
                 persona,
                 stimuli,
                 embedded_questions,
                 data.generic_instruction,
-                include_persona=use_personas
+                include_persona=use_personas,
+                images=condition_images,
             )
 
             start_time = time.time()
@@ -634,7 +664,8 @@ def run_generation_job(job_id: str, data: GenerateRequest):
                 prompt,
                 data.temperature,
                 embedded_questions,
-                max_retries=5
+                max_retries=5,
+                images=condition_images,
             )
 
             end_time = time.time()
