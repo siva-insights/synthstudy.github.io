@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "SEDG: A Synthetic Experimental Data Generator for LLM-Based Behavioral Experiments"
+authors:
+  - family-names: Mariappan
+    given-names: Siva Shanmugam
+    orcid: "https://orcid.org/0000-0001-8200-3579"
+    affiliation: "The University of Texas at San Antonio"
+  - family-names: Malshe
+    given-names: Ashwin
+    orcid: "https://orcid.org/0000-0002-3429-4268"
+    affiliation: "The University of Texas at San Antonio"
+repository-code: "https://github.com/siva-insights/synthstudy.github.io"
+url: "https://synthstudy.vercel.app/"
+version: 1.0.0
+date-released: "2026-07-05"
+license: MIT
+keywords:
+  - large language models
+  - synthetic data
+  - behavioral experiments
+  - marketing research

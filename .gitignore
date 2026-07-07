@@ -3,4 +3,5 @@ backend/dist/
 *.spec
 dist/
 build/
-*.spec
+__pycache__/
+*.pyc
