@@ -1,0 +1,126 @@
+name: Build OLSEDG Helper
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/app.py
+      - backend/requirements.txt
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build Mac app
+        run: bash backend/build_mac.sh
+
+      - name: Zip Mac app
+        run: cd backend/dist && zip -r "OLSEDG-Helper-mac.zip" "OLSEDG Helper.app"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-build
+          path: backend/dist/OLSEDG-Helper-mac.zip
+          retention-days: 1
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build Windows exe
+        shell: pwsh
+        run: |
+          Set-Location backend
+          python -m venv build-venv
+          .\build-venv\Scripts\python.exe -m pip install --upgrade pip
+          .\build-venv\Scripts\pip.exe install -r requirements.txt
+          $flags = @(
+            '--onefile', '--windowed',
+            '--name', 'OLSEDG-Helper',
+            '--hidden-import=tkinter',
+            '--hidden-import=datasets',
+            '--hidden-import=pandas',
+            '--hidden-import=openpyxl',
+            '--hidden-import=docx',
+            '--hidden-import=requests',
+            '--collect-all', 'datasets',
+            '--collect-all', 'pandas',
+            '--collect-all', 'openpyxl',
+            '--collect-all', 'pyarrow',
+            '--exclude-module', 'torch',
+            '--exclude-module', 'torchvision',
+            '--exclude-module', 'torchaudio',
+            '--exclude-module', 'tensorflow',
+            '--exclude-module', 'jax',
+            '--exclude-module', 'PyQt5',
+            '--exclude-module', 'PySide2',
+            '--exclude-module', 'PySide6',
+            '--exclude-module', 'botocore',
+            '--exclude-module', 'boto3',
+            '--exclude-module', 's3fs',
+            '--exclude-module', 'polars',
+            '--exclude-module', 'scipy',
+            '--exclude-module', 'sklearn',
+            '--exclude-module', 'skimage',
+            '--exclude-module', 'selenium',
+            '--exclude-module', 'playwright',
+            '--exclude-module', 'notebook',
+            '--exclude-module', 'jupyterlab',
+            '--exclude-module', 'jupyter',
+            '--exclude-module', 'ipykernel',
+            '--exclude-module', 'matplotlib',
+            '--exclude-module', 'astropy',
+            '--exclude-module', 'bokeh',
+            '--exclude-module', 'panel',
+            '--exclude-module', 'dask',
+            '--exclude-module', 'distributed',
+            '--exclude-module', 'transformers',
+            'app.py'
+          )
+          & .\build-venv\Scripts\pyinstaller.exe @flags
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: backend\dist\OLSEDG-Helper.exe
+          retention-days: 1
+
+  release:
+    needs: [build-mac, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac-build
+          path: release-assets
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+          path: release-assets
+
+      - name: Publish latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes 2>/dev/null || true
+          gh release create latest \
+            --title "OLSEDG Helper (latest build)" \
+            --notes "Built automatically from \`backend/app.py\` on $(date -u '+%Y-%m-%d %H:%M UTC')." \
+            release-assets/OLSEDG-Helper-mac.zip \
+            release-assets/OLSEDG-Helper.exe
