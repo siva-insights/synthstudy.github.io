@@ -177,74 +177,115 @@
       background: #b91c1c;
     }
 
-    .comment-item {
-      margin-top: 12px;
-      padding: 12px;
-      background: white;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-    }
-    .comment-item p { margin: 8px 0; }
-    .comment-item small { color: #64748b; }
-    .comment-reply {
-      margin-top: 8px;
-      margin-left: 24px;
-      background: #f8fafc;
-      border-left: 3px solid #93c5fd;
-    }
     .comment-list-scroll {
-      max-height: 520px;
+      max-height: 540px;
       overflow-y: auto;
-      padding-right: 4px;
-      margin-top: 8px;
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .comment-item {
+      display: flex;
+      gap: 10px;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+    }
+    .comment-avatar {
+      flex-shrink: 0;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #2563eb;
+      color: #fff;
+      font-weight: 700;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-transform: uppercase;
+    }
+    .comment-body { flex: 1; min-width: 0; }
+    .comment-author {
+      font-weight: 600;
+      font-size: 14px;
+      color: #0f172a;
+      margin-bottom: 2px;
+    }
+    .comment-text {
+      font-size: 14px;
+      color: #334155;
+      line-height: 1.55;
+      margin: 4px 0 6px;
+      word-break: break-word;
+    }
+    .comment-meta {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 6px;
     }
     .comment-actions {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-top: 6px;
+      gap: 4px;
       flex-wrap: wrap;
     }
     .comment-action-btn {
       background: none;
-      border: 1px solid #cbd5e1;
+      border: none;
       border-radius: 6px;
-      padding: 2px 10px;
+      padding: 3px 10px;
       font-size: 13px;
       cursor: pointer;
-      color: #475569;
-      transition: background 0.15s;
+      color: #64748b;
+      font-weight: 500;
+      transition: background 0.15s, color 0.15s;
     }
-    .comment-action-btn:hover { background: #f1f5f9; }
-    .comment-action-btn.liked { color: #2563eb; border-color: #2563eb; font-weight: 600; }
+    .comment-action-btn:hover { background: #e2e8f0; color: #0f172a; }
+    .comment-action-btn.liked { color: #2563eb; font-weight: 700; }
+    .comment-reply {
+      margin-left: 48px;
+      background: #fff;
+      border-left: 3px solid #93c5fd;
+    }
+    .replies-container { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
     .reply-form {
       margin-top: 10px;
-      padding: 10px;
-      background: #f8fafc;
-      border-radius: 6px;
+      padding: 10px 12px;
+      background: #fff;
+      border-radius: 8px;
       border: 1px solid #e2e8f0;
     }
     .reply-form input, .reply-form textarea {
       width: 100%; box-sizing: border-box; margin-bottom: 6px;
+      font-size: 13px;
     }
-    .reply-form textarea { min-height: 60px; }
+    .reply-form textarea { min-height: 56px; }
     .comment-sort-row {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
     .comment-sort-row select {
       font-size: 13px;
-      padding: 3px 8px;
+      padding: 4px 10px;
       border-radius: 6px;
       border: 1px solid #cbd5e1;
+      background: #fff;
+      color: #374151;
+      cursor: pointer;
     }
     @media (prefers-color-scheme: dark) {
       .comment-item { background: #1e293b; border-color: #334155; }
+      .comment-author { color: #f1f5f9; }
+      .comment-text { color: #cbd5e1; }
       .comment-reply { background: #0f172a; border-left-color: #3b82f6; }
-      .comment-action-btn { color: #94a3b8; border-color: #334155; }
-      .comment-action-btn:hover { background: #1e293b; }
+      .comment-action-btn { color: #94a3b8; }
+      .comment-action-btn:hover { background: #334155; color: #f1f5f9; }
+      .comment-action-btn.liked { color: #60a5fa; }
       .reply-form { background: #0f172a; border-color: #334155; }
       .comment-sort-row select { background: #1e293b; color: #e2e8f0; border-color: #334155; }
     }
@@ -1054,30 +1095,35 @@ Important rules:
     function _renderComment(item, replies, isReply) {
       const likedIds = JSON.parse(localStorage.getItem("likedComments") || "[]");
       const liked = likedIds.includes(String(item.id));
+      const name = item.name || "Anonymous";
+      const initials = name.split(" ").map(w => w[0]).join("").slice(0, 2);
       const repliesHtml = (replies || []).map(r => _renderComment(r, [], true)).join("");
 
       return `
         <div class="comment-item${isReply ? " comment-reply" : ""}" id="comment-${item.id}">
-          <strong>${escapeHTML(item.name || "Anonymous")}</strong>
-          <p>${escapeHTML(item.comment)}</p>
-          <div class="comment-actions">
-            <small>${new Date(item.created_at).toLocaleString()}</small>
-            <button class="comment-action-btn${liked ? " liked" : ""}" onclick="likeComment('${item.id}', this)">
-              👍 <span class="like-count">${item.likes || 0}</span>
-            </button>
-            <button class="comment-action-btn" onclick="toggleReplyForm('${item.id}')">💬 Reply</button>
-            <button class="comment-action-btn" onclick="shareComment('${item.id}')">🔗 Share</button>
-          </div>
-          <div id="reply-form-${item.id}" style="display:none;" class="reply-form">
-            <input type="text" id="reply-name-${item.id}" placeholder="Your name (or leave blank for Anonymous)">
-            <textarea id="reply-text-${item.id}" placeholder="Write a reply..."></textarea>
-            <div style="display:flex;gap:8px;">
-              <button type="button" onclick="submitComment('${item.id}')">Submit Reply</button>
-              <button type="button" onclick="toggleReplyForm('${item.id}')">Cancel</button>
+          <div class="comment-avatar">${escapeHTML(initials)}</div>
+          <div class="comment-body">
+            <div class="comment-author">${escapeHTML(name)}</div>
+            <div class="comment-meta">${new Date(item.created_at).toLocaleString()}</div>
+            <div class="comment-text">${escapeHTML(item.comment)}</div>
+            <div class="comment-actions">
+              <button class="comment-action-btn${liked ? " liked" : ""}" onclick="likeComment('${item.id}', this)">
+                👍 <span class="like-count">${item.likes || 0}</span>
+              </button>
+              <button class="comment-action-btn" onclick="toggleReplyForm('${item.id}')">💬 Reply</button>
+              <button class="comment-action-btn" onclick="shareComment('${item.id}')">🔗 Share</button>
             </div>
-            <div id="reply-status-${item.id}" class="note"></div>
+            <div id="reply-form-${item.id}" style="display:none;" class="reply-form">
+              <input type="text" id="reply-name-${item.id}" placeholder="Your name (or leave blank for Anonymous)">
+              <textarea id="reply-text-${item.id}" placeholder="Write a reply..."></textarea>
+              <div style="display:flex;gap:8px;">
+                <button type="button" onclick="submitComment('${item.id}')">Submit Reply</button>
+                <button type="button" onclick="toggleReplyForm('${item.id}')">Cancel</button>
+              </div>
+              <div id="reply-status-${item.id}" class="note"></div>
+            </div>
+            ${repliesHtml ? `<div class="replies-container">${repliesHtml}</div>` : ""}
           </div>
-          ${repliesHtml ? `<div class="replies-container">${repliesHtml}</div>` : ""}
         </div>`;
     }
 
