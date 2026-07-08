@@ -460,7 +460,6 @@ def call_ollama(model_name, prompt, temperature, images=None, seed=None):
         options["seed"] = seed
 
     if images:
-        # /api/chat supports images for modern multimodal models (gemma3, llava, etc.)
         response = requests.post(
             f"{OLLAMA_URL}/api/chat",
             json={
@@ -472,7 +471,10 @@ def call_ollama(model_name, prompt, temperature, images=None, seed=None):
             },
             timeout=900
         )
-        response.raise_for_status()
+        if not response.ok:
+            raise RuntimeError(
+                f"Ollama /api/chat error {response.status_code}: {response.text}"
+            )
         return response.json().get("message", {}).get("content", "")
     else:
         response = requests.post(
@@ -480,7 +482,10 @@ def call_ollama(model_name, prompt, temperature, images=None, seed=None):
             json={"model": model_name, "prompt": prompt, "stream": False, "options": options},
             timeout=900
         )
-        response.raise_for_status()
+        if not response.ok:
+            raise RuntimeError(
+                f"Ollama /api/generate error {response.status_code}: {response.text}"
+            )
         return response.json().get("response", "")
 
 
