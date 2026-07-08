@@ -184,13 +184,69 @@
       border: 1px solid #cbd5e1;
       border-radius: 8px;
     }
-    
-    .comment-item p {
-      margin: 8px 0;
+    .comment-item p { margin: 8px 0; }
+    .comment-item small { color: #64748b; }
+    .comment-reply {
+      margin-top: 8px;
+      margin-left: 24px;
+      background: #f8fafc;
+      border-left: 3px solid #93c5fd;
     }
-    
-    .comment-item small {
-      color: #64748b;
+    .comment-list-scroll {
+      max-height: 520px;
+      overflow-y: auto;
+      padding-right: 4px;
+      margin-top: 8px;
+    }
+    .comment-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+    .comment-action-btn {
+      background: none;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 2px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #475569;
+      transition: background 0.15s;
+    }
+    .comment-action-btn:hover { background: #f1f5f9; }
+    .comment-action-btn.liked { color: #2563eb; border-color: #2563eb; font-weight: 600; }
+    .reply-form {
+      margin-top: 10px;
+      padding: 10px;
+      background: #f8fafc;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+    }
+    .reply-form input, .reply-form textarea {
+      width: 100%; box-sizing: border-box; margin-bottom: 6px;
+    }
+    .reply-form textarea { min-height: 60px; }
+    .comment-sort-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .comment-sort-row select {
+      font-size: 13px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+    }
+    @media (prefers-color-scheme: dark) {
+      .comment-item { background: #1e293b; border-color: #334155; }
+      .comment-reply { background: #0f172a; border-left-color: #3b82f6; }
+      .comment-action-btn { color: #94a3b8; border-color: #334155; }
+      .comment-action-btn:hover { background: #1e293b; }
+      .reply-form { background: #0f172a; border-color: #334155; }
+      .comment-sort-row select { background: #1e293b; color: #e2e8f0; border-color: #334155; }
     }
 
     .site-metrics {
@@ -699,18 +755,26 @@ Important rules:
     <!-- Download / Comments section -->
     <div class="section">
       <h2>Comments</h2>
-    
-      <label for="commentName">Name:</label>
-      <input type="text" id="commentName" placeholder="Enter your name">
-    
+
+      <label for="commentName">Name: <span style="font-weight:normal;color:#64748b;font-size:13px;">(leave blank to post anonymously)</span></label>
+      <input type="text" id="commentName" placeholder="Anonymous">
+
       <label for="commentText">Comment:</label>
       <textarea id="commentText" placeholder="Share your thoughts here"></textarea>
-    
+
       <button type="button" onclick="submitComment()">Submit Comment</button>
-    
+
       <div id="commentStatus" class="note"></div>
-    
-      <div id="commentList"></div>
+
+      <div class="comment-sort-row">
+        <span style="font-size:13px;color:#64748b;">Sort by:</span>
+        <select id="commentSort" onchange="loadComments()">
+          <option value="latest">Latest</option>
+          <option value="oldest">Oldest</option>
+        </select>
+      </div>
+
+      <div id="commentList" class="comment-list-scroll"></div>
     </div>
   </div>
 
@@ -955,77 +1019,127 @@ Important rules:
       await loadSiteMetrics();
     }
 
-    async function submitComment() {
-      const nameInput = document.getElementById("commentName");
-      const commentInput = document.getElementById("commentText");
-      const statusBox = document.getElementById("commentStatus");
-    
-      const name = nameInput.value.trim();
-      const comment = commentInput.value.trim();
-    
-      if (!name || !comment) {
-        statusBox.innerHTML = "Please enter both name and comment.";
+    async function submitComment(parentId = null) {
+      const nameInputId = parentId ? `reply-name-${parentId}` : "commentName";
+      const textInputId = parentId ? `reply-text-${parentId}` : "commentText";
+      const statusId    = parentId ? `reply-status-${parentId}` : "commentStatus";
+
+      const name    = document.getElementById(nameInputId)?.value.trim() || "Anonymous";
+      const comment = document.getElementById(textInputId)?.value.trim();
+      const statusBox = document.getElementById(statusId);
+
+      if (!comment) {
+        if (statusBox) statusBox.innerHTML = "Please enter a comment.";
         return;
       }
-    
-      statusBox.innerHTML = "Submitting comment...";
-    
-      const { error } = await supabaseClient
-        .from("comments")
-        .insert([
-          {
-            name: name,
-            comment: comment
-          }
-        ]);
-    
+
+      if (statusBox) statusBox.innerHTML = "Submitting...";
+
+      const payload = { name, comment };
+      if (parentId) payload.parent_id = parentId;
+
+      const { error } = await supabaseClient.from("comments").insert([payload]);
+
       if (error) {
-        statusBox.innerHTML = "Comment could not be submitted.";
+        if (statusBox) statusBox.innerHTML = "Could not submit. Please try again.";
         console.error(error);
         return;
       }
-    
-      nameInput.value = "";
-      commentInput.value = "";
-    
-      statusBox.innerHTML = "Comment submitted. It will appear after approval.";
+
+      document.getElementById(textInputId).value = "";
+      if (!parentId) document.getElementById(nameInputId).value = "";
+      if (statusBox) statusBox.innerHTML = "Submitted! It will appear after approval.";
     }
-    
+
+    function _renderComment(item, replies, isReply) {
+      const likedIds = JSON.parse(localStorage.getItem("likedComments") || "[]");
+      const liked = likedIds.includes(String(item.id));
+      const repliesHtml = (replies || []).map(r => _renderComment(r, [], true)).join("");
+
+      return `
+        <div class="comment-item${isReply ? " comment-reply" : ""}" id="comment-${item.id}">
+          <strong>${escapeHTML(item.name || "Anonymous")}</strong>
+          <p>${escapeHTML(item.comment)}</p>
+          <div class="comment-actions">
+            <small>${new Date(item.created_at).toLocaleString()}</small>
+            <button class="comment-action-btn${liked ? " liked" : ""}" onclick="likeComment('${item.id}', this)">
+              👍 <span class="like-count">${item.likes || 0}</span>
+            </button>
+            <button class="comment-action-btn" onclick="toggleReplyForm('${item.id}')">💬 Reply</button>
+            <button class="comment-action-btn" onclick="shareComment('${item.id}')">🔗 Share</button>
+          </div>
+          <div id="reply-form-${item.id}" style="display:none;" class="reply-form">
+            <input type="text" id="reply-name-${item.id}" placeholder="Your name (or leave blank for Anonymous)">
+            <textarea id="reply-text-${item.id}" placeholder="Write a reply..."></textarea>
+            <div style="display:flex;gap:8px;">
+              <button type="button" onclick="submitComment('${item.id}')">Submit Reply</button>
+              <button type="button" onclick="toggleReplyForm('${item.id}')">Cancel</button>
+            </div>
+            <div id="reply-status-${item.id}" class="note"></div>
+          </div>
+          ${repliesHtml ? `<div class="replies-container">${repliesHtml}</div>` : ""}
+        </div>`;
+    }
+
     async function loadComments() {
       const commentList = document.getElementById("commentList");
-    
       if (!commentList) return;
-    
-      const { data, error } = await supabaseClient
-        .from("comments")
-        .select("name, comment, created_at")
-        .eq("approved", true)
-        .order("created_at", { ascending: false });
-    
-      if (error) {
+
+      const sort = document.getElementById("commentSort")?.value || "latest";
+      const ascending = sort === "oldest";
+
+      const [topRes, replyRes] = await Promise.all([
+        supabaseClient.from("comments").select("id, name, comment, created_at, likes, parent_id")
+          .eq("approved", true).is("parent_id", null).order("created_at", { ascending }),
+        supabaseClient.from("comments").select("id, name, comment, created_at, likes, parent_id")
+          .eq("approved", true).not("parent_id", "is", null).order("created_at", { ascending: true })
+      ]);
+
+      if (topRes.error) {
         commentList.innerHTML = "Could not load comments.";
-        console.error(error);
+        console.error(topRes.error);
         return;
       }
-    
-      if (!data || data.length === 0) {
-        commentList.innerHTML = `<p class="note">No comments yet.</p>`;
+
+      const data = topRes.data || [];
+      if (data.length === 0) {
+        commentList.innerHTML = `<p class="note">No comments yet. Be the first!</p>`;
         return;
       }
-    
-      commentList.innerHTML = "";
-    
-      data.forEach((item) => {
-        commentList.innerHTML += `
-          <div class="comment-item">
-            <strong>${escapeHTML(item.name)}</strong>
-            <p>${escapeHTML(item.comment)}</p>
-            <small>${new Date(item.created_at).toLocaleString()}</small>
-          </div>
-        `;
+
+      const replyMap = {};
+      (replyRes.data || []).forEach(r => {
+        if (!replyMap[r.parent_id]) replyMap[r.parent_id] = [];
+        replyMap[r.parent_id].push(r);
       });
+
+      commentList.innerHTML = data.map(item => _renderComment(item, replyMap[item.id] || [], false)).join("");
     }
-    
+
+    async function likeComment(id, btn) {
+      const likedIds = JSON.parse(localStorage.getItem("likedComments") || "[]");
+      if (likedIds.includes(String(id))) return;
+
+      likedIds.push(String(id));
+      localStorage.setItem("likedComments", JSON.stringify(likedIds));
+      btn.classList.add("liked");
+      const countEl = btn.querySelector(".like-count");
+      const newCount = (parseInt(countEl?.textContent) || 0) + 1;
+      if (countEl) countEl.textContent = newCount;
+
+      await supabaseClient.from("comments").update({ likes: newCount }).eq("id", id);
+    }
+
+    function shareComment(id) {
+      const url = `${location.origin}${location.pathname}#comment-${id}`;
+      navigator.clipboard.writeText(url).then(() => alert("Comment link copied to clipboard!"));
+    }
+
+    function toggleReplyForm(id) {
+      const form = document.getElementById(`reply-form-${id}`);
+      if (form) form.style.display = form.style.display === "none" ? "block" : "none";
+    }
+
     window.addEventListener("load", loadComments);
     window.addEventListener("load", recordPageView);
     window.addEventListener("load", () => loadDefaultPersonaPool().catch(() => {}));
