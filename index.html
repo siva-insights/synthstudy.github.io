@@ -1079,8 +1079,10 @@ Important rules:
       const payload = { name, comment };
       if (parentId) payload.parent_id = parentId;
 
-      const { data: inserted, error } = await supabaseClient
-        .from("comments").insert([payload]).select("id").single();
+      const newId = crypto.randomUUID();
+      payload.id = newId;
+
+      const { error } = await supabaseClient.from("comments").insert([payload]);
 
       if (error) {
         if (statusBox) statusBox.innerHTML = "Could not submit. Please try again.";
@@ -1088,11 +1090,9 @@ Important rules:
         return;
       }
 
-      if (inserted?.id) {
-        const myIds = JSON.parse(localStorage.getItem("myCommentIds") || "[]");
-        myIds.push(String(inserted.id));
-        localStorage.setItem("myCommentIds", JSON.stringify(myIds));
-      }
+      const myIds = JSON.parse(localStorage.getItem("myCommentIds") || "[]");
+      myIds.push(newId);
+      localStorage.setItem("myCommentIds", JSON.stringify(myIds));
 
       document.getElementById(textInputId).value = "";
       if (!parentId) document.getElementById(nameInputId).value = "";
@@ -1120,7 +1120,6 @@ Important rules:
                 👍 <span class="like-count">${item.likes || 0}</span>
               </button>
               <button class="comment-action-btn" onclick="toggleReplyForm('${item.id}')">💬 Reply</button>
-              <button class="comment-action-btn" onclick="shareComment('${item.id}')">🔗 Share</button>
               ${isOwn ? `
               <button class="comment-action-btn" onclick="toggleEditForm('${item.id}')">✏️ Edit</button>
               <button class="comment-action-btn" style="color:#ef4444;" onclick="deleteComment('${item.id}')">🗑️ Delete</button>` : ""}
