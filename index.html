@@ -269,15 +269,17 @@
       gap: 8px;
       margin-bottom: 2px;
     }
-    .comment-sort-row select {
-      font-size: 13px;
-      padding: 4px 10px;
-      border-radius: 6px;
+    .comment-sort-toggle {
+      background: none;
       border: 1px solid #cbd5e1;
-      background: #fff;
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-size: 13px;
       color: #374151;
       cursor: pointer;
+      font-weight: 500;
     }
+    .comment-sort-toggle:hover { background: #f1f5f9; }
     /* LinkedIn-style comment input */
     .comment-input-row {
       display: flex;
@@ -341,22 +343,16 @@
       transition: border-color 0.15s, color 0.15s;
     }
     .comment-cancel-btn:hover { border-color: #94a3b8; color: #0f172a; }
-    @media (prefers-color-scheme: dark) {
-      .comment-item { background: #1e293b; border-color: #334155; }
-      .comment-author { color: #f1f5f9; }
-      .comment-text { color: #cbd5e1; }
-      .comment-reply { background: #0f172a; border-left-color: #3b82f6; }
-      .comment-action-btn { color: #94a3b8; }
-      .comment-action-btn:hover { background: #334155; color: #f1f5f9; }
-      .comment-action-btn.liked { color: #60a5fa; }
-      .comment-sort-row select { background: #1e293b; color: #e2e8f0; border-color: #334155; }
-      .comment-input-pill { background: #1e293b; border-color: #334155; color: #e2e8f0; }
-      .comment-input-pill:focus { border-color: #3b82f6; }
-      .comment-name-pill { background: #1e293b; border-color: #334155; color: #e2e8f0; }
-      .comment-name-pill:focus { border-color: #3b82f6; }
-      .comment-cancel-btn { border-color: #334155; color: #94a3b8; }
-      .comment-cancel-btn:hover { border-color: #64748b; color: #e2e8f0; }
-    }
+    /* Comment cards always use light theme for readability */
+    .comment-item { background: #fff !important; border-color: #e2e8f0 !important; }
+    .comment-reply { background: #f8fafc !important; }
+    .comment-author { color: #0f172a !important; }
+    .comment-text { color: #334155 !important; }
+    .comment-action-btn { color: #64748b !important; }
+    .comment-action-btn:hover { background: #f1f5f9 !important; color: #0f172a !important; }
+    .comment-action-btn.liked { color: #2563eb !important; }
+    .comment-input-pill { background: #fff !important; color: #0f172a !important; border-color: #cbd5e1; }
+    .comment-name-pill { background: #fff !important; color: #0f172a !important; border-color: #cbd5e1; }
 
     .site-metrics {
       position: fixed;
@@ -882,11 +878,7 @@ Important rules:
       </div>
 
       <div class="comment-sort-row">
-        <span style="font-size:13px;color:#64748b;">Sort by:</span>
-        <select id="commentSort" onchange="loadComments()">
-          <option value="latest">Latest</option>
-          <option value="oldest">Oldest</option>
-        </select>
+        <button id="commentSortBtn" class="comment-sort-toggle" onclick="toggleCommentSort()" title="Toggle sort order">&#8595; Latest</button>
       </div>
 
       <div id="commentList" class="comment-list-scroll"></div>
@@ -1175,6 +1167,7 @@ Important rules:
       } else {
         collapseMainInput();
       }
+      setTimeout(loadComments, 400);
     }
 
     function _renderComment(item, replies, isReply) {
@@ -1229,12 +1222,19 @@ Important rules:
         </div>`;
     }
 
+    let _commentSortAsc = false;
+    function toggleCommentSort() {
+      _commentSortAsc = !_commentSortAsc;
+      const btn = document.getElementById("commentSortBtn");
+      if (btn) btn.innerHTML = _commentSortAsc ? "&#8593; Oldest" : "&#8595; Latest";
+      loadComments();
+    }
+
     async function loadComments() {
       const commentList = document.getElementById("commentList");
       if (!commentList) return;
 
-      const sort = document.getElementById("commentSort")?.value || "latest";
-      const ascending = sort === "oldest";
+      const ascending = _commentSortAsc;
 
       // Fetch all approved comments; filter top-level vs replies client-side
       // so the query works even before the parent_id column migration is run.
@@ -1281,16 +1281,25 @@ Important rules:
 
     async function likeComment(id, btn) {
       const likedIds = JSON.parse(localStorage.getItem("likedComments") || "[]");
-      if (likedIds.includes(String(id))) return;
-
-      likedIds.push(String(id));
-      localStorage.setItem("likedComments", JSON.stringify(likedIds));
-      btn.classList.add("liked");
       const countEl = btn.querySelector(".like-count");
-      const newCount = (parseInt(countEl?.textContent) || 0) + 1;
-      if (countEl) countEl.textContent = newCount;
+      const currentCount = parseInt(countEl?.textContent) || 0;
 
-      await supabaseClient.from("comments").update({ likes: newCount }).eq("id", id);
+      if (likedIds.includes(String(id))) {
+        // Unlike
+        localStorage.setItem("likedComments", JSON.stringify(likedIds.filter(i => i !== String(id))));
+        btn.classList.remove("liked");
+        const newCount = Math.max(0, currentCount - 1);
+        if (countEl) countEl.textContent = newCount;
+        await supabaseClient.from("comments").update({ likes: newCount }).eq("id", id);
+      } else {
+        // Like
+        likedIds.push(String(id));
+        localStorage.setItem("likedComments", JSON.stringify(likedIds));
+        btn.classList.add("liked");
+        const newCount = currentCount + 1;
+        if (countEl) countEl.textContent = newCount;
+        await supabaseClient.from("comments").update({ likes: newCount }).eq("id", id);
+      }
     }
 
     function expandMainInput() {
