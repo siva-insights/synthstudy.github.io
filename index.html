@@ -1079,7 +1079,8 @@ Important rules:
       const payload = { name, comment };
       if (parentId) payload.parent_id = parentId;
 
-      const { error } = await supabaseClient.from("comments").insert([payload]);
+      const { data: inserted, error } = await supabaseClient
+        .from("comments").insert([payload]).select("id").single();
 
       if (error) {
         if (statusBox) statusBox.innerHTML = "Could not submit. Please try again.";
@@ -1087,15 +1088,23 @@ Important rules:
         return;
       }
 
+      if (inserted?.id) {
+        const myIds = JSON.parse(localStorage.getItem("myCommentIds") || "[]");
+        myIds.push(String(inserted.id));
+        localStorage.setItem("myCommentIds", JSON.stringify(myIds));
+      }
+
       document.getElementById(textInputId).value = "";
       if (!parentId) document.getElementById(nameInputId).value = "";
-      if (statusBox) statusBox.innerHTML = "Submitted! It will appear after approval.";
+      if (statusBox) statusBox.innerHTML = parentId ? "Reply submitted!" : "Comment submitted!";
     }
 
     function _renderComment(item, replies, isReply) {
       const likedIds = JSON.parse(localStorage.getItem("likedComments") || "[]");
-      const liked = likedIds.includes(String(item.id));
-      const name = item.name || "Anonymous";
+      const myIds    = JSON.parse(localStorage.getItem("myCommentIds")  || "[]");
+      const liked  = likedIds.includes(String(item.id));
+      const isOwn  = myIds.includes(String(item.id));
+      const name   = item.name || "Anonymous";
       const initials = name.split(" ").map(w => w[0]).join("").slice(0, 2);
       const repliesHtml = (replies || []).map(r => _renderComment(r, [], true)).join("");
 
@@ -1105,13 +1114,24 @@ Important rules:
           <div class="comment-body">
             <div class="comment-author">${escapeHTML(name)}</div>
             <div class="comment-meta">${new Date(item.created_at).toLocaleString()}</div>
-            <div class="comment-text">${escapeHTML(item.comment)}</div>
+            <div class="comment-text" id="comment-text-${item.id}">${escapeHTML(item.comment)}</div>
             <div class="comment-actions">
               <button class="comment-action-btn${liked ? " liked" : ""}" onclick="likeComment('${item.id}', this)">
                 👍 <span class="like-count">${item.likes || 0}</span>
               </button>
               <button class="comment-action-btn" onclick="toggleReplyForm('${item.id}')">💬 Reply</button>
               <button class="comment-action-btn" onclick="shareComment('${item.id}')">🔗 Share</button>
+              ${isOwn ? `
+              <button class="comment-action-btn" onclick="toggleEditForm('${item.id}')">✏️ Edit</button>
+              <button class="comment-action-btn" style="color:#ef4444;" onclick="deleteComment('${item.id}')">🗑️ Delete</button>` : ""}
+            </div>
+            <div id="edit-form-${item.id}" style="display:none;" class="reply-form">
+              <textarea id="edit-text-${item.id}">${escapeHTML(item.comment)}</textarea>
+              <div style="display:flex;gap:8px;">
+                <button type="button" onclick="saveEdit('${item.id}')">Save</button>
+                <button type="button" onclick="toggleEditForm('${item.id}')">Cancel</button>
+              </div>
+              <div id="edit-status-${item.id}" class="note"></div>
             </div>
             <div id="reply-form-${item.id}" style="display:none;" class="reply-form">
               <input type="text" id="reply-name-${item.id}" placeholder="Your name (or leave blank for Anonymous)">
@@ -1199,6 +1219,35 @@ Important rules:
     function toggleReplyForm(id) {
       const form = document.getElementById(`reply-form-${id}`);
       if (form) form.style.display = form.style.display === "none" ? "block" : "none";
+    }
+
+    function toggleEditForm(id) {
+      const form = document.getElementById(`edit-form-${id}`);
+      if (form) form.style.display = form.style.display === "none" ? "block" : "none";
+    }
+
+    async function saveEdit(id) {
+      const textarea  = document.getElementById(`edit-text-${id}`);
+      const statusBox = document.getElementById(`edit-status-${id}`);
+      const newText   = textarea?.value.trim();
+      if (!newText) { if (statusBox) statusBox.innerHTML = "Comment cannot be empty."; return; }
+      if (statusBox) statusBox.innerHTML = "Saving...";
+      const { error } = await supabaseClient.from("comments").update({ comment: newText }).eq("id", id);
+      if (error) { if (statusBox) statusBox.innerHTML = "Could not save. Please try again."; return; }
+      const textEl = document.getElementById(`comment-text-${id}`);
+      if (textEl) textEl.textContent = newText;
+      toggleEditForm(id);
+      if (statusBox) statusBox.innerHTML = "";
+    }
+
+    async function deleteComment(id) {
+      if (!confirm("Delete this comment?")) return;
+      const { error } = await supabaseClient.from("comments").delete().eq("id", id);
+      if (error) { alert("Could not delete. Please try again."); return; }
+      const el = document.getElementById(`comment-${id}`);
+      if (el) el.remove();
+      const myIds = JSON.parse(localStorage.getItem("myCommentIds") || "[]");
+      localStorage.setItem("myCommentIds", JSON.stringify(myIds.filter(i => i !== String(id))));
     }
 
     window.addEventListener("load", loadComments);
