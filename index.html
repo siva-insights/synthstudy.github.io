@@ -278,6 +278,69 @@
       color: #374151;
       cursor: pointer;
     }
+    /* LinkedIn-style comment input */
+    .comment-input-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .comment-input-avatar-sm {
+      flex-shrink: 0;
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      background: #64748b;
+      color: #fff;
+      font-weight: 700; font-size: 15px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .comment-input-wrap { flex: 1; min-width: 0; }
+    .comment-input-pill {
+      width: 100%; box-sizing: border-box;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 24px;
+      padding: 9px 16px;
+      font-size: 14px;
+      resize: none;
+      outline: none;
+      background: #fff;
+      color: #0f172a;
+      line-height: 1.5;
+      transition: border-color 0.2s, border-radius 0.2s;
+      overflow: hidden;
+      display: block;
+    }
+    .comment-input-pill:focus { border-color: #2563eb; border-radius: 12px; }
+    .comment-input-expanded { margin-top: 8px; }
+    .comment-name-pill {
+      width: 100%; box-sizing: border-box;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 13px;
+      outline: none;
+      color: #0f172a;
+      background: #fff;
+      margin-bottom: 8px;
+      transition: border-color 0.2s;
+      display: block;
+    }
+    .comment-name-pill:focus { border-color: #2563eb; }
+    .comment-input-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .comment-post-btn {
+      background: #2563eb; color: #fff; border: none;
+      border-radius: 20px; padding: 7px 20px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .comment-post-btn:hover { background: #1d4ed8; }
+    .comment-cancel-btn {
+      background: none; border: 1.5px solid #cbd5e1;
+      border-radius: 20px; padding: 7px 16px;
+      font-size: 14px; color: #64748b; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .comment-cancel-btn:hover { border-color: #94a3b8; color: #0f172a; }
     @media (prefers-color-scheme: dark) {
       .comment-item { background: #1e293b; border-color: #334155; }
       .comment-author { color: #f1f5f9; }
@@ -286,8 +349,13 @@
       .comment-action-btn { color: #94a3b8; }
       .comment-action-btn:hover { background: #334155; color: #f1f5f9; }
       .comment-action-btn.liked { color: #60a5fa; }
-      .reply-form { background: #0f172a; border-color: #334155; }
       .comment-sort-row select { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+      .comment-input-pill { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+      .comment-input-pill:focus { border-color: #3b82f6; }
+      .comment-name-pill { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+      .comment-name-pill:focus { border-color: #3b82f6; }
+      .comment-cancel-btn { border-color: #334155; color: #94a3b8; }
+      .comment-cancel-btn:hover { border-color: #64748b; color: #e2e8f0; }
     }
 
     .site-metrics {
@@ -797,15 +865,21 @@ Important rules:
     <div class="section">
       <h2>Comments</h2>
 
-      <label for="commentName">Name: <span style="font-weight:normal;color:#64748b;font-size:13px;">(leave blank to post anonymously)</span></label>
-      <input type="text" id="commentName" placeholder="Anonymous">
-
-      <label for="commentText">Comment:</label>
-      <textarea id="commentText" placeholder="Share your thoughts here"></textarea>
-
-      <button type="button" onclick="submitComment()">Submit Comment</button>
-
-      <div id="commentStatus" class="note"></div>
+      <div class="comment-input-row">
+        <div class="comment-input-avatar-sm">?</div>
+        <div class="comment-input-wrap">
+          <textarea class="comment-input-pill" id="commentText" placeholder="Share your thoughts here..."
+            rows="1" onfocus="expandMainInput()" oninput="autoResizeTA(this)"></textarea>
+          <div class="comment-input-expanded" id="commentInputExpanded" style="display:none;">
+            <input type="text" class="comment-name-pill" id="commentName" placeholder="Your name (leave blank for Anonymous)">
+            <div class="comment-input-actions">
+              <button class="comment-cancel-btn" type="button" onclick="collapseMainInput()">Cancel</button>
+              <button class="comment-post-btn" type="button" onclick="submitComment()">Post</button>
+            </div>
+            <div id="commentStatus" class="note" style="margin-top:4px;"></div>
+          </div>
+        </div>
+      </div>
 
       <div class="comment-sort-row">
         <span style="font-size:13px;color:#64748b;">Sort by:</span>
@@ -1094,9 +1168,13 @@ Important rules:
       myIds.push(newId);
       localStorage.setItem("myCommentIds", JSON.stringify(myIds));
 
-      document.getElementById(textInputId).value = "";
-      if (!parentId) document.getElementById(nameInputId).value = "";
-      if (statusBox) statusBox.innerHTML = parentId ? "Reply submitted!" : "Comment submitted!";
+      if (parentId) {
+        document.getElementById(textInputId).value = "";
+        document.getElementById(nameInputId).value = "";
+        if (statusBox) statusBox.innerHTML = "Reply submitted!";
+      } else {
+        collapseMainInput();
+      }
     }
 
     function _renderComment(item, replies, isReply) {
@@ -1124,22 +1202,27 @@ Important rules:
               <button class="comment-action-btn" onclick="toggleEditForm('${item.id}')">✏️ Edit</button>
               <button class="comment-action-btn" style="color:#ef4444;" onclick="deleteComment('${item.id}')">🗑️ Delete</button>` : ""}
             </div>
-            <div id="edit-form-${item.id}" style="display:none;" class="reply-form">
-              <textarea id="edit-text-${item.id}">${escapeHTML(item.comment)}</textarea>
-              <div style="display:flex;gap:8px;">
-                <button type="button" onclick="saveEdit('${item.id}')">Save</button>
-                <button type="button" onclick="toggleEditForm('${item.id}')">Cancel</button>
+            <div id="edit-form-${item.id}" style="display:none;margin-top:8px;">
+              <textarea class="comment-input-pill" id="edit-text-${item.id}" rows="2" oninput="autoResizeTA(this)">${escapeHTML(item.comment)}</textarea>
+              <div class="comment-input-actions" style="margin-top:6px;">
+                <button class="comment-cancel-btn" type="button" onclick="toggleEditForm('${item.id}')">Cancel</button>
+                <button class="comment-post-btn" type="button" onclick="saveEdit('${item.id}')">Save</button>
               </div>
-              <div id="edit-status-${item.id}" class="note"></div>
+              <div id="edit-status-${item.id}" class="note" style="margin-top:4px;"></div>
             </div>
-            <div id="reply-form-${item.id}" style="display:none;" class="reply-form">
-              <input type="text" id="reply-name-${item.id}" placeholder="Your name (or leave blank for Anonymous)">
-              <textarea id="reply-text-${item.id}" placeholder="Write a reply..."></textarea>
-              <div style="display:flex;gap:8px;">
-                <button type="button" onclick="submitComment('${item.id}')">Submit Reply</button>
-                <button type="button" onclick="toggleReplyForm('${item.id}')">Cancel</button>
+            <div id="reply-form-${item.id}" style="display:none;margin-top:10px;" class="comment-input-row">
+              <div class="comment-input-avatar-sm" style="width:32px;height:32px;font-size:12px;">?</div>
+              <div class="comment-input-wrap">
+                <textarea class="comment-input-pill" id="reply-text-${item.id}" placeholder="Write a reply..." rows="2" oninput="autoResizeTA(this)"></textarea>
+                <div style="margin-top:8px;">
+                  <input type="text" class="comment-name-pill" id="reply-name-${item.id}" placeholder="Your name (leave blank for Anonymous)">
+                  <div class="comment-input-actions">
+                    <button class="comment-cancel-btn" type="button" onclick="toggleReplyForm('${item.id}')">Cancel</button>
+                    <button class="comment-post-btn" type="button" onclick="submitComment('${item.id}')">Post</button>
+                  </div>
+                </div>
+                <div id="reply-status-${item.id}" class="note" style="margin-top:4px;"></div>
               </div>
-              <div id="reply-status-${item.id}" class="note"></div>
             </div>
             ${repliesHtml ? `<div class="replies-container">${repliesHtml}</div>` : ""}
           </div>
@@ -1210,9 +1293,23 @@ Important rules:
       await supabaseClient.from("comments").update({ likes: newCount }).eq("id", id);
     }
 
-    function shareComment(id) {
-      const url = `${location.origin}${location.pathname}#comment-${id}`;
-      navigator.clipboard.writeText(url).then(() => alert("Comment link copied to clipboard!"));
+    function expandMainInput() {
+      document.getElementById("commentInputExpanded").style.display = "block";
+      const ta = document.getElementById("commentText");
+      if (ta) { ta.style.borderRadius = "12px"; if (ta.rows < 3) ta.rows = 3; }
+    }
+    function collapseMainInput() {
+      document.getElementById("commentInputExpanded").style.display = "none";
+      const ta = document.getElementById("commentText");
+      if (ta) { ta.style.borderRadius = ""; ta.rows = 1; ta.value = ""; ta.style.height = ""; }
+      const status = document.getElementById("commentStatus");
+      if (status) status.innerHTML = "";
+      const name = document.getElementById("commentName");
+      if (name) name.value = "";
+    }
+    function autoResizeTA(el) {
+      el.style.height = "auto";
+      el.style.height = el.scrollHeight + "px";
     }
 
     function toggleReplyForm(id) {
