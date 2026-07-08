@@ -1170,14 +1170,17 @@ Important rules:
       setTimeout(loadComments, 400);
     }
 
-    function _renderComment(item, replyMap, isReply) {
+    function _renderComment(item, flatReplies, isReply) {
       const likedIds = JSON.parse(localStorage.getItem("likedComments") || "[]");
       const myIds    = JSON.parse(localStorage.getItem("myCommentIds")  || "[]");
       const liked  = likedIds.includes(String(item.id));
       const isOwn  = myIds.includes(String(item.id));
       const name   = item.name || "Anonymous";
       const initials = name.split(" ").map(w => w[0]).join("").slice(0, 2);
-      const repliesHtml = (replyMap[item.id] || []).map(r => _renderComment(r, replyMap, true)).join("");
+      // Only top-level comments render their flat reply list; replies never recurse
+      const repliesHtml = !isReply
+        ? (flatReplies || []).map(r => _renderComment(r, [], true)).join("")
+        : "";
 
       return `
         <div class="comment-item${isReply ? " comment-reply" : ""}" id="comment-${item.id}">
@@ -1276,7 +1279,19 @@ Important rules:
         replyMap[r.parent_id].push(r);
       });
 
-      commentList.innerHTML = data.map(item => _renderComment(item, replyMap, false)).join("");
+      // Collect ALL descendants of a comment flat (BFS), sorted by time
+      function getAllDescendants(id) {
+        const result = [];
+        const queue = [...(replyMap[id] || [])];
+        while (queue.length) {
+          const r = queue.shift();
+          result.push(r);
+          if (replyMap[r.id]) queue.push(...replyMap[r.id]);
+        }
+        return result.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      }
+
+      commentList.innerHTML = data.map(item => _renderComment(item, getAllDescendants(item.id), false)).join("");
     }
 
     async function likeComment(id, btn) {
@@ -1347,12 +1362,22 @@ Important rules:
 
     async function deleteComment(id) {
       if (!confirm("Delete this comment?")) return;
-      const { error } = await supabaseClient.from("comments").delete().eq("id", id);
-      if (error) { alert("Could not delete. Please try again."); return; }
-      const el = document.getElementById(`comment-${id}`);
-      if (el) el.remove();
+      // Collect all descendants (BFS) so we can delete children before parent
+      const toDelete = [];
+      const queue = [id];
+      while (queue.length) {
+        const cur = queue.shift();
+        toDelete.push(cur);
+        const { data: children } = await supabaseClient.from("comments").select("id").eq("parent_id", cur);
+        for (const c of (children || [])) queue.push(c.id);
+      }
+      // Delete from leaves to root
+      for (const cid of toDelete.reverse()) {
+        await supabaseClient.from("comments").delete().eq("id", cid);
+      }
+      await loadComments();
       const myIds = JSON.parse(localStorage.getItem("myCommentIds") || "[]");
-      localStorage.setItem("myCommentIds", JSON.stringify(myIds.filter(i => i !== String(id))));
+      localStorage.setItem("myCommentIds", JSON.stringify(myIds.filter(i => !toDelete.includes(i))));
     }
 
     window.addEventListener("load", loadComments);
