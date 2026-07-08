@@ -460,12 +460,15 @@ def call_ollama(model_name, prompt, temperature, images=None, seed=None):
         options["seed"] = seed
 
     if images:
+        content = [{"type": "text", "text": prompt}] + [
+            {"type": "image_url", "image_url": {"url": f"data:{img.mimeType};base64,{img.base64}"}}
+            for img in images.values()
+        ]
         response = requests.post(
-            f"{OLLAMA_URL}/api/chat",
+            f"{OLLAMA_URL}/v1/chat/completions",
             json={
                 "model": model_name,
-                "messages": [{"role": "user", "content": prompt,
-                               "images": [img.base64 for img in images.values()]}],
+                "messages": [{"role": "user", "content": content}],
                 "stream": False,
                 "options": options
             },
@@ -473,9 +476,9 @@ def call_ollama(model_name, prompt, temperature, images=None, seed=None):
         )
         if not response.ok:
             raise RuntimeError(
-                f"Ollama /api/chat error {response.status_code}: {response.text}"
+                f"Ollama vision error {response.status_code}: {response.text}"
             )
-        return response.json().get("message", {}).get("content", "")
+        return response.json()["choices"][0]["message"]["content"]
     else:
         response = requests.post(
             f"{OLLAMA_URL}/api/generate",
