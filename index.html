@@ -1088,27 +1088,42 @@ Important rules:
       const sort = document.getElementById("commentSort")?.value || "latest";
       const ascending = sort === "oldest";
 
-      const [topRes, replyRes] = await Promise.all([
-        supabaseClient.from("comments").select("id, name, comment, created_at, likes, parent_id")
-          .eq("approved", true).is("parent_id", null).order("created_at", { ascending }),
-        supabaseClient.from("comments").select("id, name, comment, created_at, likes, parent_id")
-          .eq("approved", true).not("parent_id", "is", null).order("created_at", { ascending: true })
-      ]);
+      // Fetch all approved comments; filter top-level vs replies client-side
+      // so the query works even before the parent_id column migration is run.
+      const { data: allData, error: allError } = await supabaseClient
+        .from("comments")
+        .select("id, name, comment, created_at, likes, parent_id")
+        .eq("approved", true)
+        .order("created_at", { ascending });
 
-      if (topRes.error) {
-        commentList.innerHTML = "Could not load comments.";
-        console.error(topRes.error);
+      if (allError) {
+        // Fallback: select only columns that always exist
+        const { data: fallback, error: fallbackError } = await supabaseClient
+          .from("comments")
+          .select("id, name, comment, created_at")
+          .eq("approved", true)
+          .order("created_at", { ascending });
+        if (fallbackError) {
+          commentList.innerHTML = "Could not load comments.";
+          console.error(fallbackError);
+          return;
+        }
+        commentList.innerHTML = (fallback || []).length === 0
+          ? `<p class="note">No comments yet. Be the first!</p>`
+          : (fallback || []).map(item => _renderComment(item, [], false)).join("");
         return;
       }
 
-      const data = topRes.data || [];
+      const data = (allData || []).filter(c => !c.parent_id);
+      const replies = (allData || []).filter(c => !!c.parent_id);
+
       if (data.length === 0) {
         commentList.innerHTML = `<p class="note">No comments yet. Be the first!</p>`;
         return;
       }
 
       const replyMap = {};
-      (replyRes.data || []).forEach(r => {
+      replies.forEach(r => {
         if (!replyMap[r.parent_id]) replyMap[r.parent_id] = [];
         replyMap[r.parent_id].push(r);
       });
