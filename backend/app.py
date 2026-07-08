@@ -459,24 +459,29 @@ def call_ollama(model_name, prompt, temperature, images=None, seed=None):
     if seed is not None:
         options["seed"] = seed
 
-    payload = {
-        "model": model_name,
-        "prompt": prompt,
-        "stream": False,
-        "options": options
-    }
-
     if images:
-        payload["images"] = [img.base64 for img in images.values()]
-
-    response = requests.post(
-        f"{OLLAMA_URL}/api/generate",
-        json=payload,
-        timeout=900
-    )
-
-    response.raise_for_status()
-    return response.json().get("response", "")
+        # /api/chat supports images for modern multimodal models (gemma3, llava, etc.)
+        response = requests.post(
+            f"{OLLAMA_URL}/api/chat",
+            json={
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt,
+                               "images": [img.base64 for img in images.values()]}],
+                "stream": False,
+                "options": options
+            },
+            timeout=900
+        )
+        response.raise_for_status()
+        return response.json().get("message", {}).get("content", "")
+    else:
+        response = requests.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={"model": model_name, "prompt": prompt, "stream": False, "options": options},
+            timeout=900
+        )
+        response.raise_for_status()
+        return response.json().get("response", "")
 
 
 def parse_answers(raw_text, questions):
