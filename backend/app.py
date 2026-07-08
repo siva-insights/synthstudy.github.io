@@ -4,6 +4,7 @@ import re
 import sys
 import uuid
 import base64
+import io
 import random
 import shutil
 import subprocess
@@ -449,6 +450,16 @@ Important rules:
     return prompt
 
 
+def _to_jpeg_base64(b64_str: str) -> str:
+    """Convert any image format to RGB JPEG base64 so Ollama's decoder always accepts it."""
+    from PIL import Image
+    raw = base64.b64decode(b64_str)
+    img = Image.open(io.BytesIO(raw)).convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=90)
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
 def call_ollama(model_name, prompt, temperature, images=None, seed=None):
     num_ctx = estimate_num_ctx(prompt)
 
@@ -467,7 +478,7 @@ def call_ollama(model_name, prompt, temperature, images=None, seed=None):
                 "messages": [{
                     "role": "user",
                     "content": prompt,
-                    "images": [img.base64 for img in images.values()]
+                    "images": [_to_jpeg_base64(img.base64) for img in images.values()]
                 }],
                 "stream": False,
                 "options": options

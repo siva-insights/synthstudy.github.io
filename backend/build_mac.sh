@@ -30,6 +30,7 @@ pyinstaller \
   --collect-all pandas \
   --collect-all openpyxl \
   --collect-all pyarrow \
+  --collect-all PIL \
   --exclude-module torch \
   --exclude-module torchvision \
   --exclude-module torchaudio \
