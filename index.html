@@ -1170,14 +1170,14 @@ Important rules:
       setTimeout(loadComments, 400);
     }
 
-    function _renderComment(item, replies, isReply) {
+    function _renderComment(item, replyMap, isReply) {
       const likedIds = JSON.parse(localStorage.getItem("likedComments") || "[]");
       const myIds    = JSON.parse(localStorage.getItem("myCommentIds")  || "[]");
       const liked  = likedIds.includes(String(item.id));
       const isOwn  = myIds.includes(String(item.id));
       const name   = item.name || "Anonymous";
       const initials = name.split(" ").map(w => w[0]).join("").slice(0, 2);
-      const repliesHtml = (replies || []).map(r => _renderComment(r, [], true)).join("");
+      const repliesHtml = (replyMap[item.id] || []).map(r => _renderComment(r, replyMap, true)).join("");
 
       return `
         <div class="comment-item${isReply ? " comment-reply" : ""}" id="comment-${item.id}">
@@ -1258,7 +1258,7 @@ Important rules:
         }
         commentList.innerHTML = (fallback || []).length === 0
           ? `<p class="note">No comments yet. Be the first!</p>`
-          : (fallback || []).map(item => _renderComment(item, [], false)).join("");
+          : (fallback || []).map(item => _renderComment(item, {}, false)).join("");
         return;
       }
 
@@ -1276,7 +1276,7 @@ Important rules:
         replyMap[r.parent_id].push(r);
       });
 
-      commentList.innerHTML = data.map(item => _renderComment(item, replyMap[item.id] || [], false)).join("");
+      commentList.innerHTML = data.map(item => _renderComment(item, replyMap, false)).join("");
     }
 
     async function likeComment(id, btn) {
