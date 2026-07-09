@@ -41,7 +41,12 @@ HISTORY_FILE = _APP_DIR / "generation_history.json"
 # FastAPI app setup + CORS
 app = FastAPI(title="OLSEDG Helper")
 
-ALLOWED_ORIGINS = {"https://synthstudy.vercel.app", "http://localhost:8000", "http://127.0.0.1:8000"}
+ALLOWED_ORIGINS = {
+    "https://synthstudy.vercel.app",
+    "https://synthstudy-git-pilot-siva-research.vercel.app",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+}
 
 app.add_middleware(
     CORSMiddleware,
