@@ -835,8 +835,6 @@ Important rules:
       <button type="button" onclick="showPreview(true)">Download Preview</button>
       <button type="button" onclick="downloadStudyInfo()">Download Study Info</button>
       <button type="button" onclick="generateResponses()">Generate Responses</button>
-      <button type="button" id="downloadLogBtn" onclick="downloadRunLog()" title="Download generation log as text file"
-        style="display:none;font-size:12px;padding:5px 12px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;">⬇ Logs</button>
     </div>
 
     <!-- Preview: populated dynamically by showPreview() / renderPreview() -->
@@ -925,8 +923,6 @@ Important rules:
       _log(`Mode      : ${context}`);
       _log(`Browser   : ${navigator.userAgent}`);
       _log(`─────────────────────────────────────────────`);
-      const btn = document.getElementById("downloadLogBtn");
-      if (btn) btn.style.display = "inline-block";
     }
 
     function _log(msg) {
@@ -3233,11 +3229,12 @@ Important rules:
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                 <div class="preview-title" style="margin-bottom:0;">Generation Failed</div>
                 <div style="display:flex;gap:6px;">
-                  <button onclick="downloadRunLog()" style="font-size:12px;padding:5px 12px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;">⬇ Logs</button>
-                  <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:5px 12px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;">🐛 Raise Issue Ticket</a>
+                  <button onclick="downloadRunLog()" style="font-size:12px;padding:0 12px;height:28px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">⬇ Logs</button>
+                  <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:0 12px;height:28px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">🐛 Raise Issue Ticket</a>
                 </div>
               </div>
               <p>${escapeHTML(error.message || "Could not load personas. Please check your internet connection and try again.")}</p>
+              <pre style="background:#0f172a;color:#fca5a5;font-size:12px;padding:12px;border-radius:6px;margin-top:10px;white-space:pre-wrap;">${_runLog.join("\n")}</pre>
             </div>`;
           return;
         }
@@ -3302,11 +3299,12 @@ Important rules:
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                 <div class="preview-title" style="margin-bottom:0;">Generation Failed</div>
                 <div style="display:flex;gap:6px;">
-                  <button onclick="downloadRunLog()" style="font-size:12px;padding:5px 12px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;">⬇ Logs</button>
-                  <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:5px 12px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;">🐛 Raise Issue Ticket</a>
+                  <button onclick="downloadRunLog()" style="font-size:12px;padding:0 12px;height:28px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">⬇ Logs</button>
+                  <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:0 12px;height:28px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">🐛 Raise Issue Ticket</a>
                 </div>
               </div>
               <p>Could not start generation. ${escapeHTML(data.message || "")}</p>
+              <pre style="background:#0f172a;color:#fca5a5;font-size:12px;padding:12px;border-radius:6px;margin-top:10px;white-space:pre-wrap;">${_runLog.join("\n")}</pre>
             </div>
           `;
           return;
@@ -3353,8 +3351,8 @@ Important rules:
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
               <div class="preview-title" style="margin-bottom:0;">Generation Failed</div>
               <div style="display:flex;gap:6px;">
-                <button onclick="downloadRunLog()" style="font-size:12px;padding:5px 12px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;">⬇ Logs</button>
-                <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:5px 12px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;">🐛 Raise Issue Ticket</a>
+                <button onclick="downloadRunLog()" style="font-size:12px;padding:0 12px;height:28px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">⬇ Logs</button>
+                <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:0 12px;height:28px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">🐛 Raise Issue Ticket</a>
               </div>
             </div>
             <p>OLSEDG Helper is not running or could not connect to Ollama.</p>
@@ -3492,11 +3490,12 @@ Important rules:
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                   <div class="preview-title" style="margin-bottom:0;">Generation Failed</div>
                   <div style="display:flex;gap:6px;">
-                    <button onclick="downloadRunLog()" style="font-size:12px;padding:5px 12px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;">⬇ Logs</button>
-                    <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:5px 12px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;">🐛 Raise Issue Ticket</a>
+                    <button onclick="downloadRunLog()" style="font-size:12px;padding:0 12px;height:28px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">⬇ Logs</button>
+                    <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:0 12px;height:28px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">🐛 Raise Issue Ticket</a>
                   </div>
                 </div>
                 <p>${escapeHTML(data.message)}</p>
+                <pre style="background:#0f172a;color:#fca5a5;font-size:12px;padding:12px;border-radius:6px;margin-top:10px;white-space:pre-wrap;">${_runLog.join("\n")}</pre>
               </div>
             `;
           }
@@ -3512,11 +3511,12 @@ Important rules:
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                 <div class="preview-title" style="margin-bottom:0;">Generation Failed</div>
                 <div style="display:flex;gap:6px;">
-                  <button onclick="downloadRunLog()" style="font-size:12px;padding:5px 12px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;">⬇ Logs</button>
-                  <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:5px 12px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;">🐛 Raise Issue Ticket</a>
+                  <button onclick="downloadRunLog()" style="font-size:12px;padding:0 12px;height:28px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">⬇ Logs</button>
+                  <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:0 12px;height:28px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">🐛 Raise Issue Ticket</a>
                 </div>
               </div>
               <p>Lost connection to OLSEDG Helper.</p>
+              <pre style="background:#0f172a;color:#fca5a5;font-size:12px;padding:12px;border-radius:6px;margin-top:10px;white-space:pre-wrap;">${_runLog.join("\n")}</pre>
             </div>
           `;
         }
@@ -4144,11 +4144,12 @@ Important rules:
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
               <div class="preview-title" style="margin-bottom:0;">Generation Failed</div>
               <div style="display:flex;gap:6px;">
-                <button onclick="downloadRunLog()" style="font-size:12px;padding:5px 12px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;">⬇ Logs</button>
-                <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:5px 12px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;">🐛 Raise Issue Ticket</a>
+                <button onclick="downloadRunLog()" style="font-size:12px;padding:0 12px;height:28px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">⬇ Logs</button>
+                <a href="https://github.com/siva-insights/synthstudy.github.io/issues" target="_blank" rel="noopener" style="font-size:12px;padding:0 12px;height:28px;background:#dc2626;color:#fff;border-radius:5px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;box-sizing:border-box;">🐛 Raise Issue Ticket</a>
               </div>
             </div>
             <p>${escapeHTML(message)}</p>
+            <pre style="background:#0f172a;color:#fca5a5;font-size:12px;padding:12px;border-radius:6px;margin-top:10px;white-space:pre-wrap;">${_runLog.join("\n")}</pre>
           </div>
         `;
       }
