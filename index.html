@@ -835,6 +835,8 @@ Important rules:
       <button type="button" onclick="showPreview(true)">Download Preview</button>
       <button type="button" onclick="downloadStudyInfo()">Download Study Info</button>
       <button type="button" onclick="generateResponses()">Generate Responses</button>
+      <button type="button" id="downloadLogBtn" onclick="downloadRunLog()" title="Download generation log as text file"
+        style="display:none;font-size:12px;padding:5px 12px;background:#475569;color:#fff;border:none;border-radius:5px;cursor:pointer;">⬇ Logs</button>
     </div>
 
     <!-- Preview: populated dynamically by showPreview() / renderPreview() -->
@@ -910,6 +912,46 @@ Important rules:
     let cloudGenerationRows = [];
     let cloudGenerationColumns = [];
     let cloudGenerationTimestamp = "";
+
+    // ── Run log (shared across local and cloud generation) ──────────────────
+    let _runLog = [];
+    let _runLogT0 = null;
+
+    function _initLog(context) {
+      _runLog = [];
+      _runLogT0 = Date.now();
+      _log(`=== SEDG GENERATION STARTED ===`);
+      _log(`Timestamp : ${new Date().toISOString()}`);
+      _log(`Mode      : ${context}`);
+      _log(`Browser   : ${navigator.userAgent}`);
+      _log(`─────────────────────────────────────────────`);
+      const btn = document.getElementById("downloadLogBtn");
+      if (btn) btn.style.display = "inline-block";
+    }
+
+    function _log(msg) {
+      const elapsed = _runLogT0 !== null ? ((Date.now() - _runLogT0) / 1000).toFixed(2) : "?.??";
+      const line = `[+${elapsed}s] ${msg}`;
+      _runLog.push(line);
+      console.log("[SEDG]", line);
+      const logEl = document.getElementById("genDebugLog");
+      if (logEl) { logEl.textContent = _runLog.join("\n"); logEl.scrollTop = logEl.scrollHeight; }
+    }
+
+    function downloadRunLog() {
+      if (!_runLog.length) { alert("No log yet — click Generate Responses first."); return; }
+      _log("=== LOG DOWNLOADED BY USER ===");
+      const blob = new Blob([_runLog.join("\n")], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `SEDG_log_${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     // Seeded PRNG (mulberry32) — deterministic float generator so preview and generation
     // can draw the same shuffled order/condition assignment for a given seed.
@@ -3089,20 +3131,9 @@ Important rules:
       updateTotalSamples();
 
       const previewArea = document.getElementById("previewArea");
-      const t0 = Date.now();
 
-      const logLines = [];
-      function addLog(msg) {
-        const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
-        const line = `[+${elapsed}s] ${msg}`;
-        logLines.push(line);
-        console.log(line);
-        const logEl = document.getElementById("genDebugLog");
-        if (logEl) {
-          logEl.textContent = logLines.join("\n");
-          logEl.scrollTop = logEl.scrollHeight;
-        }
-      }
+      _initLog("Local (OLSEDG Helper)");
+      const addLog = _log;
 
       previewArea.innerHTML = `
         <div class="preview-box">
@@ -3284,7 +3315,7 @@ Important rules:
           <div class="preview-box">
             <div class="preview-title">Generation Failed</div>
             <p>OLSEDG Helper is not running or could not connect to Ollama.</p>
-            <pre style="background:#0f172a;color:#fca5a5;font-size:12px;padding:12px;border-radius:6px;margin-top:10px;white-space:pre-wrap;">${logLines.join("\n")}</pre>
+            <pre style="background:#0f172a;color:#fca5a5;font-size:12px;padding:12px;border-radius:6px;margin-top:10px;white-space:pre-wrap;">${_runLog.join("\n")}</pre>
           </div>
         `;
       }
@@ -3990,13 +4021,15 @@ Important rules:
     }
 
     function showCloudGenerationError(message) {
+      _log(`GENERATION FAILED: ${message}`);
+      _log("=== END OF RUN (error) ===");
       const previewArea = document.getElementById("previewArea");
-
       if (previewArea) {
         previewArea.innerHTML = `
           <div class="preview-box">
             <div class="preview-title">Generation Failed</div>
             <p>${escapeHTML(message)}</p>
+            <p style="font-size:12px;color:#64748b;margin-top:8px;">Click <strong>⬇ Logs</strong> above for details.</p>
           </div>
         `;
       }
@@ -4005,6 +4038,8 @@ Important rules:
     // Generation orchestration — Cloud: top-level cloud generation entry point
     async function generateCloudResponses() {
       const previewArea = document.getElementById("previewArea");
+
+      _initLog("Cloud");
 
       if (previewArea) {
         previewArea.innerHTML = `
@@ -4020,12 +4055,16 @@ Important rules:
       const sampleCount = parseInt(document.getElementById("sampleCount").value);
       const temperature = parseFloat(document.getElementById("temperature").value) || 0;
 
+      _log(`Study: "${studyName}" | Conditions: ${conditionCount} | Samples: ${sampleCount} | Questions: ${questionNumbers.length} | Temp: ${temperature}`);
+
       if (!studyName || !conditionCount || conditionCount < 1 || !sampleCount || sampleCount < 1 || questionNumbers.length < 1) {
+        _log(`VALIDATION FAILED: studyName="${studyName}" conditionCount=${conditionCount} sampleCount=${sampleCount} questions=${questionNumbers.length}`);
         showCloudGenerationError("Please complete study name, conditions, samples, and at least one question.");
         return;
       }
 
       const cloudModelProvider = document.getElementById("cloudModelProvider")?.value || "";
+      _log(`Cloud provider: "${cloudModelProvider}"`);
 
       if (!cloudModelProvider) {
         showCloudGenerationError("Please select a cloud LLM provider.");
@@ -4033,6 +4072,7 @@ Important rules:
       }
 
       const modelName = getSelectedModelName();
+      _log(`Model: "${modelName}"`);
 
       if (!modelName) {
         showCloudGenerationError("Please select a model for the chosen cloud provider.");
@@ -4041,6 +4081,7 @@ Important rules:
 
       const apiKeyFieldId = CLOUD_API_KEY_FIELD_BY_PROVIDER[cloudModelProvider];
       const apiKey = document.getElementById(apiKeyFieldId)?.value.trim() || "";
+      _log(`API key present: ${!!apiKey} (field: ${apiKeyFieldId})`);
 
       if (!apiKey) {
         showCloudGenerationError("Please enter the API key for the selected cloud provider.");
@@ -4049,14 +4090,28 @@ Important rules:
 
       updateTotalSamples();
 
+      _log("Calling showPreview() to build preview rows (may fetch persona dataset from HuggingFace)…");
       try {
         await showPreview();
+        _log(`showPreview() completed — previews.length = ${previews.length}`);
       } catch (error) {
-        showCloudGenerationError(error.message || "Could not build the preview table for generation.");
+        const isTimeout = error.name === "TimeoutError" || error.name === "AbortError";
+        _log(`ERROR in showPreview(): [${error.name}] ${error.message}`);
+        if (error.stack) _log(`Stack trace:\n${error.stack.split("\n").slice(0, 6).join("\n")}`);
+        if (isTimeout) {
+          _log("DIAGNOSIS: The HuggingFace API call timed out after 20 seconds.");
+          _log("  → This usually means HuggingFace datasets-server is slow or unreachable.");
+          _log("  → Check internet connection, or upload your own persona dataset to avoid this.");
+          showCloudGenerationError("Persona dataset fetch timed out (HuggingFace took > 20 s). Check your internet connection and try again, or upload your own persona dataset.");
+        } else {
+          showCloudGenerationError(error.message || "Could not build the preview table for generation.");
+        }
         return;
       }
 
       if (!previews.length) {
+        _log("ERROR: previews array is empty after showPreview() succeeded.");
+        _log(`DIAGNOSIS: conditionCount=${conditionCount} sampleCount=${sampleCount} questions=${questionNumbers.join(",")} — check that stimuli fields are filled and sample count > 0.`);
         showCloudGenerationError("Could not build the preview table for generation. Please check your conditions, samples, and persona settings above.");
         return;
       }
@@ -4109,6 +4164,8 @@ Important rules:
 
       await incrementSiteMetricBy("synthetic_responses_generated", totalSamples);
       await loadSiteMetrics();
+
+      _log(`=== GENERATION COMPLETE — ${totalSamples} responses ===`);
 
       previewArea.innerHTML = `
         <div class="preview-box">
