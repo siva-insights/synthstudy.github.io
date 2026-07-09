@@ -3604,9 +3604,9 @@ Important rules:
       }
 
       const data = await response.json();
-      const content = data.choices?.[0]?.message?.content || "";
+      const responseText = data.choices?.[0]?.message?.content || "";
       _log(`    ← OpenAI response tokens: prompt=${data.usage?.prompt_tokens||"?"} completion=${data.usage?.completion_tokens||"?"}`);
-      return content;
+      return responseText;
     }
 
     // API call functions — Gemini: generateContent endpoint with inline image data
