@@ -56,6 +56,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Chrome's Private Network Access policy requires this header on CORS preflight
+# responses so that HTTPS pages (Vercel) can POST to http://localhost:8000.
+# Simple GET requests (e.g. /health) skip the preflight and work without it;
+# POST with JSON triggers a preflight that Chrome blocks without this header.
+@app.middleware("http")
+async def allow_private_network_access(request: Request, call_next):
+    response = await call_next(request)
+    if request.method == "OPTIONS":
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
 app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR), name="outputs")
 
 
