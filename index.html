@@ -2273,11 +2273,19 @@ Important rules:
 
     async function getSharedImagesData() {
       const count = parseInt(document.getElementById("sharedImageCount")?.value) || 0;
+      _log(`[IMAGES] Image slots configured: ${count}`);
       const images = {};
       for (let i = 1; i <= count; i++) {
         const file = document.getElementById(`sharedImage${i}`)?.files?.[0];
-        if (file) images[i] = await readFileAsBase64(file);
+        if (file) {
+          _log(`[IMAGES] Encoding image ${i}: name=${file.name} size=${(file.size/1024).toFixed(1)}KB type=${file.type}`);
+          images[i] = await readFileAsBase64(file);
+          _log(`[IMAGES] Image ${i} encoded OK — base64 length=${images[i].base64?.length || 0}`);
+        } else {
+          _log(`[IMAGES] Image ${i}: no file uploaded`);
+        }
       }
+      _log(`[IMAGES] Total images ready: ${Object.keys(images).length}`);
       return images;
     }
 
@@ -3143,7 +3151,9 @@ Important rules:
       `;
 
       addLog("Generate clicked — validation passed");
-      addLog(`Conditions: ${conditionCount} | Samples/condition: ${sampleCount} | Questions: ${questionNumbers.length}`);
+      addLog(`Conditions: ${conditionCount} | Samples/condition: ${sampleCount} | Questions: ${questionNumbers.length} | Temp: ${temperature}`);
+      addLog(`Model: ${selectedModel.value}`);
+      addLog(`Persona mode: ${document.getElementById("personaSelection")?.value || "default"} | Order: ${document.getElementById("personaOrder")?.value || "random"} | StimuliAssign: ${document.getElementById("stimuliAssignment")?.value || "random"}`);
 
       try {
 
@@ -3155,7 +3165,7 @@ Important rules:
           stimuli: document.getElementById(`condition${c}Stimuli`).value.trim()
         });
       }
-      addLog(`Built ${conditions.length} condition(s)`);
+      addLog(`Built ${conditions.length} condition(s) — stimuli word counts: [${conditions.map(c => c.stimuli.split(/\s+/).filter(Boolean).length).join(", ")}]`);
 
       const questions = [];
       for (const q of questionNumbers) {
@@ -3177,7 +3187,7 @@ Important rules:
           max_words: parseInt(document.getElementById(`question${q}MaxWords`)?.value) || 0
         });
       }
-      addLog(`Built ${questions.length} question(s)`);
+      addLog(`Built ${questions.length} question(s) — types: [${questions.map(q => `Q${q.question_number}:${q.scale_type||"text"}(${q.scale_points.length}pts)`).join(", ")}]`);
 
       const personaSelection = document.getElementById("personaSelection")?.value || "default";
       let customPersonas = null;
@@ -3192,10 +3202,11 @@ Important rules:
           return;
         }
         try {
-          addLog("Reading custom persona Excel sheet…");
+          addLog(`Reading custom persona Excel sheet: ${personaSheet.name} (${(personaSheet.size/1024).toFixed(1)}KB)`);
           customPersonas = await readPersonaSheet(personaSheet);
           addLog(`Custom personas loaded: ${customPersonas.length} rows`);
         } catch (error) {
+          addLog(`ERROR reading persona sheet: ${error.message}`);
           alert(error.message || "Could not read the persona Excel sheet.");
           return;
         }
@@ -3211,11 +3222,17 @@ Important rules:
           customPersonas = fetched.map(p => ({ pid: p.pid, persona: p.persona }));
           payloadPersonaSource = "custom";
         } catch (error) {
-          addLog(`ERROR loading personas: ${error.message}`);
+          addLog(`ERROR loading personas: [${error.name}] ${error.message}`);
+          if (error.name === "TimeoutError" || error.name === "AbortError") {
+            addLog("DIAGNOSIS: HuggingFace API timed out (20s). Check internet connection or upload your own persona dataset.");
+          }
+          if (error.stack) addLog(`Stack:\n${error.stack.split("\n").slice(0,4).join("\n")}`);
+          addLog("=== END OF RUN (error) ===");
           previewArea.innerHTML = `
             <div class="preview-box">
               <div class="preview-title">Generation Failed</div>
               <p>${escapeHTML(error.message || "Could not load personas. Please check your internet connection and try again.")}</p>
+              <p style="font-size:12px;color:#64748b;margin-top:8px;">Click <strong>⬇ Logs</strong> above for details.</p>
             </div>`;
           return;
         }
@@ -3235,12 +3252,14 @@ Important rules:
         addLog("Personas reordered to match preview condition assignments");
       }
 
-      addLog("Building JSON payload…");
+      addLog("Loading shared images…");
       const rawImagesData = await getSharedImagesData();
       const imagesPayload = {};
       for (const [idx, img] of Object.entries(rawImagesData)) {
         imagesPayload[idx] = { base64: img.base64, mimeType: img.mimeType };
       }
+      addLog(`Images in payload: ${Object.keys(imagesPayload).length} (indices: [${Object.keys(imagesPayload).join(",")||"none"}])`);
+      addLog("Building JSON payload…");
       const payloadBody = JSON.stringify({
         study_name: studyName,
         model_name: selectedModel.value,
@@ -3271,11 +3290,13 @@ Important rules:
         addLog(`Response parsed — success: ${data.success}, job_id: ${data.job_id || "n/a"}`);
 
         if (!data.success) {
-          addLog("ERROR: Backend returned success=false");
+          addLog(`ERROR: Backend returned success=false — message: ${data.message || "n/a"} detail: ${data.detail || "n/a"}`);
+          addLog("=== END OF RUN (error) ===");
           previewArea.innerHTML = `
             <div class="preview-box">
               <div class="preview-title">Generation Failed</div>
-              <p>Could not start generation.</p>
+              <p>Could not start generation. ${escapeHTML(data.message || "")}</p>
+              <p style="font-size:12px;color:#64748b;margin-top:8px;">Click <strong>⬇ Logs</strong> above for details.</p>
             </div>
           `;
           return;
@@ -3288,6 +3309,7 @@ Important rules:
         addLog("Site metrics incremented");
         await loadSiteMetrics();
         addLog("Site metrics loaded — handing off to progress poller");
+        addLog(`Starting poll for job_id: ${data.job_id}`);
 
         previewArea.innerHTML = `
           <div class="preview-box">
@@ -3310,7 +3332,12 @@ Important rules:
         pollGenerationProgress(data.job_id);
 
       } catch (error) {
-        addLog(`FETCH ERROR: ${error.message}`);
+        addLog(`FETCH ERROR: [${error.name}] ${error.message}`);
+        if (error.name === "TypeError" && error.message.includes("fetch")) {
+          addLog("DIAGNOSIS: Cannot reach http://localhost:8000 — OLSEDG Helper is not running or blocked by browser.");
+        }
+        if (error.stack) addLog(`Stack:\n${error.stack.split("\n").slice(0,4).join("\n")}`);
+        addLog("=== END OF RUN (error) ===");
         previewArea.innerHTML = `
           <div class="preview-box">
             <div class="preview-title">Generation Failed</div>
@@ -3345,13 +3372,22 @@ Important rules:
     async function pollGenerationProgress(jobId) {
       _activeJobId = jobId;
       const previewArea = document.getElementById("previewArea");
+      _log(`[POLL] Polling started for job_id=${jobId}`);
+      let _pollCount = 0;
 
       const interval = setInterval(async () => {
+        _pollCount++;
         try {
           const response = await fetch(`http://localhost:8000/progress/${jobId}`);
+          if (!response.ok) {
+            _log(`[POLL #${_pollCount}] HTTP ${response.status} from /progress/${jobId}`);
+          }
           const data = await response.json();
 
-          if (!data.success) { clearInterval(interval); return; }
+          if (!data.success) {
+            _log(`[POLL #${_pollCount}] success=false — stopping poll. message: ${data.message || "n/a"}`);
+            clearInterval(interval); return;
+          }
 
           const completed = data.completed || 0;
           const total     = data.total || 1;
@@ -3378,7 +3414,12 @@ Important rules:
               `${completed} of ${total} respondents completed (${percent}%)${timeStr}`;
           }
 
+          if (_pollCount % 5 === 1) {
+            _log(`[POLL #${_pollCount}] status=${data.status} | ${completed}/${total} (${percent}%) | eta=${data.estimated_remaining_seconds != null ? Math.round(data.estimated_remaining_seconds)+"s" : "?"}`);
+          }
+
           if (data.status === "complete" || data.status === "stopped") {
+            _log(`[POLL] Job ${data.status} — total=${data.total} completed=${completed} polls=${_pollCount}`);
             clearInterval(interval);
             _activeJobId = null;
 
@@ -3399,8 +3440,10 @@ Important rules:
 
             // Fetch the file as a blob and trigger a real browser download
             try {
+              _log(`[POLL] Fetching result file from /download-result/${jobId}`);
               const fileResp = await fetch(`http://localhost:8000/download-result/${jobId}`);
-              if (!fileResp.ok) throw new Error("not ready");
+              if (!fileResp.ok) throw new Error(`HTTP ${fileResp.status} from /download-result`);
+              _log(`[POLL] Result file fetch OK — size: ${fileResp.headers.get("content-length") || "unknown"} bytes`);
               const blob = await fileResp.blob();
               const blobUrl = URL.createObjectURL(blob);
               const dlLink = document.createElement("a");
@@ -3412,7 +3455,10 @@ Important rules:
               setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
               const dlMsg = document.getElementById("dlStatusMsg");
               if (dlMsg) dlMsg.textContent = "✓ Response file downloaded. Check your Downloads folder.";
-            } catch (_) {
+              _log("=== END OF RUN (complete) ===");
+            } catch (dlErr) {
+              _log(`[POLL] Result file download FAILED: [${dlErr.name}] ${dlErr.message}`);
+              _log("=== END OF RUN (download error) ===");
               const dlMsg = document.getElementById("dlStatusMsg");
               if (dlMsg) {
                 dlMsg.style.color = "#dc2626";
@@ -3422,22 +3468,29 @@ Important rules:
           }
 
           if (data.status === "error") {
+            _log(`[POLL] Backend reported error: ${data.message}`);
+            _log("=== END OF RUN (backend error) ===");
             clearInterval(interval);
             previewArea.innerHTML = `
               <div class="preview-box">
                 <div class="preview-title">Generation Failed</div>
                 <p>${escapeHTML(data.message)}</p>
+                <p style="font-size:12px;color:#64748b;margin-top:8px;">Click <strong>⬇ Logs</strong> above for details.</p>
               </div>
             `;
           }
 
         } catch (error) {
+          _log(`[POLL #${_pollCount}] Connection lost: [${error.name}] ${error.message}`);
+          _log("DIAGNOSIS: OLSEDG Helper stopped responding mid-generation.");
+          _log("=== END OF RUN (connection lost) ===");
           clearInterval(interval);
           _activeJobId = null;
           previewArea.innerHTML = `
             <div class="preview-box">
               <div class="preview-title">Generation Failed</div>
               <p>Lost connection to OLSEDG Helper.</p>
+              <p style="font-size:12px;color:#64748b;margin-top:8px;">Click <strong>⬇ Logs</strong> above for details.</p>
             </div>
           `;
         }
@@ -3543,13 +3596,17 @@ Important rules:
         })
       });
 
+      _log(`    ← OpenAI HTTP ${response.status}`);
       if (!response.ok) {
         const errorBody = await response.text();
+        _log(`    ← OpenAI error body: ${errorBody.slice(0, 300)}`);
         throw new Error(`OpenAI API error (${response.status}): ${errorBody}`);
       }
 
       const data = await response.json();
-      return data.choices?.[0]?.message?.content || "";
+      const content = data.choices?.[0]?.message?.content || "";
+      _log(`    ← OpenAI response tokens: prompt=${data.usage?.prompt_tokens||"?"} completion=${data.usage?.completion_tokens||"?"}`);
+      return content;
     }
 
     // API call functions — Gemini: generateContent endpoint with inline image data
@@ -3569,12 +3626,15 @@ Important rules:
         })
       });
 
+      _log(`    ← Gemini HTTP ${response.status}`);
       if (!response.ok) {
         const errorBody = await response.text();
+        _log(`    ← Gemini error body: ${errorBody.slice(0, 300)}`);
         throw new Error(`Gemini API error (${response.status}): ${errorBody}`);
       }
 
       const data = await response.json();
+      _log(`    ← Gemini finishReason=${data.candidates?.[0]?.finishReason||"?"} tokenCount=${data.usageMetadata?.totalTokenCount||"?"}`);
       return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     }
 
@@ -3604,12 +3664,15 @@ Important rules:
         })
       });
 
+      _log(`    ← Claude HTTP ${response.status}`);
       if (!response.ok) {
         const errorBody = await response.text();
+        _log(`    ← Claude error body: ${errorBody.slice(0, 300)}`);
         throw new Error(`Claude API error (${response.status}): ${errorBody}`);
       }
 
       const data = await response.json();
+      _log(`    ← Claude stopReason=${data.stop_reason||"?"} inputTokens=${data.usage?.input_tokens||"?"} outputTokens=${data.usage?.output_tokens||"?"}`);
       return data.content?.[0]?.text || "";
     }
 
@@ -3637,12 +3700,15 @@ Important rules:
         })
       });
 
+      _log(`    ← OpenRouter HTTP ${response.status}`);
       if (!response.ok) {
         const errorBody = await response.text();
+        _log(`    ← OpenRouter error body: ${errorBody.slice(0, 300)}`);
         throw new Error(`OpenRouter API error (${response.status}): ${errorBody}`);
       }
 
       const data = await response.json();
+      _log(`    ← OpenRouter tokens: prompt=${data.usage?.prompt_tokens||"?"} completion=${data.usage?.completion_tokens||"?"}`);
       return data.choices?.[0]?.message?.content || "";
     }
 
@@ -3716,8 +3782,18 @@ Important rules:
       let last = { answers: {}, validation: "invalid", invalidQuestions: [], rawResponse: "" };
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        const rawResponse = await callCloudModel(cloudModelProvider, apiKey, modelName, prompt, temperature, imagesData);
+        _log(`  [API] Attempt ${attempt}/${maxRetries} → ${cloudModelProvider}/${modelName} | promptLen=${prompt.length} | images=${Object.keys(imagesData).length}`);
+        const t0 = Date.now();
+        let rawResponse;
+        try {
+          rawResponse = await callCloudModel(cloudModelProvider, apiKey, modelName, prompt, temperature, imagesData);
+          _log(`  [API] Attempt ${attempt} response received in ${((Date.now()-t0)/1000).toFixed(2)}s — responseLen=${rawResponse.length}`);
+        } catch (apiErr) {
+          _log(`  [API] Attempt ${attempt} FAILED: [${apiErr.name}] ${apiErr.message}`);
+          throw apiErr;
+        }
         const { answers, validation, invalidQuestions } = parseCloudAnswers(rawResponse, questionNumbers);
+        _log(`  [PARSE] Attempt ${attempt} — validation=${validation} invalidQs=[${invalidQuestions.join(",")||"none"}]`);
 
         if (validation === "valid") {
           return { answers, validation, invalidQuestions, retryCount: attempt, rawResponse };
@@ -3726,12 +3802,15 @@ Important rules:
         last = { answers, validation, invalidQuestions, rawResponse };
       }
 
+      _log(`  [API] Max retries (${maxRetries}) exhausted — final invalidQs=[${last.invalidQuestions.join(",")}]`);
       return { ...last, retryCount: maxRetries };
     }
 
     async function processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, imagesData = {}) {
       const startTime = Date.now();
       const embeddedQuestionNumbers = getEmbeddedQuestionNumbers(row.condition_stimuli, questionNumbers);
+      const rowId = `R${row.respondent_id||"?"}/C${row.condition_number||"?"}`;
+      _log(`[ROW] ${rowId} — embeddedQs=[${embeddedQuestionNumbers.join(",")}] hasImages=${Object.keys(imagesData).length > 0}`);
 
       try {
         const result = await getValidCloudResponse(cloudModelProvider, apiKey, modelName, row.prompt, temperature, embeddedQuestionNumbers, imagesData);
@@ -3744,10 +3823,12 @@ Important rules:
         for (const q of questionNumbers) {
           row[`Q${q}`] = result.answers[`Q${q}`] ?? "";
         }
+        _log(`[ROW] ${rowId} done — validation=${result.validation} retries=${result.retryCount} invalidQs=[${result.invalidQuestions.join(",")||"none"}] time=${((Date.now()-startTime)/1000).toFixed(1)}s`);
       } catch (error) {
         row.validation = "error";
         row.invalid_questions = embeddedQuestionNumbers.map((q) => `Q${q}`).join(",");
         row.raw_response = String(error.message || error);
+        _log(`[ROW] ${rowId} ERROR: [${error.name}] ${error.message} time=${((Date.now()-startTime)/1000).toFixed(1)}s`);
       } finally {
         row.seconds_taken = ((Date.now() - startTime) / 1000).toFixed(3);
       }
@@ -3755,16 +3836,23 @@ Important rules:
 
     async function runCloudGenerationBatches(rows, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, concurrency, onProgress, imagesData = {}) {
       let completed = 0;
+      const totalBatches = Math.ceil(rows.length / concurrency);
+      _log(`[CLOUD] Starting batched generation — rows=${rows.length} concurrency=${concurrency} batches=${totalBatches} provider=${cloudModelProvider} model=${modelName}`);
 
       for (let start = 0; start < rows.length; start += concurrency) {
+        const batchNum = Math.floor(start / concurrency) + 1;
         const batch = rows.slice(start, start + concurrency);
+        _log(`[CLOUD] Batch ${batchNum}/${totalBatches} — rows ${start+1}–${start+batch.length}`);
 
         await Promise.all(batch.map(async (row) => {
           await processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, imagesData);
           completed++;
           onProgress(completed, rows.length);
         }));
+
+        _log(`[CLOUD] Batch ${batchNum}/${totalBatches} done — ${completed}/${rows.length} total completed`);
       }
+      _log(`[CLOUD] All batches complete — ${completed} rows`);
     }
 
     function updateCloudGenerationProgress(completed, total) {
