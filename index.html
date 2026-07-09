@@ -3143,7 +3143,7 @@ Important rules:
       `;
 
       addLog("Generate clicked — validation passed");
-      addLog(`Study: "${studyName}" | Conditions: ${conditionCount} | Samples/condition: ${sampleCount} | Questions: ${questionNumbers.length}`);
+      addLog(`Conditions: ${conditionCount} | Samples/condition: ${sampleCount} | Questions: ${questionNumbers.length}`);
 
       try {
 
@@ -4055,10 +4055,10 @@ Important rules:
       const sampleCount = parseInt(document.getElementById("sampleCount").value);
       const temperature = parseFloat(document.getElementById("temperature").value) || 0;
 
-      _log(`Study: "${studyName}" | Conditions: ${conditionCount} | Samples: ${sampleCount} | Questions: ${questionNumbers.length} | Temp: ${temperature}`);
+      _log(`Conditions: ${conditionCount} | Samples: ${sampleCount} | Questions: ${questionNumbers.length} | Temp: ${temperature}`);
 
       if (!studyName || !conditionCount || conditionCount < 1 || !sampleCount || sampleCount < 1 || questionNumbers.length < 1) {
-        _log(`VALIDATION FAILED: studyName="${studyName}" conditionCount=${conditionCount} sampleCount=${sampleCount} questions=${questionNumbers.length}`);
+        _log(`VALIDATION FAILED: conditionCount=${conditionCount} sampleCount=${sampleCount} questions=${questionNumbers.length} studyNameEmpty=${!studyName}`);
         showCloudGenerationError("Please complete study name, conditions, samples, and at least one question.");
         return;
       }
@@ -4111,7 +4111,7 @@ Important rules:
 
       if (!previews.length) {
         _log("ERROR: previews array is empty after showPreview() succeeded.");
-        _log(`DIAGNOSIS: conditionCount=${conditionCount} sampleCount=${sampleCount} questions=${questionNumbers.join(",")} — check that stimuli fields are filled and sample count > 0.`);
+        _log(`DIAGNOSIS: conditionCount=${conditionCount} sampleCount=${sampleCount} questionCount=${questionNumbers.length} — check that stimuli fields are filled and sample count > 0.`);
         showCloudGenerationError("Could not build the preview table for generation. Please check your conditions, samples, and persona settings above.");
         return;
       }
