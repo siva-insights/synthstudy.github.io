@@ -1385,7 +1385,7 @@ Important rules:
     window.addEventListener("load", () => loadDefaultPersonaPool().catch(() => {}));
 
     // ponytail: FEATURE 17 — ethical-use banner, dismiss state persisted in localStorage
-    const ETHICAL_BANNER_DISMISS_KEY = "sedgEthicalBannerDismissed";
+    const ETHICAL_BANNER_DISMISS_KEY = "sedgEthicalBannerDismissed_v2";
     function dismissEthicalUseBanner() {
       localStorage.setItem(ETHICAL_BANNER_DISMISS_KEY, "1");
       const banner = document.getElementById("ethicalUseBanner");
