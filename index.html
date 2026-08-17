@@ -413,8 +413,8 @@
   <div class="container">
     <h1>Synthetic Experimental Data Generator (SEDG)</h1>
 
-    <!-- ponytail: dismissible ethical-use banner, dismiss state kept in localStorage -->
-    <div id="ethicalUseBanner" class="note" style="border:1px solid #f59e0b;background:#fffbeb;position:relative;padding-right:34px;" hidden>
+    <!-- ponytail: dismissible ethical-use banner, session-only dismiss (no localStorage) -->
+    <div id="ethicalUseBanner" class="note" style="border:1px solid #f59e0b;background:#fffbeb;position:relative;padding-right:34px;">
       <b>Ethical use notice:</b> Synthetic LLM responses are for piloting, pretesting, and exploration only.
       They are <b>not</b> a substitute for human-subject data in confirmatory research. Validate against real
       human data before drawing conclusions.
@@ -1384,17 +1384,11 @@ Important rules:
     window.addEventListener("load", recordPageView);
     window.addEventListener("load", () => loadDefaultPersonaPool().catch(() => {}));
 
-    // ponytail: FEATURE 17 — ethical-use banner, dismiss state persisted in localStorage
-    const ETHICAL_BANNER_DISMISS_KEY = "sedgEthicalBannerDismissed_v2";
+    // ponytail: FEATURE 17 — ethical-use banner, session-only dismiss (shows on every page load)
     function dismissEthicalUseBanner() {
-      localStorage.setItem(ETHICAL_BANNER_DISMISS_KEY, "1");
       const banner = document.getElementById("ethicalUseBanner");
       if (banner) banner.hidden = true;
     }
-    window.addEventListener("load", () => {
-      const banner = document.getElementById("ethicalUseBanner");
-      if (banner) banner.hidden = localStorage.getItem(ETHICAL_BANNER_DISMISS_KEY) === "1";
-    });
 
     // Utility functions: question card helpers, word count, condition/persona toggles
     function getExistingQuestionNumbers() {
