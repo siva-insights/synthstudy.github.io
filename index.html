@@ -3467,14 +3467,61 @@ Important rules:
     }
 
     // Constants / config: per-provider concurrency limits and API key field IDs
-    // cloud provider. Real rate limits depend on the user's account/tier, so this
-    // is intentionally cautious rather than a verified provider limit.
+    // Starting concurrency is conservative; AdaptiveRateLimiter scales it up automatically
+    // on consecutive successes and backs off + cools on 429 rate limit errors.
     const CLOUD_PROVIDER_CONCURRENCY = {
-      "openai-gpt": 5,
-      "google-gemini": 5,
+      "openai-gpt": 10,
+      "google-gemini": 4,
       "anthropic-claude": 5,
-      "openrouter": 5
+      "openrouter": 8
     };
+    const CLOUD_PROVIDER_MAX_CONCURRENCY = {
+      "openai-gpt": 30,
+      "google-gemini": 10,
+      "anthropic-claude": 20,
+      "openrouter": 15
+    };
+
+    class AdaptiveRateLimiter {
+      constructor(initial, max) {
+        this.concurrency   = initial;
+        this.max           = max;
+        this.active        = 0;
+        this.successStreak = 0;
+        this.coolUntil     = 0;
+      }
+      async waitForSlot() {
+        while (true) {
+          const now = Date.now();
+          if (now < this.coolUntil) {
+            await new Promise(r => setTimeout(r, this.coolUntil - now + 50));
+            continue;
+          }
+          if (this.active < this.concurrency) { this.active++; return; }
+          await new Promise(r => setTimeout(r, 100));
+        }
+      }
+      onSuccess() {
+        this.active = Math.max(0, this.active - 1);
+        this.successStreak++;
+        if (this.successStreak >= 5 && this.concurrency < this.max) {
+          this.concurrency = Math.min(this.concurrency + 2, this.max);
+          this.successStreak = 0;
+          _log(`[RATE] Concurrency auto-scaled → ${this.concurrency} (5 consecutive successes)`);
+        }
+      }
+      onRateLimit() {
+        this.active = Math.max(0, this.active - 1);
+        this.successStreak = 0;
+        const prev = this.concurrency;
+        this.concurrency = Math.max(1, Math.ceil(this.concurrency / 2));
+        this.coolUntil = Date.now() + 30000;
+        _log(`[RATE] 429 hit — concurrency ${prev}→${this.concurrency}, 30s cooling`);
+      }
+      onError() {
+        this.active = Math.max(0, this.active - 1);
+      }
+    }
 
     const CLOUD_API_KEY_FIELD_BY_PROVIDER = {
       "openai-gpt": "openAiApiKey",
@@ -3508,7 +3555,10 @@ Important rules:
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(`OpenAI API error (${response.status}): ${errorBody}`);
+        _log(`    ← OpenAI error body: ${errorBody.slice(0, 300)}`);
+        const err = new Error(`OpenAI API error (${response.status}): ${errorBody}`);
+        if (response.status === 429) err.isRateLimit = true;
+        throw err;
       }
 
       const data = await response.json();
@@ -3534,7 +3584,10 @@ Important rules:
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(`Gemini API error (${response.status}): ${errorBody}`);
+        _log(`    ← Gemini error body: ${errorBody.slice(0, 300)}`);
+        const err = new Error(`Gemini API error (${response.status}): ${errorBody}`);
+        if (response.status === 429) err.isRateLimit = true;
+        throw err;
       }
 
       const data = await response.json();
@@ -3569,7 +3622,10 @@ Important rules:
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(`Claude API error (${response.status}): ${errorBody}`);
+        _log(`    ← Claude error body: ${errorBody.slice(0, 300)}`);
+        const err = new Error(`Claude API error (${response.status}): ${errorBody}`);
+        if (response.status === 429) err.isRateLimit = true;
+        throw err;
       }
 
       const data = await response.json();
@@ -3602,7 +3658,10 @@ Important rules:
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(`OpenRouter API error (${response.status}): ${errorBody}`);
+        _log(`    ← OpenRouter error body: ${errorBody.slice(0, 300)}`);
+        const err = new Error(`OpenRouter API error (${response.status}): ${errorBody}`);
+        if (response.status === 429) err.isRateLimit = true;
+        throw err;
       }
 
       const data = await response.json();
@@ -3696,6 +3755,7 @@ Important rules:
       const startTime = Date.now();
       const embeddedQuestionNumbers = getEmbeddedQuestionNumbers(row.condition_stimuli, questionNumbers);
 
+      let rateLimited = false;
       try {
         const result = await getValidCloudResponse(cloudModelProvider, apiKey, modelName, row.prompt, temperature, embeddedQuestionNumbers, imagesData);
 
@@ -3708,26 +3768,64 @@ Important rules:
           row[`Q${q}`] = result.answers[`Q${q}`] ?? "";
         }
       } catch (error) {
-        row.validation = "error";
-        row.invalid_questions = embeddedQuestionNumbers.map((q) => `Q${q}`).join(",");
-        row.raw_response = String(error.message || error);
+        if (error.isRateLimit) {
+          rateLimited = true;
+          row.validation = "rate_limited";
+          row.raw_response = String(error.message || error);
+          _log(`[ROW] ${rowId} RATE_LIMITED — queued for retry after cooling time=${((Date.now()-startTime)/1000).toFixed(1)}s`);
+        } else {
+          row.validation = "error";
+          row.invalid_questions = embeddedQuestionNumbers.map((q) => `Q${q}`).join(",");
+          row.raw_response = String(error.message || error);
+          _log(`[ROW] ${rowId} ERROR: [${error.name}] ${error.message} time=${((Date.now()-startTime)/1000).toFixed(1)}s`);
+        }
       } finally {
         row.seconds_taken = ((Date.now() - startTime) / 1000).toFixed(3);
       }
+      return rateLimited;
     }
 
-    async function runCloudGenerationBatches(rows, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, concurrency, onProgress, imagesData = {}) {
+    async function runSingleAdaptivePass(rows, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, limiter, onSuccess, imagesData) {
+      const rateLimitedRows = [];
+      await Promise.all(rows.map(async (row) => {
+        await limiter.waitForSlot();
+        const wasRateLimited = await processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, imagesData);
+        if (wasRateLimited) {
+          limiter.onRateLimit();
+          rateLimitedRows.push(row);
+        } else {
+          limiter.onSuccess();
+          onSuccess();
+        }
+      }));
+      return rateLimitedRows;
+    }
+
+    async function runCloudGenerationAdaptive(rows, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, initial, max, onProgress, imagesData = {}) {
+      const limiter = new AdaptiveRateLimiter(initial, max);
+      const total = rows.length;
       let completed = 0;
+      const MAX_RETRY_ROUNDS = 3;
 
-      for (let start = 0; start < rows.length; start += concurrency) {
-        const batch = rows.slice(start, start + concurrency);
+      _log(`[CLOUD] Starting adaptive generation — rows=${total} initial=${initial} max=${max} provider=${cloudModelProvider} model=${modelName}`);
 
-        await Promise.all(batch.map(async (row) => {
-          await processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, imagesData);
-          completed++;
-          onProgress(completed, rows.length);
-        }));
+      const tick = () => { completed++; onProgress(completed, total); };
+
+      let toProcess = rows;
+      for (let round = 0; round <= MAX_RETRY_ROUNDS; round++) {
+        if (toProcess.length === 0) break;
+        if (round > 0) _log(`[CLOUD] Retry round ${round}/${MAX_RETRY_ROUNDS} — ${toProcess.length} rate-limited rows`);
+        toProcess = await runSingleAdaptivePass(toProcess, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, limiter, tick, imagesData);
       }
+
+      for (const row of toProcess) {
+        row.validation = "error";
+        row.invalid_questions = "";
+        row.raw_response = "Rate limit exceeded — exhausted all retry rounds";
+        tick();
+      }
+
+      _log(`[CLOUD] Adaptive generation complete — ${completed}/${total} rows`);
     }
 
     function updateCloudGenerationProgress(completed, total) {
@@ -4063,14 +4161,15 @@ Important rules:
       });
 
       const totalSamples = rows.length;
-      const concurrency = CLOUD_PROVIDER_CONCURRENCY[cloudModelProvider] || 5;
+      const initial = CLOUD_PROVIDER_CONCURRENCY[cloudModelProvider] || 5;
+      const max     = CLOUD_PROVIDER_MAX_CONCURRENCY[cloudModelProvider] || 10;
 
       previewArea.innerHTML = `
         <div class="preview-box">
           <div class="preview-title">Generating Synthetic Responses...</div>
           <p>
-            Each prompt is sent to ${escapeHTML(modelName)} as an independent conversation,
-            up to ${concurrency} at a time.
+            Each prompt is sent to ${escapeHTML(modelName)} as an independent conversation.
+            Starting at ${initial} concurrent requests, auto-scaling up based on your API tier.
           </p>
 
           <div class="progress-container">
@@ -4085,14 +4184,15 @@ Important rules:
 
       const imagesData = await getSharedImagesData();
 
-      await runCloudGenerationBatches(
+      await runCloudGenerationAdaptive(
         rows,
         cloudModelProvider,
         apiKey,
         modelName,
         temperature,
         questionNumbers,
-        concurrency,
+        initial,
+        max,
         updateCloudGenerationProgress,
         imagesData
       );
