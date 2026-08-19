@@ -3754,6 +3754,7 @@ Important rules:
     async function processCloudRow(row, cloudModelProvider, apiKey, modelName, temperature, questionNumbers, imagesData = {}) {
       const startTime = Date.now();
       const embeddedQuestionNumbers = getEmbeddedQuestionNumbers(row.condition_stimuli, questionNumbers);
+      const rowId = `R${row.respondent_id||"?"}/C${row.condition_number||"?"}`;
 
       let rateLimited = false;
       try {
