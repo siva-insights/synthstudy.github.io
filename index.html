@@ -3043,6 +3043,44 @@ Important rules:
       return personas;
     }
 
+    // ── Run log (shared across local and cloud generation) ──────────────────
+    let _runLog = [];
+    let _runLogT0 = null;
+
+    function _initLog(context) {
+      _runLog = [];
+      _runLogT0 = Date.now();
+      _log(`=== SEDG GENERATION STARTED ===`);
+      _log(`Timestamp : ${new Date().toISOString()}`);
+      _log(`Mode      : ${context}`);
+      _log(`Browser   : ${navigator.userAgent}`);
+      _log(`─────────────────────────────────────────────`);
+    }
+
+    function _log(msg) {
+      const elapsed = _runLogT0 !== null ? ((Date.now() - _runLogT0) / 1000).toFixed(2) : "?.??";
+      const line = `[+${elapsed}s] ${msg}`;
+      _runLog.push(line);
+      console.log("[SEDG]", line);
+      const logEl = document.getElementById("genDebugLog");
+      if (logEl) { logEl.textContent = _runLog.join("\n"); logEl.scrollTop = logEl.scrollHeight; }
+    }
+
+    function downloadRunLog() {
+      if (!_runLog.length) { alert("No log yet — click Generate Responses first."); return; }
+      _log("=== LOG DOWNLOADED BY USER ===");
+      const blob = new Blob([_runLog.join("\n")], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `SEDG_log_${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     // Generation orchestration: dispatcher that routes to local or cloud generation path
     async function generateResponses() {
       const selectedProvider = document.querySelector('input[name="llmProviderType"]:checked');
@@ -4098,6 +4136,8 @@ Important rules:
     // Generation orchestration — Cloud: top-level cloud generation entry point
     async function generateCloudResponses() {
       const previewArea = document.getElementById("previewArea");
+
+      _initLog("Cloud");
 
       if (previewArea) {
         previewArea.innerHTML = `
