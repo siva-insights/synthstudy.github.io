@@ -4218,8 +4218,35 @@ Important rules:
       renderPersonaTransparency();
     }
 
+    // Fallback when the Excel file can't be built (e.g. a cell over Excel's 32,767-character limit,
+    // or the XLSX library failed to load). CSV has no cell-size limit, so every row is saved in full.
+    function downloadRowsAsCsv(rows, columns, filename) {
+      const escapeCell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+      const csv = [
+        columns.map(escapeCell).join(","),
+        ...rows.map((row) => columns.map((column) => escapeCell(row[column])).join(","))
+      ].join("\n");
+      // BOM so Excel opens the file as UTF-8
+      const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+
+    function setCloudDownloadStatus(html, color) {
+      const statusEl = document.getElementById("cloudDownloadStatus");
+      if (!statusEl) return;
+      statusEl.style.color = color;
+      statusEl.innerHTML = html;
+    }
+
     function downloadCloudGenerationResults() {
-      if (!window.XLSX || cloudGenerationRows.length === 0) {
+      if (cloudGenerationRows.length === 0) {
         alert("No generated responses are available to download.");
         return;
       }
@@ -4242,26 +4269,40 @@ Important rules:
         seed: seed
       }));
       const columnsWithProvenance = [...cloudGenerationColumns, "data_source", "sedg_version", "provider", "model", "temperature", "seed"];
+      const baseFilename = `SEDG_${cloudGenerationRows.length}samples_${cloudGenerationTimestamp}`;
 
-      const worksheet = XLSX.utils.json_to_sheet(rowsWithProvenance, { header: columnsWithProvenance });
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Generated Responses");
+      try {
+        if (!window.XLSX) throw new Error("Excel library (XLSX) is not loaded");
 
-      const manifestRows = [
-        { key: "sedg_version", value: SEDG_VERSION },
-        { key: "provider", value: provider },
-        { key: "model", value: model },
-        { key: "temperature", value: temperature },
-        { key: "seed", value: seed },
-        { key: "prompt_template_hash", value: hashString(promptTemplate) },
-        { key: "generated_at_utc", value: new Date().toISOString() },
-        { key: "n_conditions", value: conditionCount },
-        { key: "n_per_condition", value: sampleCount }
-      ];
-      const manifestSheet = XLSX.utils.json_to_sheet(manifestRows, { header: ["key", "value"] });
-      XLSX.utils.book_append_sheet(workbook, manifestSheet, "manifest");
+        const worksheet = XLSX.utils.json_to_sheet(rowsWithProvenance, { header: columnsWithProvenance });
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Generated Responses");
 
-      XLSX.writeFile(workbook, `SEDG_${cloudGenerationRows.length}samples_${cloudGenerationTimestamp}.xlsx`);
+        const manifestRows = [
+          { key: "sedg_version", value: SEDG_VERSION },
+          { key: "provider", value: provider },
+          { key: "model", value: model },
+          { key: "temperature", value: temperature },
+          { key: "seed", value: seed },
+          { key: "prompt_template_hash", value: hashString(promptTemplate) },
+          { key: "generated_at_utc", value: new Date().toISOString() },
+          { key: "n_conditions", value: conditionCount },
+          { key: "n_per_condition", value: sampleCount }
+        ];
+        const manifestSheet = XLSX.utils.json_to_sheet(manifestRows, { header: ["key", "value"] });
+        XLSX.utils.book_append_sheet(workbook, manifestSheet, "manifest");
+
+        XLSX.writeFile(workbook, `${baseFilename}.xlsx`);
+        setCloudDownloadStatus("✓ Excel file downloaded. Check your Downloads folder.", "#16a34a");
+      } catch (excelErr) {
+        _log(`[DOWNLOAD] Excel export failed: ${excelErr.message} — falling back to CSV`);
+        downloadRowsAsCsv(rowsWithProvenance, columnsWithProvenance, `${baseFilename}.csv`);
+        setCloudDownloadStatus(
+          `Excel file could not be created (${escapeHTML(excelErr.message)}), so your responses were downloaded as a <strong>CSV</strong> file instead. ` +
+          `It contains every row in full and opens in Excel.`,
+          "#d97706"
+        );
+      }
     }
 
     function showCloudGenerationError(message) {
@@ -4399,9 +4440,13 @@ Important rules:
         <div class="preview-box">
           <div class="preview-title">Generation Complete</div>
           <p><strong>Total responses generated:</strong> ${totalSamples}</p>
+          <p id="cloudDownloadStatus" style="font-weight:600;"></p>
           <button type="button" onclick="downloadCloudGenerationResults()">Download Responses</button>
         </div>
       `;
+
+      // Auto-download once; the button stays for re-downloading or if the browser blocked it
+      downloadCloudGenerationResults();
 
       renderAnalysisPanel();
     }
