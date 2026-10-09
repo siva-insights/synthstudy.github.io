@@ -5,3 +5,9 @@ dist/
 build/
 __pycache__/
 *.pyc
+
+# Local-only files (never commit)
+.DS_Store
+.claude/
+backend/build-venv/
+.pytest_cache/
