@@ -668,7 +668,7 @@
           </button>
           <span class="tooltip" style="font-size:13px;color:#64748b;cursor:help;">?
             <span class="tooltip-text" style="min-width:220px;">
-              Upload a <strong>Download Study Info</strong> (.docx) file to restore all study fields automatically. Condition codes, persona order, and stimuli assignment will reset to defaults.
+              Upload a <strong>Download Study Info</strong> (.docx) file to restore all study fields automatically, including uploaded images. Condition codes, persona order, and stimuli assignment will reset to defaults.
             </span>
           </span>
           <input type="file" id="studyInfoUploadInput" accept=".docx" style="display:none"
@@ -2694,18 +2694,25 @@ Important rules:
       const NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
       const xmlDoc = new DOMParser().parseFromString(xmlStr, "application/xml");
 
-      // Extract paragraphs as {type, text}
+      const DRAWING_NS = "http://schemas.openxmlformats.org/drawingml/2006/main";
+      const REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+      // Extract paragraphs as {type, text, embeds} — embeds are relationship ids of images in the paragraph
       const paras = Array.from(xmlDoc.getElementsByTagNameNS(NS, "p")).map(p => {
         const style = p.getElementsByTagNameNS(NS, "pStyle")[0]?.getAttribute("w:val") || "";
         const text = Array.from(p.getElementsByTagNameNS(NS, "t")).map(t => t.textContent).join("");
         const type = style === "Heading1" ? "h1" : style === "Heading2" ? "h2" : style === "Heading3" ? "h3" : "p";
-        return { type, text: text };
+        const embeds = Array.from(p.getElementsByTagNameNS(DRAWING_NS, "blip"))
+          .map(b => b.getAttributeNS(REL_NS, "embed") || b.getAttribute("r:embed"))
+          .filter(Boolean);
+        return { type, text: text, embeds };
       });
 
       const config = { studyName: "", sampleCount: "", temperature: "0", personaSource: "default",
-                       genericInstruction: "", conditions: [], questions: [] };
+                       genericInstruction: "", conditions: [], questions: [], imageCount: 0, images: [] };
       let state = "start";
       let cur = null;         // current condition or question being built
+      let curImage = null;    // current image slot in the Images section
       let genericLines = [];
       let collectLabels = false;
 
@@ -2719,7 +2726,7 @@ Important rules:
         if (cur?.text !== undefined) { config.questions.push(cur); cur = null; collectLabels = false; }
       }
 
-      for (const { type, text } of paras) {
+      for (const { type, text, embeds } of paras) {
         const t = text.trim();
 
         if (state === "start") {
@@ -2733,6 +2740,7 @@ Important rules:
             if (key === "Study Name")              config.studyName = val;
             else if (key === "Samples per Condition") config.sampleCount = val;
             else if (key === "Temperature")        config.temperature = val;
+            else if (key === "Number of Images")   config.imageCount = parseInt(val) || 0;
             else if (key === "Persona Source") {
               config.personaSource = val.includes("No persona") ? "none"
                                    : val.includes("Input persona") ? "custom" : "default";
@@ -2752,7 +2760,9 @@ Important rules:
           else if (type === "p" && cur) { cur.stimuliLines.push(t); }
 
         } else if (state === "questions") {
-          if (type === "h3") {
+          if (type === "h2" && t === "Images") {
+            saveQuestion(); state = "images";
+          } else if (type === "h3") {
             saveQuestion();
             const m = t.match(/^Q\d+:\s*(.+)$/);
             cur = { text: m ? m[1].trim() : t, scaleType: "discrete",
@@ -2774,9 +2784,44 @@ Important rules:
               if (lm) cur.scaleLabels.push({ code: parseInt(lm[1]), label: lm[2].trim() });
             }
           }
+
+        } else if (state === "images") {
+          const slotMatch = type === "h3" && t.match(/^Image\s+(\d+)$/);
+          if (slotMatch) {
+            curImage = { slot: parseInt(slotMatch[1]), name: "", mimeType: "", embedId: null, file: null };
+            config.images.push(curImage);
+          } else if (curImage) {
+            const fileMatch = t.match(/^File:\s*(.+?)\s*\(([^)]*)\)\s*$/);
+            if (fileMatch) { curImage.name = fileMatch[1]; curImage.mimeType = fileMatch[2]; }
+            if (embeds.length && !curImage.embedId) curImage.embedId = embeds[0];
+          }
         }
       }
       saveQuestion();
+
+      // Pull each embedded image's bytes out of the .docx so it can be re-attached to its Image slot
+      if (config.images.some(img => img.embedId)) {
+        const relsXml = await zip.file("word/_rels/document.xml.rels")?.async("string");
+        const targets = {};
+        if (relsXml) {
+          const relsDoc = new DOMParser().parseFromString(relsXml, "application/xml");
+          for (const rel of Array.from(relsDoc.getElementsByTagName("Relationship"))) {
+            targets[rel.getAttribute("Id")] = rel.getAttribute("Target");
+          }
+        }
+        const EXT_MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp" };
+        for (const img of config.images) {
+          const target = img.embedId && targets[img.embedId];
+          if (!target) continue;
+          const path = target.startsWith("/") ? target.slice(1) : `word/${target}`;
+          const entry = zip.file(path);
+          if (!entry) continue;
+          const ext = path.split(".").pop().toLowerCase();
+          const mimeType = img.mimeType.startsWith("image/") ? img.mimeType : (EXT_MIME[ext] || "image/png");
+          const name = img.name || `image${img.slot}.${ext}`;
+          img.file = new File([await entry.async("uint8array")], name, { type: mimeType });
+        }
+      }
 
       if (!config.studyName && config.conditions.length === 0 && config.questions.length === 0) {
         throw new Error("This does not appear to be a valid SEDG Study Info file.");
@@ -2801,6 +2846,22 @@ Important rules:
         if (stimEl) stimEl.value = config.conditions[i].stimuli || "";
       }
 
+      // showConditionInputs() re-renders the image count field, so restore images after it
+      const images = config.images || [];
+      const imageCount = Math.max(config.imageCount || 0, ...images.map(img => img.slot), 0);
+      const imageCountEl = document.getElementById("sharedImageCount");
+      if (imageCountEl) {
+        imageCountEl.value = imageCount;
+        showSharedImages();
+        for (const img of images) {
+          const input = document.getElementById(`sharedImage${img.slot}`);
+          if (!input || !img.file) continue;
+          const transfer = new DataTransfer();
+          transfer.items.add(img.file);
+          input.files = transfer.files;
+        }
+      }
+
       const qContainer = document.getElementById("questionFields");
       if (qContainer) qContainer.innerHTML = "";
       questionCount = 0;
@@ -2819,13 +2880,43 @@ Important rules:
       updateInputEstimate();
     }
 
+    // Image formats Word (via the docx library) can embed directly; anything else is converted to PNG
+    const DOCX_IMAGE_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/bmp": "bmp" };
+
+    async function prepareImageForDocx(file) {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 450 / bitmap.width);
+      const width = Math.round(bitmap.width * scale);
+      const height = Math.round(bitmap.height * scale);
+      let mimeType = file.type;
+      let name = file.name;
+      let data;
+
+      if (DOCX_IMAGE_TYPES[mimeType]) {
+        data = new Uint8Array(await file.arrayBuffer());
+      } else {
+        const canvas = document.createElement("canvas");
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext("2d").drawImage(bitmap, 0, 0);
+        const blob = await new Promise((resolve, reject) =>
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error("PNG conversion failed")), "image/png"));
+        data = new Uint8Array(await blob.arrayBuffer());
+        mimeType = "image/png";
+        name = name.replace(/\.[^.]+$/, "") + ".png";
+      }
+      bitmap.close?.();
+      return { data, mimeType, name, docxType: DOCX_IMAGE_TYPES[mimeType], width, height };
+    }
+
     async function downloadStudyInfo() {
       if (!window.docx) {
         alert("Word document export is not available. Please check your internet connection and try again.");
         return;
       }
 
-      const { Document, Packer, Paragraph, HeadingLevel } = docx;
+      const { Document, Packer, Paragraph, HeadingLevel, ImageRun } = docx;
+      const imageCount = parseInt(document.getElementById("sharedImageCount")?.value) || 0;
 
       const studyName = document.getElementById("studyName")?.value.trim() || "";
       const conditionCount = parseInt(document.getElementById("conditionCount")?.value) || 0;
@@ -2862,6 +2953,7 @@ Important rules:
         new Paragraph({ text: `Samples per Condition: ${sampleCount}` }),
         new Paragraph({ text: `Total Samples: ${totalSamples}` }),
         new Paragraph({ text: `Persona Source: ${personaLabel}` }),
+        new Paragraph({ text: `Number of Images: ${imageCount}` }),
 
         new Paragraph({ text: "Generic Instruction for LLM Input", heading: HeadingLevel.HEADING_2 }),
         new Paragraph({ text: genericInstruction }),
@@ -2901,6 +2993,28 @@ Important rules:
           scaleLabels.forEach((label) => {
             children.push(new Paragraph({ text: `    ${label.replace(/^(-?\d+)-/, "$1 = ")}` }));
           });
+        }
+      }
+
+      // Images go last so documents without this section (older exports) still parse the same way
+      if (imageCount > 0) {
+        children.push(new Paragraph({ text: "Images", heading: HeadingLevel.HEADING_2 }));
+        for (let i = 1; i <= imageCount; i++) {
+          children.push(new Paragraph({ text: `Image ${i}`, heading: HeadingLevel.HEADING_3 }));
+          const file = document.getElementById(`sharedImage${i}`)?.files?.[0];
+          if (!file) {
+            children.push(new Paragraph({ text: "File: not uploaded" }));
+            continue;
+          }
+          try {
+            const img = await prepareImageForDocx(file);
+            children.push(new Paragraph({ text: `File: ${img.name} (${img.mimeType})` }));
+            children.push(new Paragraph({
+              children: [new ImageRun({ type: img.docxType, data: img.data, transformation: { width: img.width, height: img.height } })]
+            }));
+          } catch (err) {
+            children.push(new Paragraph({ text: `File: ${file.name} — could not be embedded (${err.message})` }));
+          }
         }
       }
 
